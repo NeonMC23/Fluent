@@ -53,12 +53,15 @@ die() {
 sed_in_place() {
     local file="$1"
     local expression="$2"
-    if sed --version >/dev/null 2>&1; then
-        sed -i "$expression" "$file"
-    else
-        # BSD/macOS sed requires an explicit backup suffix.
-        sed -i '' "$expression" "$file"
-    fi
+    case "$(uname -s)" in
+        Darwin*)
+            # BSD/macOS sed requires an explicit backup suffix.
+            sed -i '' "$expression" "$file"
+            ;;
+        *)
+            sed -i "$expression" "$file"
+            ;;
+    esac
 }
 
 FEATURES=""
