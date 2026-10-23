@@ -1,90 +1,79 @@
-# Fluent
+# ✦ Fluent
 
-<div align="center">
+**Private AI translation. No cloud. Your machine.**
 
-### Private AI Translation · 190+ Languages · Local First
+A native, local-first translation application powered by Meta's NLLB-200 models — built in Rust for Linux, Windows, and macOS.
 
-Translate text locally with Meta's NLLB-200 models and a modern native interface.
+Translate across **190+ languages and dialects** with a clean desktop interface, selectable translation modes, and optional GPU acceleration.
 
-</div>
-
----
-
-## Overview
-
-Fluent is a local AI translation application built in Rust. It runs NLLB-200
-directly on your machine, so your text never leaves your computer: there is no
-cloud API, no account and no background server.
-
-The desktop interface is written with [egui](https://github.com/emilk/egui) /
-eframe and works on Linux, Windows 10/11 and macOS.
-
-Key points:
-
-- 190+ languages and dialects
-- Automatic language detection
-- Fast and Accurate translation modes
-- Native, responsive interface with light, dark and system themes
-- Custom accent colors
-- GPU acceleration (CUDA or Metal) when available
-- CPU fallback with no external runtime dependencies
+[![Rust](https://img.shields.io/badge/Rust-Native-FF66C4?style=flat-square&labelColor=171717)](https://www.rust-lang.org/) [![Languages](https://img.shields.io/badge/Languages-190%2B-A3E635?style=flat-square&labelColor=171717)](#-features) [![AI](https://img.shields.io/badge/AI-NLLB--200-FF66C4?style=flat-square&labelColor=171717)](https://github.com/facebookresearch/fairseq/tree/nllb) [![License](https://img.shields.io/badge/License-MIT-A3E635?style=flat-square&labelColor=171717)](LICENSE)
 
 ---
 
-## Quick install
+## ◈ Preview
 
-Build and install Fluent into a self-contained folder under your home directory:
+![Fluent — Translation interface](./src/image1.png)
+
+![Fluent — Application preview](./src/image2.png)
+
+*Powerful translation. A native interface. Your data stays yours.*
+
+---
+
+## ✦ Features
+
+| Feature | Description |
+| --- | --- |
+| 🌍 **190+ languages** | Translate between a wide range of languages and dialects. |
+| 🧠 **Local AI inference** | Run NLLB-200 models directly on your computer. |
+| ⚡ **Fast mode** | Use the smaller 1.3B model for lighter workloads. |
+| 🎯 **Accurate mode** | Choose the larger 3.3B model for translation quality. |
+| 🔎 **Automatic detection** | Detect the source language automatically. |
+| 🖥️ **Native desktop UI** | A responsive interface built with Rust and egui. |
+| 🎨 **Customizable appearance** | Light, dark, and system themes, plus accent colors. |
+| 🚀 **Optional GPU acceleration** | CUDA on supported NVIDIA systems or Metal on Apple Silicon. |
+| 🔒 **Local-first privacy** | Translation inference runs on your device, without a cloud translation API. |
+| 🧩 **Self-contained installation** | Install the executable, configuration, and model directories under your chosen installation folder. |
+
+## ▸ Getting Started
+
+### Requirements
+
+- Rust 1.85 or newer and Cargo.
+- A C toolchain for native dependencies.
+- Sufficient disk space and memory for the model you intend to use.
+- On Linux, the required X11 or Wayland development libraries and an OpenGL driver when building from source.
+
+The installer builds the desktop application, but **does not download model weights**. You must provide the supported model files separately.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/NeonMC23/Fluent.git
+cd Fluent
+```
+
+### 2. Run the installer
 
 ```bash
 chmod +x install.sh
 ./install.sh
 ```
 
-Requirements: Rust/cargo and a C toolchain (see
-[Building from source](#building-from-source)). No Python or web server is
-needed for the installed application.
+By default, Fluent installs under `~/.fluent`.
 
-The installer detects the current platform:
+The installer builds the GUI in release mode, installs the executable, creates the model directories, and copies or hard-links available model files from the repository's `models/` directory.
 
-| Platform | Installation directory | Executable |
-| --- | --- | --- |
-| Linux (Nobara/Fedora, etc.) | `~/.fluent` | `~/.fluent/bin/fluent` |
-| macOS | `~/.fluent` | `~/.fluent/bin/fluent` |
-| Windows (Git Bash/MSYS2) | `%USERPROFILE%\.fluent` | `%USERPROFILE%\.fluent\bin\fluent.exe` |
+### 3. Add the models
 
-It performs the following steps:
+Fluent supports two translation engines:
 
-- builds `fluent-gui` in release mode;
-- installs the binary into `<install-dir>/bin/`;
-- writes `<install-dir>/config.json` with model paths relative to the install folder;
-- creates `<install-dir>/models/nllb-200-1.3b/` and `<install-dir>/models/nllb-200-3.3b/`;
-- hard-links the model files from `./models` when they are on the same filesystem,
-  and copies them otherwise. Use `--skip-models` to skip this step.
+| Mode | Model | Approximate weights | Intended use |
+| --- | --- | ---: | --- |
+| ⚡ **Fast** | `facebook/nllb-200-1.3B` | 5.2 GB | Lower-memory systems |
+| 🎯 **Accurate** | `facebook/nllb-200-3.3B` | 17.5 GB | Systems with more memory or GPU resources |
 
-The installer never downloads models. If `./models` contains checkpoint folders
-they are installed automatically; otherwise place the model files in
-`<install-dir>/models/` after installation.
-
-Run the installed application with:
-
-```bash
-~/.fluent/bin/fluent
-```
-
-Useful options:
-
-```bash
-./install.sh --cuda            # NVIDIA build (CUDA toolkit + nvcc required)
-./install.sh --metal           # Apple Silicon build
-./install.sh --skip-build      # reuse target/release/fluent
-./install.sh --skip-models     # create empty model folders
-./install.sh --install-dir DIR # install somewhere other than ~/.fluent
-```
-
-`FLUENT_MODELS_SRC=/path/to/models ./install.sh` reads model files from another
-directory. `FLUENT_INSTALL_DIR` overrides the installation directory.
-
-### Installed layout
+Place each model's files in the corresponding directory:
 
 ```text
 ~/.fluent/
@@ -96,51 +85,58 @@ directory. `FLUENT_INSTALL_DIR` overrides the installation directory.
     └── nllb-200-3.3b/
 ```
 
-The application loads `config.json` from the executable directory or its parent
-before looking in the current directory, so the installed copy always uses its
-own `models/` folder, regardless of where you launch it from.
+Each model directory must contain the required model configuration, tokenizer, and supported checkpoint files. Sharded checkpoints are supported.
 
-To uninstall, remove the installation folder:
+If the installer did not find models in the repository, place them in the installed `models/` directory after installation.
+
+### 4. Launch Fluent
 
 ```bash
-rm -rf ~/.fluent
+~/.fluent/bin/fluent
 ```
 
-Platform settings such as the selected theme and last source text are stored
-separately (see [Usage](#usage)).
+The models are loaded on demand when you perform your first translation.
 
----
+### Installer options
 
-## Translation engines
+| Option | Purpose |
+| --- | --- |
+| `--cuda` | Build with NVIDIA CUDA support; requires the CUDA toolkit and `nvcc`. |
+| `--metal` | Build with Metal support for Apple Silicon. |
+| `--skip-build` | Reuse an existing `target/release/fluent` binary. |
+| `--skip-models` | Create empty model directories without installing models. |
+| `--install-dir DIR` | Choose a custom installation directory. |
 
-| Mode | Model | Weights | Best for |
-| --- | --- | --- | --- |
-| Fast | `facebook/nllb-200-1.3B` | ~5.2 GB | CPUs and low-memory machines |
-| Accurate | `facebook/nllb-200-3.3B` | ~17.5 GB | GPUs and machines with plenty of RAM |
+You can also override the model source and installation location:
 
-Models are loaded on demand and can be unloaded from the settings panel to free
-memory.
-
-### Model files
-
-For a source build, place the model directories next to `config.json` (or update
-the paths in that file). The installer places them in the installation folder
-instead (`~/.fluent/models/` by default).
-
-Each model directory must contain:
-
-```text
-models/nllb-200-1.3b/
-├── config.json
-├── tokenizer.json
-├── pytorch_model.bin          # or model.safetensors
-└── sentencepiece.bpe.model    # optional, not used by the Rust engine
+```bash
+FLUENT_MODELS_SRC=/path/to/models ./install.sh
+FLUENT_INSTALL_DIR=/path/to/install ./install.sh
 ```
 
-Sharded checkpoints (`pytorch_model.bin.index.json`, `model.safetensors.index.json`)
-are supported too.
+## ⌁ Using Fluent
 
-`config.json` at the repository root points to the two model directories:
+1. Select a source language or leave automatic detection enabled.
+2. Choose your target language using the searchable language selector.
+3. Enter or paste the text you want to translate.
+4. Click **Translate** or press `Ctrl + Enter`.
+5. Copy the translated result when you're ready.
+
+The interface displays model-loading and generation progress. Operations can be cancelled while loading or generating.
+
+## ⚙️ Configuration
+
+Fluent stores application settings separately from the model files.
+
+| Platform | Settings location |
+| --- | --- |
+| Linux | `~/.config/fluent/settings.json` |
+| Windows | `%APPDATA%\fluent\Fluent\settings.json` |
+| macOS | `~/Library/Application Support/io.fluent.Fluent/settings.json` |
+
+The root `config.json` defines model paths and generation defaults. For an installed copy, the application uses the configuration associated with its installation directory.
+
+Example:
 
 ```json
 {
@@ -155,43 +151,50 @@ are supported too.
 }
 ```
 
-The `host` and `port` fields are only used by the legacy Python server.
+## 🚀 GPU Acceleration
 
----
+Fluent runs on the CPU by default. Optional acceleration can be enabled at build time.
 
-## Building from source
-
-### Requirements
-
-- Rust 1.85 or newer (`rustup` is recommended)
-- A C toolchain for the target platform
-- Linux: X11 or Wayland development libraries and an OpenGL driver
-
-### Run from source
+### NVIDIA — CUDA
 
 ```bash
-git clone <repository-url> fluent
-cd fluent
-
-# Build and run the desktop application
-cargo run --release -p fluent-gui
+cargo build --release -p fluent-gui --features cuda
 ```
 
-The binary is written to `target/release/fluent` (`fluent.exe` on Windows).
+Requires a compatible NVIDIA GPU, CUDA toolkit, and `nvcc`.
 
-### Linux (Fedora / Nobara)
+### Apple Silicon — Metal
+
+```bash
+cargo build --release -p fluent-gui --features metal
+```
+
+Requires a supported Apple Silicon environment.
+
+When the corresponding feature is enabled, select the desired device in **Settings → Device**. Otherwise, use CPU inference.
+
+## 🛠️ Building from Source
+
+### Linux — Fedora / Nobara
+
+Install the required system packages:
 
 ```bash
 sudo dnf install gcc gcc-c++ make cmake \
     libxkbcommon-devel wayland-devel mesa-libGL-devel \
     fontconfig-devel
+```
+
+Build and run:
+
+```bash
 cargo build --release -p fluent-gui
 ./target/release/fluent
 ```
 
 ### Windows
 
-Install the MSVC build tools and Rust (`x86_64-pc-windows-msvc`), then run:
+Install Rust and the MSVC C++ build tools, then run:
 
 ```powershell
 cargo build --release -p fluent-gui
@@ -200,58 +203,16 @@ cargo build --release -p fluent-gui
 
 ### macOS
 
-Install Xcode Command Line Tools and Rust, then run:
+Install Xcode Command Line Tools and Rust:
 
 ```bash
 cargo build --release -p fluent-gui
 ./target/release/fluent
 ```
 
-### GPU acceleration (optional)
+### CLI example
 
-The default build is CPU-only and runs everywhere. GPU support is compiled in
-explicitly:
-
-```bash
-# NVIDIA (CUDA toolkit and nvcc required)
-cargo build --release -p fluent-gui --features cuda
-
-# Apple Silicon (Metal)
-cargo build --release -p fluent-gui --features metal
-```
-
-Select `Automatic`, `Processor (CPU)`, `NVIDIA GPU (CUDA)` or
-`Apple GPU (Metal)` in **Settings → Device**. CUDA/Metal entries are only
-available in builds that include the corresponding feature.
-
----
-
-## Usage
-
-1. Choose a source language, or keep **Automatic detection**.
-2. Choose the target language. Use the search field to filter by English name,
-   native name, FLORES-200 code or ISO code.
-3. Paste or type your text. Long text scrolls inside the editor instead of
-   overflowing the panel.
-4. Click **Translate** or press `Ctrl + Enter`.
-5. Use **Copy** to put the translation on the clipboard.
-
-The model is loaded on the first translation. Loading and generation show live
-progress and can be cancelled at any time.
-
-Settings are stored in the platform configuration directory:
-
-| Platform | Path |
-| --- | --- |
-| Linux | `~/.config/fluent/settings.json` |
-| Windows | `%APPDATA%\fluent\Fluent\settings.json` |
-| macOS | `~/Library/Application Support/io.fluent.Fluent/settings.json` |
-
----
-
-## Command-line example
-
-The core engine also ships with a small CLI example:
+The core crate also includes a command-line translation example:
 
 ```bash
 cargo run --release -p fluent-core --example translate -- \
@@ -261,50 +222,64 @@ cargo run --release -p fluent-core --example translate -- \
 
 Optional environment variables:
 
-- `FLUENT_BEAMS` — beam width (default `4`)
-- `FLUENT_MAX_NEW` — maximum generated tokens
+- `FLUENT_BEAMS` — beam width; defaults to `4`.
+- `FLUENT_MAX_NEW` — maximum number of generated tokens.
+
+## ⛭ Technology
+
+| Component | Technology |
+| --- | --- |
+| Language | Rust |
+| Desktop interface | egui / eframe |
+| Inference engine | Candle |
+| Translation models | Meta NLLB-200 |
+| Tokenization | Hugging Face `tokenizers` |
+| Language detection | `whatlang` |
+| Configuration | JSON and Serde |
+| GPU acceleration | Optional CUDA / Metal |
+
+The Rust application is independent of the legacy Python backend and web frontend, which remain in the repository for reference.
+
+## 🔒 Privacy by Design
+
+Fluent is designed to keep translation local.
+
+- **No cloud translation API** is required for inference.
+- **No account** is needed.
+- **No dedicated application backend** is required by the native translation engine.
+- **Your text stays on your device** during local inference.
+- **Model downloads require network access**, but translation itself can run offline once the required files are available.
+
+Your operating system and other software may still have their own network activity; Fluent's local inference does not mean the entire machine is offline.
+
+## 🗺️ Roadmap
+
+Potential future improvements:
+
+- [ ] More model choices and inference optimizations.
+- [ ] Additional interface customization.
+- [ ] Improved model management and setup guidance.
+- [ ] Further performance and usability refinements.
+
+These are possible future directions, not promises of features already implemented.
+
+## 🤝 Contributing
+
+Contributions, bug reports, and suggestions are welcome.
+
+- Report bugs and unexpected translation results.
+- Suggest interface and usability improvements.
+- Help improve documentation and cross-platform support.
+- Propose performance optimizations.
+
+For substantial changes, open an issue to discuss the approach before submitting a pull request.
+
+## 📄 License
+
+Fluent is distributed under the [MIT License](LICENSE).
 
 ---
 
-## Project layout
+*Your language. Your machine. Your privacy.*
 
-```text
-.
-├── Cargo.toml                 # Cargo workspace
-├── config.json                # model paths and defaults
-├── install.sh                 # build + self-contained installer
-├── crates/
-│   ├── fluent-core/           # NLLB-200 engine, tokenizer, language data
-│   │   ├── src/
-│   │   └── examples/translate.rs
-│   └── fluent-gui/            # egui desktop application
-│       └── src/
-├── backend/                   # legacy Python/Flask implementation
-├── frontend/                  # legacy web interface
-└── models/                    # local NLLB-200 checkpoints
-```
-
-The original Python implementation is kept in `backend/`, `frontend/` and
-`start.py` for reference. The Rust application does not depend on it.
-
----
-
-## Technology
-
-- **Language:** Rust
-- **Interface:** egui / eframe (glow renderer)
-- **Inference:** candle (CPU by default, optional CUDA/Metal)
-- **Models:** Meta NLLB-200 (M2M100 architecture)
-- **Tokenizer:** Hugging Face `tokenizers`
-- **Language detection:** `whatlang`
-- **Configuration:** JSON + serde
-
-## Privacy
-
-All inference happens on the local device. Fluent does not send text, prompts or
-statistics over the network. The only network access is the one you perform
-yourself when downloading model weights.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+**Fluent — Translation without the cloud.**
