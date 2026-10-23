@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fluent</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">F</div>
+          <div>
+            <h1>Fluent</h1>
+            <p>Traduction IA locale avec NLLB-200</p>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <div class="status-pill" id="engineStatus">
+            <span class="status-dot"></span>
+            <span>Initialisation</span>
+          </div>
+          <button class="icon-button" id="themeToggle" type="button" title="Changer de theme" aria-label="Changer de theme">
+            <span id="themeIcon">◐</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="toolbar" aria-label="Options de traduction">
+          <div class="segmented" role="group" aria-label="Mode de qualite">
+            <button class="segment active" type="button" data-mode="fast">Rapide</button>
+            <button class="segment" type="button" data-mode="accurate">Precis</button>
+          </div>
+
+          <label class="color-field">
+            <span>Accent</span>
+            <input id="accentColor" type="color" value="#0f9f8f" />
+          </label>
+
+          <button class="text-button" id="reloadStatus" type="button">Etat moteur</button>
+        </section>
+
+        <section class="translator" aria-label="Traducteur">
+          <article class="pane">
+            <div class="pane-header">
+              <div class="language-picker">
+                <label for="sourceSearch">Depuis</label>
+                <input id="sourceSearch" type="search" placeholder="Rechercher une langue" autocomplete="off" />
+                <select id="sourceLanguage" aria-label="Langue source"></select>
+              </div>
+              <button class="icon-button swap-button" id="swapLanguages" type="button" title="Echanger les langues" aria-label="Echanger les langues">⇄</button>
+            </div>
+            <textarea id="sourceText" maxlength="5000" spellcheck="true" placeholder="Saisissez le texte a traduire"></textarea>
+            <div class="pane-footer">
+              <span id="charCount">0 / 5000</span>
+              <button class="ghost-button" id="clearText" type="button">Effacer</button>
+            </div>
+          </article>
+
+          <article class="pane output-pane">
+            <div class="pane-header">
+              <div class="language-picker">
+                <label for="targetSearch">Vers</label>
+                <input id="targetSearch" type="search" placeholder="Rechercher une langue" autocomplete="off" />
+                <select id="targetLanguage" aria-label="Langue cible"></select>
+              </div>
+            </div>
+            <div class="translation-output" id="translationOutput" aria-live="polite">
+              <span class="placeholder">La traduction apparaitra ici.</span>
+            </div>
+            <div class="pane-footer">
+              <span id="detectedLanguage">Detection automatique disponible</span>
+              <button class="ghost-button" id="copyResult" type="button">Copier</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="action-row">
+          <button class="primary-button" id="translateButton" type="button">
+            <span>Traduire</span>
+          </button>
+          <p id="message" role="status"></p>
+        </section>
+
+        <section class="details-grid" aria-label="Informations">
+          <div class="info-tile">
+            <span class="tile-label">Confidentialite</span>
+            <strong>Local first</strong>
+            <p>Le texte est envoye uniquement au serveur local Flask.</p>
+          </div>
+          <div class="info-tile">
+            <span class="tile-label">Modeles</span>
+            <strong>NLLB-200</strong>
+            <p>Mode rapide 1.3B, mode precis 3.3B selon le README.</p>
+          </div>
+          <div class="info-tile">
+            <span class="tile-label">Execution</span>
+            <strong id="deviceLabel">CPU/GPU</strong>
+            <p>GPU utilise automatiquement si PyTorch detecte CUDA.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/js/app.js"></script>
+  </body>
+</html>
