@@ -1,0 +1,205 @@
+# code	name	native	popular	iso3
+eng_Latn	English	English	1	en
+fra_Latn	French	Français	1	fr
+spa_Latn	Spanish	Español	1	es
+deu_Latn	German	Deutsch	1	de
+ita_Latn	Italian	Italiano	1	it
+por_Latn	Portuguese	Português	1	pt
+rus_Cyrl	Russian	Русский	1	ru
+zho_Hans	Chinese (Simplified)	简体中文	1	zh-cn
+jpn_Jpan	Japanese	日本語	1	ja
+kor_Hang	Korean	한국어	1	ko
+arb_Arab	Arabic	العربية	1	ar
+hin_Deva	Hindi	हिन्दी	1	hi
+nld_Latn	Dutch	Nederlands	1	nl
+pol_Latn	Polish	Polski	1	pl
+ukr_Cyrl	Ukrainian	Українська	1	uk
+tur_Latn	Turkish	Türkçe	1	tr
+vie_Latn	Vietnamese	Tiếng Việt	1	vi
+tha_Thai	Thai	ไทย	1	th
+ind_Latn	Indonesian	Bahasa Indonesia	1	id
+ron_Latn	Romanian	Română	1	ro
+ces_Latn	Czech	Čeština	1	cs
+ell_Grek	Greek	Ελληνικά	1	el
+swe_Latn	Swedish	Svenska	1	sv
+fin_Latn	Finnish	Suomi	1	fi
+dan_Latn	Danish	Dansk	1	da
+nob_Latn	Norwegian Bokmål	Norsk bokmål	1	no
+heb_Hebr	Hebrew	עברית	1	he
+ben_Beng	Bengali	বাংলা	1	bn
+zho_Hant	Chinese (Traditional)	繁體中文	1	zh-tw
+ckb_Arab	Central Kurdish	کوردیی ناوەندی	1	
+ace_Arab	Acehnese (Arabic script)	Acehnese (Arabic script)	0	
+ace_Latn	Acehnese (Latin script)	Acehnese (Latin script)	0	
+acm_Arab	Mesopotamian Arabic	Mesopotamian Arabic	0	
+acq_Arab	Taizzi-Adeni Arabic	Taizzi-Adeni Arabic	0	
+aeb_Arab	Tunisian Arabic	Tunisian Arabic	0	
+afr_Latn	Afrikaans	Afrikaans	0	
+ajp_Arab	South Levantine Arabic	South Levantine Arabic	0	
+aka_Latn	Akan	Akan	0	
+amh_Ethi	Amharic	Amharic	0	
+apc_Arab	North Levantine Arabic	North Levantine Arabic	0	
+arb_Latn	Modern Standard Arabic (Romanized)	Modern Standard Arabic (Romanized)	0	
+ars_Arab	Najdi Arabic	Najdi Arabic	0	
+ary_Arab	Moroccan Arabic	Moroccan Arabic	0	
+arz_Arab	Egyptian Arabic	Egyptian Arabic	0	
+asm_Beng	Assamese	Assamese	0	
+ast_Latn	Asturian	Asturian	0	
+awa_Deva	Awadhi	Awadhi	0	
+ayr_Latn	Central Aymara	Central Aymara	0	
+azb_Arab	South Azerbaijani	South Azerbaijani	0	
+azj_Latn	North Azerbaijani	North Azerbaijani	0	
+bak_Cyrl	Bashkir	Bashkir	0	
+bam_Latn	Bambara	Bambara	0	
+ban_Latn	Balinese	Balinese	0	
+bel_Cyrl	Belarusian	Belarusian	0	
+bem_Latn	Bemba	Bemba	0	
+bho_Deva	Bhojpuri	Bhojpuri	0	
+bjn_Arab	Banjar (Arabic script)	Banjar (Arabic script)	0	
+bjn_Latn	Banjar (Latin script)	Banjar (Latin script)	0	
+bod_Tibt	Standard Tibetan	Standard Tibetan	0	
+bos_Latn	Bosnian	Bosnian	0	
+bug_Latn	Buginese	Buginese	0	
+bul_Cyrl	Bulgarian	Bulgarian	0	
+cat_Latn	Catalan	Catalan	0	
+ceb_Latn	Cebuano	Cebuano	0	
+cjk_Latn	Chokwe	Chokwe	0	
+crh_Latn	Crimean Tatar	Crimean Tatar	0	
+cym_Latn	Welsh	Welsh	0	
+dik_Latn	Southwestern Dinka	Southwestern Dinka	0	
+dyu_Latn	Dyula	Dyula	0	
+dzo_Tibt	Dzongkha	Dzongkha	0	
+epo_Latn	Esperanto	Esperanto	0	
+est_Latn	Estonian	Estonian	0	
+eus_Latn	Basque	Basque	0	
+ewe_Latn	Ewe	Ewe	0	
+fao_Latn	Faroese	Faroese	0	
+fij_Latn	Fijian	Fijian	0	
+fon_Latn	Fon	Fon	0	
+fur_Latn	Friulian	Friulian	0	
+fuv_Latn	Nigerian Fulfulde	Nigerian Fulfulde	0	
+gla_Latn	Scottish Gaelic	Scottish Gaelic	0	
+gle_Latn	Irish	Irish	0	
+glg_Latn	Galician	Galician	0	
+grn_Latn	Guarani	Guarani	0	
+guj_Gujr	Gujarati	Gujarati	0	
+hat_Latn	Haitian Creole	Haitian Creole	0	
+hau_Latn	Hausa	Hausa	0	
+hne_Deva	Chhattisgarhi	Chhattisgarhi	0	
+hrv_Latn	Croatian	Croatian	0	
+hun_Latn	Hungarian	Hungarian	0	
+hye_Armn	Armenian	Armenian	0	
+ibo_Latn	Igbo	Igbo	0	
+ilo_Latn	Ilocano	Ilocano	0	
+isl_Latn	Icelandic	Icelandic	0	
+jav_Latn	Javanese	Javanese	0	
+kab_Latn	Kabyle	Kabyle	0	
+kac_Latn	Jingpho	Jingpho	0	
+kam_Latn	Kamba	Kamba	0	
+kan_Knda	Kannada	Kannada	0	
+kas_Arab	Kashmiri (Arabic script)	Kashmiri (Arabic script)	0	
+kas_Deva	Kashmiri (Devanagari script)	Kashmiri (Devanagari script)	0	
+kat_Geor	Georgian	Georgian	0	
+knc_Arab	Central Kanuri (Arabic script)	Central Kanuri (Arabic script)	0	
+knc_Latn	Central Kanuri (Latin script)	Central Kanuri (Latin script)	0	
+kaz_Cyrl	Kazakh	Kazakh	0	
+kbp_Latn	Kabiye	Kabiye	0	
+kea_Latn	Kabuverdianu	Kabuverdianu	0	
+khm_Khmr	Khmer	Khmer	0	
+kik_Latn	Kikuyu	Kikuyu	0	
+kin_Latn	Kinyarwanda	Kinyarwanda	0	
+kir_Cyrl	Kyrgyz	Kyrgyz	0	
+kmb_Latn	Kimbundu	Kimbundu	0	
+kmr_Latn	Northern Kurdish	Northern Kurdish	0	
+kon_Latn	Kikongo	Kikongo	0	
+lao_Laoo	Lao	Lao	0	
+lij_Latn	Ligurian	Ligurian	0	
+lim_Latn	Limburgish	Limburgish	0	
+lin_Latn	Lingala	Lingala	0	
+lit_Latn	Lithuanian	Lithuanian	0	
+lmo_Latn	Lombard	Lombard	0	
+ltg_Latn	Latgalian	Latgalian	0	
+ltz_Latn	Luxembourgish	Luxembourgish	0	
+lua_Latn	Luba-Kasai	Luba-Kasai	0	
+lug_Latn	Ganda	Ganda	0	
+luo_Latn	Luo	Luo	0	
+lus_Latn	Mizo	Mizo	0	
+lvs_Latn	Standard Latvian	Standard Latvian	0	
+mag_Deva	Magahi	Magahi	0	
+mai_Deva	Maithili	Maithili	0	
+mal_Mlym	Malayalam	Malayalam	0	
+mar_Deva	Marathi	Marathi	0	
+min_Arab	Minangkabau (Arabic script)	Minangkabau (Arabic script)	0	
+min_Latn	Minangkabau (Latin script)	Minangkabau (Latin script)	0	
+mkd_Cyrl	Macedonian	Macedonian	0	
+plt_Latn	Plateau Malagasy	Plateau Malagasy	0	
+mlt_Latn	Maltese	Maltese	0	
+mni_Beng	Meitei (Bengali script)	Meitei (Bengali script)	0	
+khk_Cyrl	Halh Mongolian	Halh Mongolian	0	
+mos_Latn	Mossi	Mossi	0	
+mri_Latn	Maori	Maori	0	
+mya_Mymr	Burmese	Burmese	0	
+nno_Latn	Norwegian Nynorsk	Norwegian Nynorsk	0	
+npi_Deva	Nepali	Nepali	0	
+nso_Latn	Northern Sotho	Northern Sotho	0	
+nus_Latn	Nuer	Nuer	0	
+nya_Latn	Nyanja	Nyanja	0	
+oci_Latn	Occitan	Occitan	0	
+gaz_Latn	West Central Oromo	West Central Oromo	0	
+ory_Orya	Odia	Odia	0	
+pag_Latn	Pangasinan	Pangasinan	0	
+pan_Guru	Eastern Panjabi	Eastern Panjabi	0	
+pap_Latn	Papiamento	Papiamento	0	
+pes_Arab	Western Persian	Western Persian	0	
+prs_Arab	Dari	Dari	0	
+pbt_Arab	Southern Pashto	Southern Pashto	0	
+quy_Latn	Ayacucho Quechua	Ayacucho Quechua	0	
+run_Latn	Rundi	Rundi	0	
+sag_Latn	Sango	Sango	0	
+san_Deva	Sanskrit	Sanskrit	0	
+sat_Olck	Santali	Santali	0	
+scn_Latn	Sicilian	Sicilian	0	
+shn_Mymr	Shan	Shan	0	
+sin_Sinh	Sinhala	Sinhala	0	
+slk_Latn	Slovak	Slovak	0	
+slv_Latn	Slovenian	Slovenian	0	
+smo_Latn	Samoan	Samoan	0	
+sna_Latn	Shona	Shona	0	
+snd_Arab	Sindhi	Sindhi	0	
+som_Latn	Somali	Somali	0	
+sot_Latn	Southern Sotho	Southern Sotho	0	
+als_Latn	Tosk Albanian	Tosk Albanian	0	
+srd_Latn	Sardinian	Sardinian	0	
+srp_Cyrl	Serbian	Serbian	0	
+ssw_Latn	Swati	Swati	0	
+sun_Latn	Sundanese	Sundanese	0	
+swh_Latn	Swahili	Swahili	0	
+szl_Latn	Silesian	Silesian	0	
+tam_Taml	Tamil	Tamil	0	
+tat_Cyrl	Tatar	Tatar	0	
+tel_Telu	Telugu	Telugu	0	
+tgk_Cyrl	Tajik	Tajik	0	
+tgl_Latn	Tagalog	Tagalog	0	
+tir_Ethi	Tigrinya	Tigrinya	0	
+taq_Latn	Tamasheq (Latin script)	Tamasheq (Latin script)	0	
+taq_Tfng	Tamasheq (Tifinagh script)	Tamasheq (Tifinagh script)	0	
+tpi_Latn	Tok Pisin	Tok Pisin	0	
+tsn_Latn	Tswana	Tswana	0	
+tso_Latn	Tsonga	Tsonga	0	
+tuk_Latn	Turkmen	Turkmen	0	
+tum_Latn	Tumbuka	Tumbuka	0	
+twi_Latn	Twi	Twi	0	
+tzm_Tfng	Central Atlas Tamazight	Central Atlas Tamazight	0	
+uig_Arab	Uyghur	Uyghur	0	
+umb_Latn	Umbundu	Umbundu	0	
+urd_Arab	Urdu	Urdu	0	
+uzn_Latn	Northern Uzbek	Northern Uzbek	0	
+vec_Latn	Venetian	Venetian	0	
+war_Latn	Waray	Waray	0	
+wol_Latn	Wolof	Wolof	0	
+xho_Latn	Xhosa	Xhosa	0	
+ydd_Hebr	Eastern Yiddish	Eastern Yiddish	0	
+yor_Latn	Yoruba	Yoruba	0	
+yue_Hant	Yue Chinese	Yue Chinese	0	
+zsm_Latn	Standard Malay	Standard Malay	0	
+zul_Latn	Zulu	Zulu	0	

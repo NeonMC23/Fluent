@@ -1,0 +1,25 @@
+[package]
+name = "fluent-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Local NLLB-200 translation engine written in pure Rust"
+
+[dependencies]
+candle-core = "0.11"
+candle-nn = "0.11"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokenizers = { version = "0.22", default-features = true }
+whatlang = "0.18"
+
+[features]
+default = []
+cuda = ["candle-core/cuda", "candle-nn/cuda"]
+metal = ["candle-core/metal", "candle-nn/metal"]
+
+[[example]]
+name = "translate"
+path = "examples/translate.rs"

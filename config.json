@@ -6,8 +6,8 @@
   "default_mode": "fast",
   "theme": "system",
   "models": {
-    "fast": "models/nllb-200-1.3B",
-    "accurate": "models/nllb-200-3.3B"
+    "fast": "models/nllb-200-1.3b",
+    "accurate": "models/nllb-200-3.3b"
   },
   "generation": {
     "max_length": 512,

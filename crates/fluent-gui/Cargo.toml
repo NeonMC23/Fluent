@@ -1,0 +1,33 @@
+[package]
+name = "fluent-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Fluent — local NLLB-200 translator with a native egui interface"
+
+[[bin]]
+name = "fluent"
+path = "src/main.rs"
+
+[dependencies]
+eframe = { version = "0.37", default-features = false, features = [
+    "accesskit",
+    "clipboard",
+    "default_fonts",
+    "glow",
+    "links",
+    "system_fonts",
+    "wayland",
+    "x11",
+] }
+egui = "0.37"
+fluent-core = { path = "../fluent-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+directories = "5"
+
+[features]
+default = []
+cuda = ["fluent-core/cuda"]
+metal = ["fluent-core/metal"]
