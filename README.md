@@ -157,6 +157,8 @@ Example:
 }
 ```
 
+`max_length` is the maximum number of **source** tokens; longer input is truncated explicitly and flagged in the interface. The number of **generated** tokens is derived from the encoded input (`min(512, source_tokens * 2 + 16)`) so short sentences finish quickly. An optional `"max_new_tokens"` entry overrides that automatic budget.
+
 ## 🚀 GPU Acceleration
 
 Fluent runs on the CPU by default. Optional acceleration can be enabled at build time.

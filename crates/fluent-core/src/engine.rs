@@ -73,8 +73,9 @@ pub struct EngineConfig {
     pub precision: Precision,
     /// Maximum length of the source sequence (tokens).
     pub max_length: usize,
-    /// Maximum number of generated tokens.
-    pub max_new_tokens: usize,
+    /// Maximum number of generated tokens. `None` derives a length-aware
+    /// budget from the encoded source.
+    pub max_new_tokens: Option<usize>,
     /// Beam search width.
     pub num_beams: usize,
 }
@@ -87,7 +88,7 @@ impl EngineConfig {
             device: DeviceChoice::Auto,
             precision: Precision::Auto,
             max_length: 512,
-            max_new_tokens: 512,
+            max_new_tokens: None,
             num_beams: 4,
         }
     }
@@ -96,10 +97,23 @@ impl EngineConfig {
     pub fn from_project(project: &ProjectConfig, mode: Mode) -> Self {
         let mut config = Self::new(mode, project.model_path(mode).to_path_buf());
         config.max_length = project.max_length;
-        config.max_new_tokens = project.max_length;
+        config.max_new_tokens = project.max_new_tokens;
         config.num_beams = project.num_beams;
         config
     }
+}
+
+/// Length-aware default budget for generated tokens.
+///
+/// A translation is rarely longer than twice its source, so this keeps short
+/// inputs far below the 512-token cap while still leaving room for expansion,
+/// identifiers, and punctuation. The hard cap matches the model's position
+/// table and the previous behaviour.
+pub fn default_generation_budget(source_tokens: usize) -> usize {
+    source_tokens
+        .saturating_mul(2)
+        .saturating_add(16)
+        .clamp(16, 512)
 }
 
 // ---------------------------------------------------------------------------
@@ -531,9 +545,15 @@ impl Engine {
             Some(0.0),
             "Generating translation",
         ));
+        let generation_budget = self
+            .config
+            .max_new_tokens
+            .map(|value| value.clamp(1, 1024))
+            .unwrap_or_else(|| default_generation_budget(source_ids.len()));
         let options = GenerateOptions {
-            max_new_tokens: self.config.max_new_tokens.max(1),
+            max_new_tokens: generation_budget,
             num_beams: self.config.num_beams.max(1),
+            early_stopping: Default::default(),
         };
         let tokens = loaded.model.generate(
             &loaded.tokenizer,
@@ -720,5 +740,27 @@ mod tests {
             ..estimate
         };
         assert!(!too_big.fits());
+    }
+
+    #[test]
+    fn generation_budget_scales_with_source_length() {
+        assert_eq!(default_generation_budget(0), 16);
+        assert_eq!(default_generation_budget(1), 18);
+        assert_eq!(default_generation_budget(12), 40);
+        assert_eq!(default_generation_budget(100), 216);
+        assert_eq!(default_generation_budget(400), 512);
+        assert_eq!(default_generation_budget(usize::MAX), 512);
+    }
+
+    #[test]
+    fn source_and_generation_limits_are_independent() {
+        let project = ProjectConfig {
+            max_length: 64,
+            max_new_tokens: Some(200),
+            ..ProjectConfig::default()
+        };
+        let config = EngineConfig::from_project(&project, Mode::Fast);
+        assert_eq!(config.max_length, 64);
+        assert_eq!(config.max_new_tokens, Some(200));
     }
 }

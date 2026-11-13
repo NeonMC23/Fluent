@@ -601,19 +601,14 @@ impl Nllb {
                 return Err(Error::Cancelled);
             }
 
-            let candidates = top_candidates(&rows, &scores, beams * 4 + 4);
-            let mut active: Vec<Candidate> = Vec::with_capacity(beams);
-            for candidate in candidates {
-                if candidate.token == eos_id {
-                    let length = (sequences[candidate.beam].len() + 1).max(1);
-                    completed.push((
-                        sequences[candidate.beam].clone(),
-                        candidate.score / length as f64,
-                    ));
-                } else if active.len() < beams {
-                    active.push(candidate);
-                }
-            }
+            // Search each beam separately before merging. A single global
+            // top-k is dominated by the best beam, which can starve the other
+            // beams of their EOS candidate and prevent beam search from ever
+            // completing `num_beams` hypotheses.
+            let pooled = top_candidates_per_beam(&rows, &scores, beams * 2);
+            let (active, finished) = collect_step(&pooled, eos_id, beams, &sequences);
+            completed.extend(finished);
+            trim_completed(&mut completed, beams);
 
             if active.is_empty() {
                 break;
@@ -660,23 +655,24 @@ impl Nllb {
                     let length = sequence.len().max(1) as f64;
                     completed.push((sequence.clone(), *score / length));
                 }
+                trim_completed(&mut completed, beams);
                 break;
             }
 
-            // Early beam search stopping, like Transformers'
-            // `BeamHypotheses.is_done`: once enough hypotheses are finished
-            // and the best running hypothesis can no longer overtake them
-            // (score normalized by length).
-            if completed.len() >= beams {
-                let worst_completed = completed
-                    .iter()
-                    .map(|(_, score)| *score)
-                    .fold(f64::INFINITY, f64::min);
-                let best_active =
-                    scores.iter().copied().fold(f64::NEG_INFINITY, f64::max) / (steps as f64 + 1.0);
-                if worst_completed >= best_active {
-                    break;
-                }
+            // Transformers-compatible stopping policy. The heuristic compares
+            // the worst completed length-normalized score with the score the
+            // best active hypothesis could reach if it terminated now. Future
+            // tokens can only lower the accumulated log-probability, so this
+            // is the standard optimistic bound; it is only applied once
+            // `num_beams` hypotheses are complete, as in `BeamHypotheses`.
+            if should_stop_early(
+                &completed,
+                &scores,
+                steps + 1,
+                beams,
+                options.early_stopping,
+            ) {
+                break;
             }
         }
 
@@ -686,12 +682,35 @@ impl Nllb {
             ));
         }
 
-        let best = completed
-            .into_iter()
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
-            .map(|(sequence, _)| sequence)
-            .unwrap_or_default();
-        Ok(best)
+        Ok(best_completed(&completed).unwrap_or_default())
+    }
+}
+
+/// Returns the highest-scoring completed hypothesis.
+fn best_completed(completed: &[(Vec<u32>, f64)]) -> Option<Vec<u32>> {
+    completed
+        .iter()
+        .max_by(|(_, a), (_, b)| a.total_cmp(b))
+        .map(|(sequence, _)| sequence.clone())
+}
+
+/// Keeps only the best `limit` completed hypotheses, as `BeamHypotheses` does.
+///
+/// Without this cap, every beam contributes a finished hypothesis on every
+/// later step, the worst score collapses, and early stopping can never fire.
+fn trim_completed(completed: &mut Vec<(Vec<u32>, f64)>, limit: usize) {
+    while completed.len() > limit.max(1) {
+        let worst = completed
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| a.1.total_cmp(&b.1))
+            .map(|(index, _)| index);
+        match worst {
+            Some(index) => {
+                completed.swap_remove(index);
+            }
+            None => break,
+        }
     }
 }
 
@@ -766,6 +785,7 @@ impl Ord for Candidate {
     }
 }
 
+#[cfg(test)]
 fn top_candidates(rows: &[Vec<f32>], beam_scores: &[f64], k: usize) -> Vec<Candidate> {
     use std::cmp::Reverse;
     let mut heap: BinaryHeap<Reverse<Candidate>> = BinaryHeap::with_capacity(k + 1);
@@ -792,10 +812,139 @@ fn top_candidates(rows: &[Vec<f32>], beam_scores: &[f64], k: usize) -> Vec<Candi
     candidates
 }
 
+/// Returns the best `per_beam` candidates of every active beam, pooled and
+/// sorted by cumulative score.
+///
+/// Searching globally instead lets the best beam occupy every slot, which can
+/// hide another beam's end-of-sequence token.
+fn top_candidates_per_beam(
+    rows: &[Vec<f32>],
+    beam_scores: &[f64],
+    per_beam: usize,
+) -> Vec<Candidate> {
+    use std::cmp::Reverse;
+    let per_beam = per_beam.max(1);
+    let mut pooled = Vec::with_capacity(rows.len() * per_beam);
+    for (beam, row) in rows.iter().enumerate() {
+        let beam_score = beam_scores.get(beam).copied().unwrap_or(f64::NEG_INFINITY);
+        let mut heap: BinaryHeap<Reverse<Candidate>> = BinaryHeap::with_capacity(per_beam + 1);
+        for (token, log_prob) in row.iter().enumerate() {
+            let candidate = Candidate {
+                score: beam_score + *log_prob as f64,
+                beam,
+                token: token as u32,
+            };
+            if heap.len() < per_beam {
+                heap.push(Reverse(candidate));
+            } else if let Some(Reverse(smallest)) = heap.peek() {
+                if candidate.score > smallest.score {
+                    heap.pop();
+                    heap.push(Reverse(candidate));
+                }
+            }
+        }
+        pooled.extend(heap.into_iter().map(|Reverse(candidate)| candidate));
+    }
+    pooled.sort_by(|a, b| b.score.total_cmp(&a.score));
+    pooled
+}
+
+/// Splits one beam-search step into the hypotheses to keep active and the
+/// hypotheses that emitted EOS.
+fn collect_step(
+    pooled: &[Candidate],
+    eos_id: u32,
+    beams: usize,
+    sequences: &[Vec<u32>],
+) -> (Vec<Candidate>, Vec<(Vec<u32>, f64)>) {
+    let mut active = Vec::with_capacity(beams);
+    let mut finished = Vec::new();
+    let mut eos_recorded = vec![false; sequences.len()];
+    for candidate in pooled {
+        if candidate.token == eos_id {
+            // Record at most one EOS per beam per step: the row contains one
+            // EOS token, but duplicate rows must not create duplicate
+            // hypotheses.
+            if let Some(recorded) = eos_recorded.get_mut(candidate.beam) {
+                if !*recorded {
+                    *recorded = true;
+                    let length = (sequences[candidate.beam].len() + 1).max(1);
+                    finished.push((
+                        sequences[candidate.beam].clone(),
+                        candidate.score / length as f64,
+                    ));
+                }
+            }
+        } else if active.len() < beams {
+            active.push(*candidate);
+        }
+    }
+    (active, finished)
+}
+
+/// Decides whether beam search may stop before the generation budget.
+///
+/// `next_length` is the length a hypothesis would have if the next token were
+/// EOS. Scores are length-normalized cumulative log-probabilities, so they are
+/// negative; a higher value is better.
+fn should_stop_early(
+    completed: &[(Vec<u32>, f64)],
+    active_scores: &[f64],
+    next_length: usize,
+    beams: usize,
+    policy: EarlyStopping,
+) -> bool {
+    if policy == EarlyStopping::Never || completed.len() < beams {
+        return false;
+    }
+    if policy == EarlyStopping::Always {
+        return true;
+    }
+    let worst_completed = completed
+        .iter()
+        .map(|(_, score)| *score)
+        .fold(f64::INFINITY, f64::min);
+    let best_active = active_scores
+        .iter()
+        .copied()
+        .fold(f64::NEG_INFINITY, f64::max);
+    if !best_active.is_finite() {
+        return true;
+    }
+    let highest_attainable = best_active / next_length.max(1) as f64;
+    worst_completed >= highest_attainable
+}
+
+/// Controls when beam search may stop before exhausting its token budget.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum EarlyStopping {
+    /// Stop as soon as `num_beams` hypotheses have finished.
+    Always,
+    /// Hugging Face's `early_stopping = false` heuristic: once `num_beams`
+    /// hypotheses are complete, stop when the worst completed normalized score
+    /// cannot be improved on by the best active hypothesis.
+    #[default]
+    Heuristic,
+    /// Never stop early; generate until `max_new_tokens` (Hugging Face's
+    /// `early_stopping = "never"`).
+    Never,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct GenerateOptions {
     pub max_new_tokens: usize,
     pub num_beams: usize,
+    pub early_stopping: EarlyStopping,
+}
+
+impl Default for GenerateOptions {
+    fn default() -> Self {
+        Self {
+            max_new_tokens: 256,
+            num_beams: 4,
+            early_stopping: EarlyStopping::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -836,5 +985,196 @@ mod tests {
     #[test]
     fn default_activation_is_relu() {
         assert_eq!(Activation::default(), Activation::Relu);
+    }
+
+    fn candidate(score: f64, beam: usize, token: u32) -> Candidate {
+        Candidate { score, beam, token }
+    }
+
+    #[test]
+    fn per_beam_search_finds_eos_hidden_by_the_best_beam() {
+        // Beam 0 dominates the global ranking; beam 1 can only finish if its
+        // own EOS candidate is considered.
+        let rows = vec![vec![-0.1, -0.2, -0.3, -10.0], vec![-5.0, -5.1, -5.2, -0.5]];
+        let pooled = top_candidates_per_beam(&rows, &[0.0, 0.0], 2);
+
+        let beam_one_eos = pooled
+            .iter()
+            .find(|candidate| candidate.beam == 1 && candidate.token == 3)
+            .expect("beam 1 EOS should be pooled");
+        assert!((beam_one_eos.score - -0.5).abs() < 1e-9);
+
+        // The old global top-k would only contain beam 0's best tokens.
+        let global = top_candidates(&rows, &[0.0, 0.0], 2);
+        assert!(global.iter().all(|candidate| candidate.beam == 0));
+    }
+
+    #[test]
+    fn collect_step_records_one_eos_per_beam_and_fills_active_slots() {
+        let pooled = vec![
+            candidate(-0.5, 0, 3),
+            candidate(-0.7, 1, 3),
+            candidate(-1.0, 0, 10),
+            candidate(-1.2, 1, 11),
+            candidate(-1.3, 0, 12),
+        ];
+        let sequences = vec![vec![7, 8, 9], vec![7, 8, 9]];
+        let (active, finished) = collect_step(&pooled, 3, 2, &sequences);
+
+        assert_eq!(finished.len(), 2);
+        assert!((finished[0].1 - (-0.5 / 4.0)).abs() < 1e-9);
+        assert!((finished[1].1 - (-0.7 / 4.0)).abs() < 1e-9);
+        assert_eq!(active.len(), 2);
+        assert_eq!(active[0].token, 10);
+        assert_eq!(active[1].token, 11);
+    }
+
+    #[test]
+    fn collect_step_handles_multiple_children_from_one_parent() {
+        let pooled = vec![
+            candidate(-0.1, 0, 4),
+            candidate(-0.2, 0, 5),
+            candidate(-0.3, 1, 6),
+        ];
+        let sequences = vec![vec![2], vec![2]];
+        let (active, finished) = collect_step(&pooled, 3, 2, &sequences);
+
+        assert!(finished.is_empty());
+        assert_eq!(active.len(), 2);
+        assert_eq!(active[0].beam, 0);
+        assert_eq!(active[1].beam, 0);
+    }
+
+    #[test]
+    fn heuristic_waits_for_enough_completed_hypotheses() {
+        let completed = vec![(vec![1], -0.1)];
+        assert!(!should_stop_early(
+            &completed,
+            &[-50.0],
+            4,
+            4,
+            EarlyStopping::Heuristic
+        ));
+    }
+
+    #[test]
+    fn heuristic_stops_when_active_beams_cannot_overtake() {
+        let completed = vec![
+            (vec![1], -1.0),
+            (vec![2], -1.1),
+            (vec![3], -1.2),
+            (vec![4], -1.3),
+        ];
+        // Best active normalized score would be -5.0, worse than -1.3.
+        assert!(should_stop_early(
+            &completed,
+            &[-50.0],
+            10,
+            4,
+            EarlyStopping::Heuristic
+        ));
+    }
+
+    #[test]
+    fn heuristic_continues_when_an_active_beam_can_still_overtake() {
+        let completed = vec![
+            (vec![1], -1.0),
+            (vec![2], -1.1),
+            (vec![3], -1.2),
+            (vec![4], -1.3),
+        ];
+        // -2.0 / 10 = -0.2, better than the worst completed score.
+        assert!(!should_stop_early(
+            &completed,
+            &[-2.0],
+            10,
+            4,
+            EarlyStopping::Heuristic
+        ));
+    }
+
+    #[test]
+    fn never_policy_runs_to_the_budget() {
+        let completed = vec![
+            (vec![1], -1.0),
+            (vec![2], -1.1),
+            (vec![3], -1.2),
+            (vec![4], -1.3),
+        ];
+        assert!(!should_stop_early(
+            &completed,
+            &[-50.0],
+            10,
+            4,
+            EarlyStopping::Never
+        ));
+    }
+
+    #[test]
+    fn always_policy_stops_once_every_beam_completed() {
+        let completed = vec![
+            (vec![1], -1.0),
+            (vec![2], -1.1),
+            (vec![3], -1.2),
+            (vec![4], -1.3),
+        ];
+        assert!(should_stop_early(
+            &completed,
+            &[0.0],
+            10,
+            4,
+            EarlyStopping::Always
+        ));
+    }
+
+    #[test]
+    fn best_completed_selects_the_highest_normalized_score() {
+        let completed = vec![
+            (vec![10, 11], -1.4),
+            (vec![20, 21, 22], -0.9),
+            (vec![30], -1.1),
+        ];
+        assert_eq!(best_completed(&completed), Some(vec![20, 21, 22]));
+        assert_eq!(best_completed(&[]), None);
+    }
+
+    #[test]
+    fn completed_hypotheses_are_capped_to_the_beam_count() {
+        let mut completed = vec![
+            (vec![1], -2.0),
+            (vec![2], -0.5),
+            (vec![3], -1.0),
+            (vec![4], -1.5),
+        ];
+        trim_completed(&mut completed, 2);
+        assert_eq!(completed.len(), 2);
+        assert!(completed.iter().any(|(sequence, _)| sequence == &vec![2]));
+        assert!(completed.iter().any(|(sequence, _)| sequence == &vec![3]));
+        assert!(!completed.iter().any(|(sequence, _)| sequence == &vec![1]));
+    }
+
+    #[test]
+    fn early_eos_cannot_be_starved_into_a_512_step_stall() {
+        // Regression for the reported FR->EN defect: beam 0 finishes early,
+        // while the other beams only expose EOS outside a naive global top-k.
+        let rows = vec![
+            vec![-0.01, -0.02, -0.03, -0.005],
+            vec![-8.0, -8.1, -8.2, -0.5],
+            vec![-9.0, -9.1, -9.2, -0.6],
+            vec![-10.0, -10.1, -10.2, -0.7],
+        ];
+        let mut pooled = top_candidates_per_beam(&rows, &[0.0, 0.0, 0.0, 0.0], 2);
+        pooled.sort_by(|a, b| b.score.total_cmp(&a.score));
+
+        let sequences = vec![vec![5], vec![5], vec![5], vec![5]];
+        let (_, finished) = collect_step(&pooled, 3, 4, &sequences);
+        assert_eq!(finished.len(), 4, "every beam's EOS must be recorded");
+        assert!(should_stop_early(
+            &finished,
+            &[-100.0],
+            2,
+            4,
+            EarlyStopping::Heuristic
+        ));
     }
 }

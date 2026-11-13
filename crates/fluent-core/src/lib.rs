@@ -17,8 +17,9 @@ use std::path::PathBuf;
 pub use config::ProjectConfig;
 pub use detect::Detection;
 pub use engine::{
-    estimate_memory, memory_info, DeviceChoice, Engine, EngineConfig, EngineStatus, MemoryEstimate,
-    MemoryInfo, Precision, Progress, ProgressStage, TranslationRequest, TranslationResult,
+    default_generation_budget, estimate_memory, memory_info, DeviceChoice, Engine, EngineConfig,
+    EngineStatus, MemoryEstimate, MemoryInfo, Precision, Progress, ProgressStage,
+    TranslationRequest, TranslationResult,
 };
 pub use languages::{find_language, languages, popular_languages};
 pub use tokenizer::NllbTokenizer;
