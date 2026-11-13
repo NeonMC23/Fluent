@@ -181,6 +181,31 @@ Requires a supported Apple Silicon environment.
 
 When the corresponding feature is enabled, select the desired device in **Settings → Device**. Otherwise, use CPU inference.
 
+## ⚡ CPU Performance
+
+On CPU, Fluent keeps the model weights in memory as 8-bit blocks (Q8) instead of f32. A block of 32 values shares one f32 scale, which cuts weight traffic and resident memory by about 3.5× while the arithmetic stays in f32 at block granularity. On x86-64 an AVX2/FMA kernel is selected at runtime when the processor supports it; a portable scalar kernel is always available, so the build does not require a particular instruction set.
+
+- The model file on disk is **never modified**. Quantization happens once while loading and the f32 weights are released immediately.
+- The Q8 path is used automatically only for CPU inference in f32. CUDA, Metal and explicit f16 keep the existing path.
+- Decoding uses a fused attention kernel and a preallocated per-beam KV cache instead of rebuilding and broadcasting tensors every step.
+
+Two environment overrides are available for diagnosis:
+
+| Variable | Effect |
+| --- | --- |
+| `FLUENT_QUANT=off` | Disable the Q8 path and use the f32 weights (higher memory, slower on CPU) |
+| `FLUENT_QUANT_SIMD=off` | Keep Q8 but force the portable scalar kernels |
+
+The checked-in benchmark measures generation separately from model loading and covers short, medium and long inputs with fixed 32/64/128/200-token budgets:
+
+```bash
+cargo run --release -p fluent-core --example bench -- \
+    models/nllb-200-1.3b --reps 3 --budgets 32,64,128,200 \
+    --json /tmp/fluent-bench.json
+```
+
+See [PERFORMANCE.md](PERFORMANCE.md) for the measured environment, baseline and final results, quality comparison and remaining limitations.
+
 ## 🛠️ Building from Source
 
 ### Linux — Fedora / Nobara
@@ -245,6 +270,7 @@ Optional environment variables:
 | Language detection | `whatlang` |
 | Configuration | JSON and Serde |
 | GPU acceleration | Optional CUDA / Metal |
+| CPU acceleration | Q8 weights, AVX2/FMA with scalar fallback |
 
 The Rust application is independent of the legacy Python backend and web frontend, which remain in the repository for reference.
 
