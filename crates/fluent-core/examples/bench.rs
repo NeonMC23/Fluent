@@ -125,6 +125,41 @@ const FIXTURES: &[Fixture] = &[
                verfügbar. Besucher können die digitalisierten Seiten kostenlos einsehen, und die \
                Stadt plant, bis 2028 auch die Handschriften und Karten zugänglich zu machen.",
     },
+    Fixture {
+        id: "accent-fr-en",
+        category: "short",
+        source_lang: "fra_Latn",
+        target_lang: "eng_Latn",
+        text: "L'été dernier, à Montréal, nous avons visité une exposition consacrée à l'œuvre d'une artiste québécoise très célèbre.",
+    },
+    Fixture {
+        id: "numbers-en-fr",
+        category: "short",
+        source_lang: "eng_Latn",
+        target_lang: "fra_Latn",
+        text: "The invoice for 1,250.75 euros was issued on 3 March 2024 and must be paid within 30 days.",
+    },
+    Fixture {
+        id: "names-en-de",
+        category: "short",
+        source_lang: "eng_Latn",
+        target_lang: "deu_Latn",
+        text: "Dr. Anna Kowalski met Professor Müller and Ms. Chen at the International Institute in Vienna on Monday.",
+    },
+    Fixture {
+        id: "repeat-es-en",
+        category: "short",
+        source_lang: "spa_Latn",
+        target_lang: "eng_Latn",
+        text: "El comité revisó el presupuesto, aprobó el presupuesto y publicó el presupuesto revisado en el sitio web del comité.",
+    },
+    Fixture {
+        id: "paragraph-en-fr",
+        category: "medium",
+        source_lang: "eng_Latn",
+        target_lang: "fra_Latn",
+        text: "The library opens at eight. Visitors can borrow up to ten books for three weeks.\n\nThe reading room closes at seven on weekdays, but it stays open until nine on Thursdays.",
+    },
 ];
 
 // ---------------------------------------------------------------------------
@@ -205,13 +240,22 @@ fn parse_args() -> Result<Args, String> {
 fn run_matmul_bench() {
     use fluent_core::model::quant::QuantizedMatrix;
 
-    println!("quantized matmul micro-benchmark (m = 4 rows)");
+    println!("quantized matmul micro-benchmark");
     println!("simd: {}", fluent_core::model::quant::simd_backend());
     println!(
-        "{:>9} {:>7} {:>10} {:>10} {:>10}",
-        "rows", "cols", "ms/call", "GB/s", "GFLOP/s"
+        "{:>5} {:>8} {:>7} {:>10} {:>11} {:>10}",
+        "m", "rows", "cols", "ms/call", "GB/s(1pass)", "GFLOP/s"
     );
-    for (rows, cols) in [(1024usize, 1024usize), (8192, 1024), (256206, 1024)] {
+
+    // Prefill-sized matrices are included on purpose: the decoding kernel is
+    // measured at m = 4, while the encoder runs at m = source length.
+    let shapes: &[(usize, usize, &[usize])] = &[
+        (1024, 1024, &[1, 4, 8, 16, 32, 64, 128, 267]),
+        (8192, 1024, &[1, 4, 8, 16, 32, 64, 128, 267]),
+        (256_206, 1024, &[1, 4, 8]),
+    ];
+
+    for &(rows, cols, ms) in shapes {
         let mut state = 0x1234_5678u32;
         let mut data = Vec::with_capacity(rows * cols);
         for _ in 0..rows * cols {
@@ -223,39 +267,162 @@ fn run_matmul_bench() {
         let matrix = QuantizedMatrix::from_tensor(&weight).unwrap();
         let quantized_in = started.elapsed();
         drop(weight);
-        let input = Tensor::from_vec(
-            (0..4 * cols)
-                .map(|index| ((index * 7 % 31) as f32 - 15.0) / 15.0)
-                .collect::<Vec<_>>(),
-            (4, cols),
-            &Device::Cpu,
-        )
-        .unwrap();
-
-        let iterations = if rows >= 100_000 { 20 } else { 200 };
-        // Warm up.
-        let _ = matrix.matmul(&input).unwrap();
-        let started = Instant::now();
-        for _ in 0..iterations {
-            let out = matrix.matmul(&input).unwrap();
-            assert_eq!(out.dims(), &[4, rows]);
-        }
-        let elapsed = started.elapsed().as_secs_f64();
-        let per_call = elapsed / iterations as f64;
-        let bytes = rows * cols * 9 / 8 + 4 * cols;
-        let flops = 2.0 * 4.0 * rows as f64 * cols as f64;
         println!(
-            "{:>9} {:>7} {:>10.3} {:>10.1} {:>10.1}",
+            "  {}x{}: quantize {:.1} ms for {} MB",
             rows,
             cols,
-            per_call * 1000.0,
-            bytes as f64 / per_call / 1e9,
-            flops / per_call / 1e9
-        );
-        println!(
-            "          quantize: {:.1} ms for {} MB",
             quantized_in.as_secs_f64() * 1000.0,
             matrix.size_bytes() / (1024 * 1024)
+        );
+
+        for &m in ms {
+            let input = Tensor::from_vec(
+                (0..m * cols)
+                    .map(|index| ((index * 7 % 31) as f32 - 15.0) / 15.0)
+                    .collect::<Vec<_>>(),
+                (m, cols),
+                &Device::Cpu,
+            )
+            .unwrap();
+
+            let work = m.saturating_mul(rows).saturating_mul(cols);
+            let iterations = (200_000_000usize / work.max(1)).clamp(3, 200);
+            // Warm up.
+            let _ = matrix.matmul(&input).unwrap();
+            let started = Instant::now();
+            for _ in 0..iterations {
+                let out = matrix.matmul(&input).unwrap();
+                assert_eq!(out.dims(), &[m, rows]);
+            }
+            let per_call = started.elapsed().as_secs_f64() / iterations as f64;
+            let weight_bytes = rows * cols * 9 / 8;
+            let flops = 2.0 * m as f64 * rows as f64 * cols as f64;
+            println!(
+                "{:>5} {:>8} {:>7} {:>10.3} {:>11.1} {:>10.1}",
+                m,
+                rows,
+                cols,
+                per_call * 1000.0,
+                weight_bytes as f64 / per_call / 1e9,
+                flops / per_call / 1e9
+            );
+        }
+    }
+
+    println!("\nlogits post-processing ([4][256206] f32, log_softmax + top-k)");
+    {
+        use std::cmp::{Ordering, Reverse};
+        use std::collections::BinaryHeap;
+
+        #[derive(PartialEq)]
+        struct Entry(f32, u32);
+        impl Eq for Entry {}
+        impl PartialOrd for Entry {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+        impl Ord for Entry {
+            fn cmp(&self, other: &Self) -> Ordering {
+                self.0.total_cmp(&other.0).then(self.1.cmp(&other.1))
+            }
+        }
+
+        let beams = 4usize;
+        let vocab = 256_206usize;
+        let mut state = 0xdead_beefu32;
+        let data: Vec<f32> = (0..beams * vocab)
+            .map(|_| {
+                state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+                (state >> 8) as f32 / 8_388_608.0 - 1.0
+            })
+            .collect();
+        let logits = Tensor::from_vec(data, (beams, vocab), &Device::Cpu).unwrap();
+        let iterations = 10;
+
+        let started = Instant::now();
+        for _ in 0..iterations {
+            let lp = candle_nn::ops::log_softmax(&logits, 1).unwrap();
+            std::hint::black_box(&lp);
+        }
+        let per = started.elapsed().as_secs_f64() / iterations as f64;
+        println!("  candle log_softmax      : {:.2} ms", per * 1000.0);
+
+        let lp = candle_nn::ops::log_softmax(&logits, 1).unwrap();
+        let started = Instant::now();
+        for _ in 0..iterations {
+            let rows = lp.to_vec2::<f32>().unwrap();
+            std::hint::black_box(&rows);
+        }
+        let per = started.elapsed().as_secs_f64() / iterations as f64;
+        println!("  to_vec2 (nested Vec)    : {:.2} ms", per * 1000.0);
+
+        let started = Instant::now();
+        for _ in 0..iterations {
+            let flat = lp.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+            std::hint::black_box(&flat);
+        }
+        let per = started.elapsed().as_secs_f64() / iterations as f64;
+        println!("  to_vec1 (flat)          : {:.2} ms", per * 1000.0);
+
+        let flat = logits.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        let started = Instant::now();
+        for _ in 0..iterations {
+            for beam in 0..beams {
+                let row = &flat[beam * vocab..(beam + 1) * vocab];
+                let mut heap: BinaryHeap<Reverse<Entry>> = BinaryHeap::with_capacity(9);
+                for (token, &value) in row.iter().enumerate() {
+                    let entry = Reverse(Entry(value, token as u32));
+                    if heap.len() < 8 {
+                        heap.push(entry);
+                    } else if value > heap.peek().unwrap().0 .0 {
+                        heap.pop();
+                        heap.push(entry);
+                    }
+                }
+                std::hint::black_box(&heap);
+            }
+        }
+        let per = started.elapsed().as_secs_f64() / iterations as f64;
+        println!("  top-8 x 4 beams (heap)  : {:.2} ms", per * 1000.0);
+
+        let started = Instant::now();
+        for _ in 0..iterations {
+            for beam in 0..beams {
+                let row = &flat[beam * vocab..(beam + 1) * vocab];
+                let mut max = f32::NEG_INFINITY;
+                for &value in row {
+                    max = max.max(value);
+                }
+                let mut sum = 0f32;
+                for &value in row {
+                    sum += (value - max).exp();
+                }
+                std::hint::black_box((max, sum));
+            }
+        }
+        let per = started.elapsed().as_secs_f64() / iterations as f64;
+        println!("  manual logsumexp        : {:.2} ms", per * 1000.0);
+    }
+
+    println!("\nencoder self-attention (batch 1, 16 heads, head_dim 64, candle path)");
+    for seq in [32usize, 64, 128, 267, 512] {
+        let q = Tensor::zeros((1, 16, seq, 64), DType::F32, &Device::Cpu).unwrap();
+        let kt = Tensor::zeros((1, 16, 64, seq), DType::F32, &Device::Cpu).unwrap();
+        let v = Tensor::zeros((1, 16, seq, 64), DType::F32, &Device::Cpu).unwrap();
+        let iterations = if seq >= 267 { 20 } else { 50 };
+        let started = Instant::now();
+        for _ in 0..iterations {
+            let scores = q.matmul(&kt).unwrap();
+            let probs = candle_nn::ops::softmax_last_dim(&scores).unwrap();
+            let out = probs.matmul(&v).unwrap();
+            assert_eq!(out.dims(), &[1, 16, seq, 64]);
+        }
+        let per_call = started.elapsed().as_secs_f64() / iterations as f64;
+        println!(
+            "  seq {:>3}: {:.3} ms per layer (scores + softmax + values)",
+            seq,
+            per_call * 1000.0
         );
     }
 
@@ -290,11 +457,17 @@ fn run_matmul_bench() {
 struct Sample {
     tokenize_ms: f64,
     encode_ms: f64,
+    encode_attn_ms: f64,
+    encode_ffn_ms: f64,
     cross_prepare_ms: f64,
     prefill_ms: f64,
     decoder_ms: f64,
     lm_head_ms: f64,
     search_ms: f64,
+    search_topk_ms: f64,
+    search_logits_ms: f64,
+    search_extract_ms: f64,
+    reorder_ms: f64,
     detokenize_ms: f64,
     generation_ms: f64,
     end_to_end_ms: f64,
@@ -320,6 +493,8 @@ struct CaseResult {
     truncated: bool,
     samples: Vec<Sample>,
     output: String,
+    /// Token ids of the last repetition, for exact quality comparisons.
+    tokens: Vec<u32>,
 }
 
 impl CaseResult {
@@ -499,6 +674,7 @@ fn run_case(
 ) -> Result<CaseResult, Box<dyn std::error::Error>> {
     let mut samples = Vec::with_capacity(reps);
     let mut output = String::new();
+    let mut tokens_out: Vec<u32> = Vec::new();
     let mut source_tokens = 0;
     let mut truncated = false;
 
@@ -535,7 +711,8 @@ fn run_case(
         output = tokenizer.decode(&tokens)?;
         let detokenize = decode_started.elapsed();
         let end_to_end = end_started.elapsed();
-        let mut sample = sample_from(stats, generation, end_to_end, tokens.len());
+        tokens_out = tokens;
+        let mut sample = sample_from(stats, generation, end_to_end, tokens_out.len());
         sample.tokenize_ms = tokenize.as_secs_f64() * 1000.0;
         sample.detokenize_ms = detokenize.as_secs_f64() * 1000.0;
         samples.push(sample);
@@ -557,6 +734,7 @@ fn run_case(
         truncated,
         samples,
         output,
+        tokens: tokens_out,
     })
 }
 
@@ -570,11 +748,17 @@ fn sample_from(
     Sample {
         tokenize_ms: 0.0,
         encode_ms: stats.encode.as_secs_f64() * 1000.0,
+        encode_attn_ms: stats.encode_attn.as_secs_f64() * 1000.0,
+        encode_ffn_ms: stats.encode_ffn.as_secs_f64() * 1000.0,
         cross_prepare_ms: stats.cross_prepare.as_secs_f64() * 1000.0,
         prefill_ms: stats.prefill.as_secs_f64() * 1000.0,
         decoder_ms: stats.decoder.as_secs_f64() * 1000.0,
         lm_head_ms: stats.lm_head.as_secs_f64() * 1000.0,
         search_ms: stats.search.as_secs_f64() * 1000.0,
+        search_topk_ms: stats.search_topk.as_secs_f64() * 1000.0,
+        search_logits_ms: stats.search_logits.as_secs_f64() * 1000.0,
+        search_extract_ms: stats.search_extract.as_secs_f64() * 1000.0,
+        reorder_ms: stats.reorder.as_secs_f64() * 1000.0,
         detokenize_ms: 0.0,
         generation_ms: generation.as_secs_f64() * 1000.0,
         end_to_end_ms: end_to_end.as_secs_f64() * 1000.0,
@@ -724,22 +908,50 @@ fn print_table(cases: &[CaseResult]) {
 fn print_breakdown(cases: &[CaseResult]) {
     println!("\nStage breakdown (median, ms):");
     println!(
-        "{:<16} {:>9} {:>9} {:>9} {:>9} {:>9} {:>9}",
-        "case", "encode", "crossKV", "prefill", "decoder", "lm_head", "search"
+        "{:<16} {:>9} {:>9} {:>9} {:>9} {:>9} {:>9} {:>9} {:>9} {:>9} {:>9}",
+        "case",
+        "encode",
+        "crossKV",
+        "prefill",
+        "decoder",
+        "lm_head",
+        "search",
+        "topk",
+        "logits",
+        "extract",
+        "reorder"
     );
     for case in cases {
         let median = case.median();
         println!(
-            "{:<16} {:>9.1} {:>9.1} {:>9.1} {:>9.1} {:>9.1} {:>9.1}",
+            "{:<16} {:>9.1} {:>9.1} {:>9.1} {:>9.1} {:>9.1} {:>9.1} {:>9.1} {:>9.1} {:>9.1} {:>9.1}",
             case.id,
             median.encode_ms,
             median.cross_prepare_ms,
             median.prefill_ms,
             median.decoder_ms,
             median.lm_head_ms,
-            median.search_ms
+            median.search_ms,
+            median.search_topk_ms,
+            median.search_logits_ms,
+            median.search_extract_ms,
+            median.reorder_ms
         );
     }
+    println!("\nEncoder sub-stages (median, ms):");
+    println!(
+        "{:<16} {:>12} {:>12} {:>12}",
+        "case", "attention", "ffn", "other"
+    );
+    for case in cases {
+        let median = case.median();
+        let other = (median.encode_ms - median.encode_attn_ms - median.encode_ffn_ms).max(0.0);
+        println!(
+            "{:<16} {:>12.1} {:>12.1} {:>12.1}",
+            case.id, median.encode_attn_ms, median.encode_ffn_ms, other
+        );
+    }
+
     println!("\nDecoder sub-stages (median, ms):");
     println!(
         "{:<16} {:>9} {:>9} {:>9} {:>9} {:>9} {:>9}",
@@ -773,11 +985,17 @@ fn sample_to_json(sample: &Sample) -> Value {
     json!({
         "tokenize_ms": round3(sample.tokenize_ms),
         "encode_ms": round3(sample.encode_ms),
+        "encode_attn_ms": round3(sample.encode_attn_ms),
+        "encode_ffn_ms": round3(sample.encode_ffn_ms),
         "cross_prepare_ms": round3(sample.cross_prepare_ms),
         "prefill_ms": round3(sample.prefill_ms),
         "decoder_ms": round3(sample.decoder_ms),
         "lm_head_ms": round3(sample.lm_head_ms),
         "search_ms": round3(sample.search_ms),
+        "search_topk_ms": round3(sample.search_topk_ms),
+        "search_logits_ms": round3(sample.search_logits_ms),
+        "search_extract_ms": round3(sample.search_extract_ms),
+        "reorder_ms": round3(sample.reorder_ms),
         "detokenize_ms": round3(sample.detokenize_ms),
         "embedding_ms": round3(sample.embedding_ms),
         "projections_ms": round3(sample.projections_ms),
@@ -835,6 +1053,7 @@ fn build_report(
                 "early_stopping": case.early_stopping,
                 "truncated": case.truncated,
                 "output": case.output,
+                "tokens": case.tokens,
                 "median": sample_to_json(&median),
                 "min_generation_ms": round3(case.min_generation()),
                 "max_generation_ms": round3(case.max_generation()),
