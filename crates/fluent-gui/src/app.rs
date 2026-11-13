@@ -175,7 +175,9 @@ impl FluentApp {
         config.precision = self.settings.precision;
         config.num_beams = self.settings.num_beams;
         config.max_length = self.settings.max_length;
-        config.max_new_tokens = self.settings.max_length;
+        // Generated length is derived from the encoded source; the settings
+        // slider controls the input limit only.
+        config.max_new_tokens = None;
         config
     }
 
@@ -246,8 +248,30 @@ impl FluentApp {
         self.notice = Some(("Cancelling…".to_string(), Instant::now()));
     }
 
+    fn clear_all(&mut self) {
+        clear_editor_state(
+            &mut self.source_text,
+            &mut self.result,
+            &mut self.preview,
+            &mut self.error,
+            &mut self.copied_at,
+        );
+        self.progress = None;
+        self.notice = None;
+        self.settings.last_source.clear();
+        self.settings.save();
+    }
+
+    fn can_clear_all(&self) -> bool {
+        !self.busy
+            && (!self.source_text.is_empty()
+                || self.result.is_some()
+                || !self.preview.is_empty()
+                || self.error.is_some())
+    }
+
     fn swap_languages(&mut self) {
-        if self.settings.source_language == "auto" {
+        if !swap_enabled(&self.settings.source_language) {
             return;
         }
         std::mem::swap(
@@ -402,7 +426,17 @@ impl FluentApp {
             ui.add_space(2.0);
             ui.vertical(|ui| {
                 ui.add_space(15.0);
-                if widgets::icon_button(ui, &palette, "⇄", "Swap languages").clicked() {
+                let enabled = swap_enabled(&self.settings.source_language);
+                let tooltip = if enabled {
+                    "Swap languages"
+                } else {
+                    "Choose a specific source language to swap"
+                };
+                let mut clicked = false;
+                ui.add_enabled_ui(enabled, |ui| {
+                    clicked = widgets::icon_button(ui, &palette, "⇄", tooltip).clicked();
+                });
+                if clicked {
                     self.swap_languages();
                 }
             });
@@ -517,6 +551,21 @@ impl FluentApp {
                     let count = self.source_text.chars().count();
                     if ui
                         .add_enabled(
+                            self.can_clear_all(),
+                            egui::Button::new(
+                                egui::RichText::new("Clear all")
+                                    .size(12.0)
+                                    .color(palette.muted),
+                            )
+                            .frame(false),
+                        )
+                        .on_hover_text("Clear the source text and the translation")
+                        .clicked()
+                    {
+                        self.clear_all();
+                    }
+                    if ui
+                        .add_enabled(
                             !self.source_text.is_empty(),
                             egui::Button::new(
                                 egui::RichText::new("Clear").size(12.0).color(palette.muted),
@@ -575,12 +624,7 @@ impl FluentApp {
             ui.horizontal(|ui| {
                 if let Some(result) = &self.result {
                     if let Some(detected) = &result.detected {
-                        widgets::badge(
-                            ui,
-                            &palette,
-                            &format!("{} · {:.0} %", detected.name, detected.confidence * 100.0),
-                            palette.accent,
-                        );
+                        widgets::badge(ui, &palette, &detection_label(detected), palette.accent);
                     }
                 } else if self.status.is_none() && !compact {
                     widgets::hint(
@@ -601,7 +645,14 @@ impl FluentApp {
                         .stroke(egui::Stroke::NONE)
                         .corner_radius(egui::CornerRadius::same(11))
                         .min_size(egui::vec2(0.0, 38.0));
-                        if ui.add(cancel).clicked() {
+                        // The idle Translate button occupies the same slot. Give
+                        // Cancel its own id so a press/release pair cannot be
+                        // attributed to Translate after the layout switches and
+                        // silently restart the cancelled translation.
+                        let clicked = ui
+                            .push_id("cancel_button", |ui| ui.add(cancel).clicked())
+                            .inner;
+                        if clicked {
                             self.request_cancel();
                         }
                         if let Some(progress) = &self.progress {
@@ -611,6 +662,11 @@ impl FluentApp {
                                     .color(palette.muted),
                             );
                         }
+                        ui.label(
+                            egui::RichText::new(shortcut_hint(true))
+                                .size(10.5)
+                                .color(palette.faint),
+                        );
                     } else {
                         let enabled = !self.source_text.trim().is_empty();
                         if widgets::primary_button(ui, &palette, "Translate", enabled).clicked() {
@@ -618,7 +674,7 @@ impl FluentApp {
                         }
                         if !compact {
                             ui.label(
-                                egui::RichText::new("Ctrl + Enter")
+                                egui::RichText::new(shortcut_hint(false))
                                     .size(10.5)
                                     .color(palette.faint),
                             );
@@ -1068,12 +1124,13 @@ impl FluentApp {
                         ui.add(
                             egui::Slider::new(&mut self.settings.max_length, 64..=512)
                                 .step_by(32.0)
-                                .text("Maximum length (tokens)"),
+                                .text("Maximum input length (tokens)"),
                         );
                         widgets::hint(
                             ui,
                             &palette,
                             "More beams = better quality but slower generation. \
+                             Output length adapts to the input. \
                              Changing the model, device or precision reloads the model.",
                         );
 
@@ -1524,4 +1581,102 @@ fn picker_row(
     );
 
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Clears the editor and all result state without touching language choices.
+fn clear_editor_state<T>(
+    source_text: &mut String,
+    result: &mut Option<T>,
+    preview: &mut String,
+    error: &mut Option<String>,
+    copied_at: &mut Option<Instant>,
+) {
+    source_text.clear();
+    *result = None;
+    preview.clear();
+    *error = None;
+    *copied_at = None;
+}
+
+/// Swapping only makes sense with a concrete source language.
+fn swap_enabled(source_language: &str) -> bool {
+    source_language != "auto"
+}
+
+/// Uses a qualitative label instead of the detector's uncalibrated score.
+fn detection_label(detected: &fluent_core::Detection) -> String {
+    if detected.reliable {
+        format!("Detected: {}", detected.name)
+    } else {
+        format!("Detected: {} (uncertain)", detected.name)
+    }
+}
+
+/// Only advertises shortcuts that are actually handled.
+fn shortcut_hint(busy: bool) -> &'static str {
+    if busy {
+        "Esc to cancel"
+    } else {
+        "Ctrl+Enter"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn detection(reliable: bool) -> fluent_core::Detection {
+        fluent_core::Detection {
+            code: "fra_Latn",
+            name: "French",
+            confidence: 0.68,
+            iso3: "fra".to_string(),
+            reliable,
+        }
+    }
+
+    #[test]
+    fn swap_is_disabled_for_automatic_source() {
+        assert!(!swap_enabled("auto"));
+        assert!(swap_enabled("fra_Latn"));
+    }
+
+    #[test]
+    fn detection_label_is_qualitative_not_a_percentage() {
+        assert_eq!(detection_label(&detection(true)), "Detected: French");
+        assert_eq!(
+            detection_label(&detection(false)),
+            "Detected: French (uncertain)"
+        );
+        assert!(!detection_label(&detection(true)).contains('%'));
+    }
+
+    #[test]
+    fn shortcut_hints_only_mention_implemented_keys() {
+        assert_eq!(shortcut_hint(false), "Ctrl+Enter");
+        assert_eq!(shortcut_hint(true), "Esc to cancel");
+    }
+
+    #[test]
+    fn clear_all_resets_text_result_preview_and_error() {
+        let mut source = "hello".to_string();
+        let mut result = Some(42u8);
+        let mut preview = "bonjour".to_string();
+        let mut error = Some("boom".to_string());
+        let mut copied_at = Some(Instant::now());
+
+        clear_editor_state(
+            &mut source,
+            &mut result,
+            &mut preview,
+            &mut error,
+            &mut copied_at,
+        );
+
+        assert!(source.is_empty());
+        assert!(result.is_none());
+        assert!(preview.is_empty());
+        assert!(error.is_none());
+        assert!(copied_at.is_none());
+    }
 }
