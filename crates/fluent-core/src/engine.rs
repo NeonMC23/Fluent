@@ -290,24 +290,67 @@ impl MemoryEstimate {
 }
 
 /// Estimates the memory needed to load a model.
+///
+/// This is the conservative form: it ignores the CPU Q8 weight path, so it
+/// never underestimates on a GPU or an unusual build. Use
+/// [`estimate_memory_for_choice`] when the target device is known.
 pub fn estimate_memory(model_dir: &Path, precision: Precision) -> Result<MemoryEstimate> {
+    estimate_memory_impl(model_dir, precision, false)
+}
+
+/// Like [`estimate_memory`], but accounts for the CPU Q8 weight path.
+///
+/// Quantized weights are about `9/32` of the f32 footprint, which lets the
+/// 1.3B model run on machines that the unquantized estimate would reject.
+pub fn estimate_memory_for_choice(
+    model_dir: &Path,
+    precision: Precision,
+    device: DeviceChoice,
+) -> Result<MemoryEstimate> {
+    let config = crate::model::nllb::NllbConfig::from_dir(model_dir)?;
+    let precision = resolve_precision(precision, config.d_model);
+    let on_cpu = match device {
+        DeviceChoice::Cpu => true,
+        DeviceChoice::Auto => !has_accelerator(),
+        DeviceChoice::Cuda(_) | DeviceChoice::Metal(_) => false,
+    };
+    estimate_memory_impl(model_dir, precision, on_cpu && precision == Precision::F32)
+}
+
+fn resolve_precision(precision: Precision, d_model: usize) -> Precision {
+    match precision {
+        Precision::Auto if d_model >= 2048 => Precision::F16,
+        Precision::Auto => Precision::F32,
+        other => other,
+    }
+}
+
+fn has_accelerator() -> bool {
+    cfg!(any(feature = "cuda", feature = "metal"))
+}
+
+/// Fraction of the on-disk f32 size used by the in-memory weights.
+fn weight_factor(precision: Precision, quantized: bool) -> f64 {
+    if quantized {
+        // One i8 per value plus one f32 scale per 32-value block.
+        9.0 / 32.0
+    } else if precision == Precision::F16 {
+        0.5
+    } else {
+        1.0
+    }
+}
+
+fn estimate_memory_impl(
+    model_dir: &Path,
+    precision: Precision,
+    quantized: bool,
+) -> Result<MemoryEstimate> {
     let checkpoint = Checkpoint::discover(model_dir)?;
     let on_disk = checkpoint.on_disk_bytes();
     let config = crate::model::nllb::NllbConfig::from_dir(model_dir)?;
-    let precision = match precision {
-        Precision::Auto => {
-            if config.d_model >= 2048 {
-                Precision::F16
-            } else {
-                Precision::F32
-            }
-        }
-        other => other,
-    };
-    let factor = match precision {
-        Precision::F16 => 0.5,
-        _ => 1.0,
-    };
+    let precision = resolve_precision(precision, config.d_model);
+    let factor = weight_factor(precision, quantized);
     let weights_mb = (on_disk as f64 * factor / (1024.0 * 1024.0)).ceil() as u64;
     let overhead_mb = (weights_mb / 10).max(768);
     let needed_mb = weights_mb + overhead_mb;
@@ -393,7 +436,11 @@ impl Engine {
         let device = resolve_device(self.config.device)?;
         let dtype = resolve_dtype(self.config.precision, &device, nllb_config.d_model);
 
-        let estimate = estimate_memory(&self.config.model_dir, self.config.precision)?;
+        let estimate = estimate_memory_impl(
+            &self.config.model_dir,
+            self.config.precision,
+            crate::model::quant::quantization_enabled(&device, dtype),
+        )?;
         if !estimate.fits() {
             return Err(Error::OutOfMemory {
                 needed_mb: estimate.needed_mb,
@@ -750,6 +797,23 @@ mod tests {
         assert_eq!(default_generation_budget(100), 216);
         assert_eq!(default_generation_budget(400), 512);
         assert_eq!(default_generation_budget(usize::MAX), 512);
+    }
+
+    #[test]
+    fn quantized_weights_shrink_the_estimated_footprint() {
+        assert!((weight_factor(Precision::F32, true) - 9.0 / 32.0).abs() < 1e-9);
+        assert_eq!(weight_factor(Precision::F32, false), 1.0);
+        assert_eq!(weight_factor(Precision::F16, false), 0.5);
+        // Quantization wins over the requested precision on CPU f32.
+        assert_eq!(weight_factor(Precision::F16, true), 9.0 / 32.0);
+    }
+
+    #[test]
+    fn automatic_precision_follows_the_model_size() {
+        assert_eq!(resolve_precision(Precision::Auto, 1024), Precision::F32);
+        assert_eq!(resolve_precision(Precision::Auto, 2048), Precision::F16);
+        assert_eq!(resolve_precision(Precision::F32, 4096), Precision::F32);
+        assert_eq!(resolve_precision(Precision::F16, 1024), Precision::F16);
     }
 
     #[test]

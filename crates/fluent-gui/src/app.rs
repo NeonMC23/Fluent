@@ -2,9 +2,9 @@ use std::time::{Duration, Instant};
 
 use eframe::egui;
 use fluent_core::{
-    estimate_memory, find_language, languages, popular_languages, DeviceChoice, EngineConfig,
-    EngineStatus, Language, Mode, Precision, Progress, ProjectConfig, TranslationRequest,
-    TranslationResult,
+    estimate_memory_for_choice, find_language, languages, popular_languages, DeviceChoice,
+    EngineConfig, EngineStatus, Language, Mode, Precision, Progress, ProjectConfig,
+    TranslationRequest, TranslationResult,
 };
 
 use crate::settings::{settings_path, Settings, ThemeChoice, ACCENTS};
@@ -993,8 +993,11 @@ impl FluentApp {
                                 &palette,
                                 "This model folder cannot be found.",
                             );
-                        } else if let Ok(estimate) = estimate_memory(model_dir, self.settings.precision)
-                        {
+                        } else if let Ok(estimate) = estimate_memory_for_choice(
+                            model_dir,
+                            self.settings.precision,
+                            self.settings.device_choice(),
+                        ) {
                             ui.add_space(4.0);
                             ui.label(
                                 egui::RichText::new(format!(
