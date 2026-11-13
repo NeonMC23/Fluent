@@ -2,15 +2,18 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
+use std::time::{Duration, Instant};
 
 use candle_core::{DType, Device, Tensor};
-use candle_nn::{layer_norm, linear, LayerNorm, Linear, Module, VarBuilder};
+use candle_nn::{layer_norm, LayerNorm, Module, VarBuilder};
+use rayon::prelude::*;
 use serde::Deserialize;
 
 use crate::tokenizer::NllbTokenizer;
 use crate::{Error, Result};
 
 use super::checkpoint::Checkpoint;
+use super::quant::{quantization_enabled, Embedding, Projection};
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -111,10 +114,10 @@ impl NllbConfig {
 // ---------------------------------------------------------------------------
 
 struct Attention {
-    q_proj: Linear,
-    k_proj: Linear,
-    v_proj: Linear,
-    out_proj: Linear,
+    q_proj: Projection,
+    k_proj: Projection,
+    v_proj: Projection,
+    out_proj: Projection,
     num_heads: usize,
     head_dim: usize,
     d_model: usize,
@@ -122,13 +125,13 @@ struct Attention {
 }
 
 impl Attention {
-    fn load(vb: VarBuilder, d_model: usize, num_heads: usize) -> Result<Self> {
+    fn load(vb: VarBuilder, d_model: usize, num_heads: usize, quantize: bool) -> Result<Self> {
         let head_dim = d_model / num_heads;
         Ok(Self {
-            q_proj: linear(d_model, d_model, vb.pp("q_proj"))?,
-            k_proj: linear(d_model, d_model, vb.pp("k_proj"))?,
-            v_proj: linear(d_model, d_model, vb.pp("v_proj"))?,
-            out_proj: linear(d_model, d_model, vb.pp("out_proj"))?,
+            q_proj: Projection::load(vb.pp("q_proj"), d_model, d_model, quantize)?,
+            k_proj: Projection::load(vb.pp("k_proj"), d_model, d_model, quantize)?,
+            v_proj: Projection::load(vb.pp("v_proj"), d_model, d_model, quantize)?,
+            out_proj: Projection::load(vb.pp("out_proj"), d_model, d_model, quantize)?,
             num_heads,
             head_dim,
             d_model,
@@ -177,7 +180,7 @@ impl Attention {
         let probs = candle_nn::ops::softmax_last_dim(&scores)?;
         let out = probs.matmul(v)?;
         let out = self.merge_heads(out)?;
-        Ok(self.out_proj.forward(&out)?)
+        self.out_proj.forward(&out)
     }
 
     fn attend_cross(&self, q: &Tensor, k: &Tensor, v: &Tensor) -> Result<Tensor> {
@@ -187,7 +190,7 @@ impl Attention {
         let probs = candle_nn::ops::softmax_last_dim(&scores)?;
         let out = probs.broadcast_matmul(v)?;
         let out = self.merge_heads(out)?;
-        Ok(self.out_proj.forward(&out)?)
+        self.out_proj.forward(&out)
     }
 }
 
@@ -198,23 +201,24 @@ impl Attention {
 struct EncoderLayer {
     self_attn: Attention,
     self_attn_layer_norm: LayerNorm,
-    fc1: Linear,
-    fc2: Linear,
+    fc1: Projection,
+    fc2: Projection,
     final_layer_norm: LayerNorm,
     activation: Activation,
 }
 
 impl EncoderLayer {
-    fn load(vb: VarBuilder, cfg: &NllbConfig) -> Result<Self> {
+    fn load(vb: VarBuilder, cfg: &NllbConfig, quantize: bool) -> Result<Self> {
         Ok(Self {
             self_attn: Attention::load(
                 vb.pp("self_attn"),
                 cfg.d_model,
                 cfg.encoder_attention_heads,
+                quantize,
             )?,
             self_attn_layer_norm: layer_norm(cfg.d_model, 1e-5, vb.pp("self_attn_layer_norm"))?,
-            fc1: linear(cfg.d_model, cfg.encoder_ffn_dim, vb.pp("fc1"))?,
-            fc2: linear(cfg.encoder_ffn_dim, cfg.d_model, vb.pp("fc2"))?,
+            fc1: Projection::load(vb.pp("fc1"), cfg.d_model, cfg.encoder_ffn_dim, quantize)?,
+            fc2: Projection::load(vb.pp("fc2"), cfg.encoder_ffn_dim, cfg.d_model, quantize)?,
             final_layer_norm: layer_norm(cfg.d_model, 1e-5, vb.pp("final_layer_norm"))?,
             activation: cfg.activation_function,
         })
@@ -248,13 +252,18 @@ impl Encoder {
         loaded: &mut usize,
         progress: &mut dyn FnMut(usize),
         cancel: &AtomicBool,
+        quantize: bool,
     ) -> Result<Self> {
         let mut layers = Vec::with_capacity(cfg.encoder_layers);
         for index in 0..cfg.encoder_layers {
             if cancel.load(AtomicOrdering::Relaxed) {
                 return Err(Error::Cancelled);
             }
-            layers.push(EncoderLayer::load(vb.pp(format!("layers.{index}")), cfg)?);
+            layers.push(EncoderLayer::load(
+                vb.pp(format!("layers.{index}")),
+                cfg,
+                quantize,
+            )?);
             *loaded += 1;
             progress(*loaded);
         }
@@ -264,9 +273,15 @@ impl Encoder {
         })
     }
 
-    fn forward(&self, x: Tensor) -> Result<Tensor> {
+    fn forward(&self, x: Tensor, cancel: &AtomicBool) -> Result<Tensor> {
         let mut x = x;
         for layer in &self.layers {
+            // The encoder takes a meaningful share of the wall-clock time on
+            // long inputs; checking between layers keeps cancellation
+            // responsive instead of waiting for the whole source to encode.
+            if cancel.load(AtomicOrdering::Relaxed) {
+                return Err(Error::Cancelled);
+            }
             x = layer.forward(&x)?;
         }
         Ok(self.layer_norm.forward(&x)?)
@@ -282,65 +297,149 @@ struct DecoderLayer {
     self_attn_layer_norm: LayerNorm,
     encoder_attn: Attention,
     encoder_attn_layer_norm: LayerNorm,
-    fc1: Linear,
-    fc2: Linear,
+    fc1: Projection,
+    fc2: Projection,
     final_layer_norm: LayerNorm,
     activation: Activation,
 }
 
 impl DecoderLayer {
-    fn load(vb: VarBuilder, cfg: &NllbConfig) -> Result<Self> {
+    fn load(vb: VarBuilder, cfg: &NllbConfig, quantize: bool) -> Result<Self> {
         Ok(Self {
             self_attn: Attention::load(
                 vb.pp("self_attn"),
                 cfg.d_model,
                 cfg.decoder_attention_heads,
+                quantize,
             )?,
             self_attn_layer_norm: layer_norm(cfg.d_model, 1e-5, vb.pp("self_attn_layer_norm"))?,
             encoder_attn: Attention::load(
                 vb.pp("encoder_attn"),
                 cfg.d_model,
                 cfg.decoder_attention_heads,
+                quantize,
             )?,
             encoder_attn_layer_norm: layer_norm(
                 cfg.d_model,
                 1e-5,
                 vb.pp("encoder_attn_layer_norm"),
             )?,
-            fc1: linear(cfg.d_model, cfg.decoder_ffn_dim, vb.pp("fc1"))?,
-            fc2: linear(cfg.decoder_ffn_dim, cfg.d_model, vb.pp("fc2"))?,
+            fc1: Projection::load(vb.pp("fc1"), cfg.d_model, cfg.decoder_ffn_dim, quantize)?,
+            fc2: Projection::load(vb.pp("fc2"), cfg.decoder_ffn_dim, cfg.d_model, quantize)?,
             final_layer_norm: layer_norm(cfg.d_model, 1e-5, vb.pp("final_layer_norm"))?,
             activation: cfg.activation_function,
         })
     }
 
-    fn forward(&self, x: &Tensor, index: usize, cache: &mut DecoderCache) -> Result<Tensor> {
+    fn forward(
+        &self,
+        x: &Tensor,
+        index: usize,
+        cache: &mut DecoderCache,
+        timers: &mut GenerationTimers,
+    ) -> Result<Tensor> {
         let residual = x;
+        let started = Instant::now();
         let h = self.self_attn_layer_norm.forward(x)?;
         let (q, k_new, v_new) = self.self_attn.project_qkv(&h)?;
+        timers.projections += started.elapsed();
 
+        let started = Instant::now();
         let (k_all, v_all) = match &cache.self_kv[index] {
             Some((k, v)) => (Tensor::cat(&[k, &k_new], 2)?, Tensor::cat(&[v, &v_new], 2)?),
             None => (k_new, v_new),
         };
         cache.self_kv[index] = Some((k_all.clone(), v_all.clone()));
+        timers.kv_cache += started.elapsed();
 
+        let started = Instant::now();
         let h = self.self_attn.attend(&q, &k_all, &v_all)?;
         let x = (residual + h)?;
+        timers.self_attn += started.elapsed();
 
         let residual = &x;
+        let started = Instant::now();
         let h = self.encoder_attn_layer_norm.forward(&x)?;
         let q = self.encoder_attn.project_q(&h)?;
+        timers.projections += started.elapsed();
+
+        let started = Instant::now();
         let (k, v) = &cache.cross_kv[index];
         let h = self.encoder_attn.attend_cross(&q, k, v)?;
         let x = (residual + h)?;
+        timers.cross_attn += started.elapsed();
 
         let residual = &x;
+        let started = Instant::now();
         let h = self.final_layer_norm.forward(&x)?;
         let h = self.fc1.forward(&h)?;
         let h = self.activation.apply(&h)?;
         let h = self.fc2.forward(&h)?;
-        Ok((residual + h)?)
+        let out = (residual + h)?;
+        timers.ffn += started.elapsed();
+        Ok(out)
+    }
+
+    /// CPU fast path used with quantized weights: fused attention over
+    /// preallocated key/value buffers instead of generic candle matmuls.
+    fn forward_cpu(
+        &self,
+        x: &Tensor,
+        index: usize,
+        cache: &mut CpuDecoderCache,
+        timers: &mut GenerationTimers,
+    ) -> Result<Tensor> {
+        let residual = x;
+        let started = Instant::now();
+        let h = self.self_attn_layer_norm.forward(x)?;
+        let (q, k_new, v_new) = self.self_attn.project_qkv(&h)?;
+        timers.projections += started.elapsed();
+
+        let started = Instant::now();
+        let q = as_f32_vec(&q)?;
+        let k_new = as_f32_vec(&k_new)?;
+        let v_new = as_f32_vec(&v_new)?;
+        cache.append(index, &k_new, &v_new);
+        timers.kv_cache += started.elapsed();
+
+        let started = Instant::now();
+        let attended = cache.self_attention(index, &q, self.self_attn.scaling as f32);
+        let h = Tensor::from_vec(
+            attended,
+            (cache.active_beams, 1, cache.d_model),
+            &Device::Cpu,
+        )?;
+        let h = self.self_attn.out_proj.forward(&h)?;
+        let x = (residual + h)?;
+        timers.self_attn += started.elapsed();
+
+        let residual = &x;
+        let started = Instant::now();
+        let h = self.encoder_attn_layer_norm.forward(&x)?;
+        let q = self.encoder_attn.project_q(&h)?;
+        timers.projections += started.elapsed();
+
+        let started = Instant::now();
+        let q = as_f32_vec(&q)?;
+        let attended = cache.cross_attention(index, &q, self.encoder_attn.scaling as f32);
+        let h = Tensor::from_vec(
+            attended,
+            (cache.active_beams, 1, cache.d_model),
+            &Device::Cpu,
+        )?;
+        let h = self.encoder_attn.out_proj.forward(&h)?;
+        let x = (residual + h)?;
+        timers.cross_attn += started.elapsed();
+
+        let residual = &x;
+        let started = Instant::now();
+        let h = self.final_layer_norm.forward(&x)?;
+        let h = self.fc1.forward(&h)?;
+        let h = self.activation.apply(&h)?;
+        let h = self.fc2.forward(&h)?;
+        let out = (residual + h)?;
+        timers.ffn += started.elapsed();
+        Ok(out)
     }
 }
 
@@ -356,13 +455,18 @@ impl Decoder {
         loaded: &mut usize,
         progress: &mut dyn FnMut(usize),
         cancel: &AtomicBool,
+        quantize: bool,
     ) -> Result<Self> {
         let mut layers = Vec::with_capacity(cfg.decoder_layers);
         for index in 0..cfg.decoder_layers {
             if cancel.load(AtomicOrdering::Relaxed) {
                 return Err(Error::Cancelled);
             }
-            layers.push(DecoderLayer::load(vb.pp(format!("layers.{index}")), cfg)?);
+            layers.push(DecoderLayer::load(
+                vb.pp(format!("layers.{index}")),
+                cfg,
+                quantize,
+            )?);
             *loaded += 1;
             progress(*loaded);
         }
@@ -379,9 +483,26 @@ impl Decoder {
             .collect()
     }
 
-    fn forward(&self, mut x: Tensor, cache: &mut DecoderCache) -> Result<Tensor> {
+    fn forward(
+        &self,
+        mut x: Tensor,
+        cache: &mut DecoderCache,
+        timers: &mut GenerationTimers,
+    ) -> Result<Tensor> {
         for (index, layer) in self.layers.iter().enumerate() {
-            x = layer.forward(&x, index, cache)?;
+            x = layer.forward(&x, index, cache, timers)?;
+        }
+        Ok(self.layer_norm.forward(&x)?)
+    }
+
+    fn forward_cpu(
+        &self,
+        mut x: Tensor,
+        cache: &mut CpuDecoderCache,
+        timers: &mut GenerationTimers,
+    ) -> Result<Tensor> {
+        for (index, layer) in self.layers.iter().enumerate() {
+            x = layer.forward_cpu(&x, index, cache, timers)?;
         }
         Ok(self.layer_norm.forward(&x)?)
     }
@@ -437,16 +558,300 @@ impl DecoderCache {
 }
 
 // ---------------------------------------------------------------------------
+// CPU decoder cache with fused attention
+// ---------------------------------------------------------------------------
+//
+// Candle's generic batched matmul is optimized for large matrices. At decode
+// time the attention operands are tiny (`[beams, heads, 1, head_dim]` against
+// `[1, heads, seq, head_dim]`), and the per-call setup dominates the actual
+// arithmetic. When the weights are quantized we therefore keep the self- and
+// cross-attention keys/values in plain f32 buffers and run a fused
+// score/softmax/value kernel. The buffers are preallocated for the whole token
+// budget, so appending a position never copies the cache.
+
+struct CpuLayerKv {
+    k: Vec<f32>,
+    v: Vec<f32>,
+}
+
+struct CpuDecoderCache {
+    layers: Vec<CpuLayerKv>,
+    /// Per layer `[heads][src_len][head_dim]`, shared by every beam.
+    cross: Vec<(Vec<f32>, Vec<f32>)>,
+    src_len: usize,
+    len: usize,
+    cap: usize,
+    active_beams: usize,
+    max_beams: usize,
+    heads: usize,
+    head_dim: usize,
+    d_model: usize,
+    scratch_k: Vec<f32>,
+    scratch_v: Vec<f32>,
+}
+
+impl CpuDecoderCache {
+    fn new(
+        decoder: &Decoder,
+        encoder_hidden: &Tensor,
+        cfg: &NllbConfig,
+        max_beams: usize,
+        cap: usize,
+    ) -> Result<Self> {
+        let heads = cfg.decoder_attention_heads;
+        let head_dim = cfg.d_model / heads;
+        let mut cross = Vec::with_capacity(decoder.layers.len());
+        let mut src_len = 0;
+        for layer in &decoder.layers {
+            let (k, v) = layer.encoder_attn.project_kv(encoder_hidden)?;
+            src_len = k.dim(2)?;
+            cross.push((as_f32_vec(&k)?, as_f32_vec(&v)?));
+        }
+        let per_beam = heads.saturating_mul(cap).saturating_mul(head_dim);
+        let total = per_beam.saturating_mul(max_beams);
+        let layers = (0..decoder.layers.len())
+            .map(|_| CpuLayerKv {
+                k: vec![0.0; total],
+                v: vec![0.0; total],
+            })
+            .collect();
+        Ok(Self {
+            layers,
+            cross,
+            src_len,
+            len: 0,
+            cap,
+            active_beams: 1,
+            max_beams,
+            heads,
+            head_dim,
+            d_model: cfg.d_model,
+            scratch_k: vec![0.0; total],
+            scratch_v: vec![0.0; total],
+        })
+    }
+
+    fn advance(&mut self) {
+        self.len += 1;
+    }
+
+    /// Stores one new key/value position for every layer.
+    fn append(&mut self, index: usize, k_new: &[f32], v_new: &[f32]) {
+        let (heads, head_dim, cap) = (self.heads, self.head_dim, self.cap);
+        let pos = self.len;
+        let layer = &mut self.layers[index];
+        for beam in 0..self.active_beams {
+            for head in 0..heads {
+                let src = (beam * heads + head) * head_dim;
+                let dst = ((beam * heads + head) * cap + pos) * head_dim;
+                layer.k[dst..dst + head_dim].copy_from_slice(&k_new[src..src + head_dim]);
+                layer.v[dst..dst + head_dim].copy_from_slice(&v_new[src..src + head_dim]);
+            }
+        }
+    }
+
+    fn repeat(&mut self, beams: usize) {
+        if beams <= self.active_beams {
+            return;
+        }
+        assert!(
+            beams <= self.max_beams,
+            "cache was sized for {} beams but {beams} were requested",
+            self.max_beams
+        );
+        let (heads, head_dim, cap, len) = (self.heads, self.head_dim, self.cap, self.len);
+        for layer in &mut self.layers {
+            for beam in 1..beams {
+                for head in 0..heads {
+                    let src = head * cap * head_dim;
+                    let dst = ((beam * heads + head) * cap) * head_dim;
+                    layer.k.copy_within(src..src + len * head_dim, dst);
+                    layer.v.copy_within(src..src + len * head_dim, dst);
+                }
+            }
+        }
+        self.active_beams = beams;
+    }
+
+    /// Reorders the cache so that destination beam `i` inherits `parents[i]`.
+    fn reorder(&mut self, parents: &[usize]) {
+        let (heads, head_dim, cap, len) = (self.heads, self.head_dim, self.cap, self.len);
+        let bytes = len * head_dim;
+        for layer in &mut self.layers {
+            for (dest, &parent) in parents.iter().enumerate() {
+                for head in 0..heads {
+                    let src = ((parent * heads + head) * cap) * head_dim;
+                    let dst = ((dest * heads + head) * cap) * head_dim;
+                    self.scratch_k[dst..dst + bytes].copy_from_slice(&layer.k[src..src + bytes]);
+                    self.scratch_v[dst..dst + bytes].copy_from_slice(&layer.v[src..src + bytes]);
+                }
+            }
+            std::mem::swap(&mut layer.k, &mut self.scratch_k);
+            std::mem::swap(&mut layer.v, &mut self.scratch_v);
+        }
+    }
+
+    fn self_attention(&self, index: usize, q: &[f32], scale: f32) -> Vec<f32> {
+        let layer = &self.layers[index];
+        let seq = self.len + 1;
+        fused_attention(
+            q,
+            &layer.k,
+            &layer.v,
+            self.active_beams,
+            self.active_beams,
+            self.heads,
+            self.head_dim,
+            self.cap,
+            seq,
+            scale,
+        )
+    }
+
+    fn cross_attention(&self, index: usize, q: &[f32], scale: f32) -> Vec<f32> {
+        let (k, v) = &self.cross[index];
+        fused_attention(
+            q,
+            k,
+            v,
+            self.active_beams,
+            1,
+            self.heads,
+            self.head_dim,
+            self.src_len,
+            self.src_len,
+            scale,
+        )
+    }
+}
+
+fn as_f32_vec(tensor: &Tensor) -> Result<Vec<f32>> {
+    Ok(tensor
+        .to_dtype(DType::F32)?
+        .to_device(&Device::Cpu)?
+        .contiguous()?
+        .flatten_all()?
+        .to_vec1::<f32>()?)
+}
+
+/// `softmax(scale * q kᵀ) v` for a single query position.
+///
+/// `q` is `[beams][heads][head_dim]`, `k`/`v` are `[kv_beams][heads][stride][head_dim]`
+/// (cross-attention uses a single, shared `kv_beams`). The result is laid out
+/// `[beams][heads * head_dim]`, ready for the output projection.
+#[allow(clippy::too_many_arguments)]
+fn fused_attention(
+    q: &[f32],
+    k: &[f32],
+    v: &[f32],
+    beams: usize,
+    kv_beams: usize,
+    heads: usize,
+    head_dim: usize,
+    stride: usize,
+    seq: usize,
+    scale: f32,
+) -> Vec<f32> {
+    let mut out = vec![0f32; beams * heads * head_dim];
+    out.par_chunks_mut(head_dim)
+        .enumerate()
+        .map_init(Vec::<f32>::new, |scores, (task, dst)| {
+            let beam = task / heads;
+            let head = task % heads;
+            let kv_beam = beam.min(kv_beams.saturating_sub(1));
+            let q_row = &q[(beam * heads + head) * head_dim..][..head_dim];
+            let base = ((kv_beam * heads + head) * stride) * head_dim;
+
+            scores.clear();
+            scores.resize(seq, 0.0);
+            for (position, score) in scores.iter_mut().enumerate() {
+                let k_row = &k[base + position * head_dim..][..head_dim];
+                let mut dot = 0f32;
+                for (a, b) in q_row.iter().zip(k_row.iter()) {
+                    dot += a * b;
+                }
+                *score = dot * scale;
+            }
+
+            let mut max = f32::NEG_INFINITY;
+            for &score in scores.iter() {
+                max = max.max(score);
+            }
+            let mut sum = 0f32;
+            for score in scores.iter_mut() {
+                *score = (*score - max).exp();
+                sum += *score;
+            }
+            let inverse = 1.0 / sum;
+            for score in scores.iter_mut() {
+                *score *= inverse;
+            }
+
+            dst.fill(0.0);
+            for (position, &weight) in scores.iter().enumerate() {
+                let v_row = &v[base + position * head_dim..][..head_dim];
+                for (acc, value) in dst.iter_mut().zip(v_row.iter()) {
+                    *acc += weight * value;
+                }
+            }
+        })
+        .for_each(|_| {});
+    out
+}
+
+/// Either the generic candle cache or the fused CPU cache.
+///
+/// The variant is chosen once per generation call from the weight format, so
+/// the search loop stays identical for both paths.
+enum CacheState {
+    Tensors(DecoderCache),
+    Cpu(CpuDecoderCache),
+}
+
+impl CacheState {
+    fn seq_len(&self) -> usize {
+        match self {
+            Self::Tensors(cache) => cache.seq_len(),
+            Self::Cpu(cache) => cache.len,
+        }
+    }
+
+    /// Replicates the single prefill beam across the requested beam count.
+    fn repeat(&mut self, beams: usize) -> Result<()> {
+        match self {
+            Self::Tensors(cache) => {
+                let repeated = cache.repeat(beams)?;
+                *cache = repeated;
+            }
+            Self::Cpu(cache) => cache.repeat(beams),
+        }
+        Ok(())
+    }
+
+    /// Reorders the cache so that destination beam `i` inherits `parents[i]`.
+    fn reorder(&mut self, parents: &Tensor, parents_usize: &[usize]) -> Result<()> {
+        match self {
+            Self::Tensors(cache) => {
+                let reordered = cache.reorder(parents)?;
+                *cache = reordered;
+            }
+            Self::Cpu(cache) => cache.reorder(parents_usize),
+        }
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Model
 // ---------------------------------------------------------------------------
 
 pub struct Nllb {
     config: NllbConfig,
-    shared: Tensor,
+    shared: Embedding,
     pos_table: Tensor,
     encoder: Encoder,
     decoder: Decoder,
-    lm_head: Linear,
+    lm_head: Projection,
 }
 
 impl Nllb {
@@ -485,6 +890,10 @@ impl Nllb {
             )));
         }
 
+        let quantize = quantization_enabled(device, dtype);
+        let shared = Embedding::from_tensor(shared, quantize)?;
+        let lm_head = shared.lm_head()?;
+
         let mut loaded = 1;
         progress(loaded);
         let encoder = Encoder::load(
@@ -493,6 +902,7 @@ impl Nllb {
             &mut loaded,
             progress,
             cancel,
+            quantize,
         )?;
         let decoder = Decoder::load(
             vb.pp("model").pp("decoder"),
@@ -500,8 +910,8 @@ impl Nllb {
             &mut loaded,
             progress,
             cancel,
+            quantize,
         )?;
-        let lm_head = Linear::new(shared.clone(), None);
         let pos_table = build_position_table(&config, dtype, device)?;
 
         Ok(Self {
@@ -514,13 +924,18 @@ impl Nllb {
         })
     }
 
+    /// `true` when the loaded weights are stored as Q8 blocks in memory.
+    pub fn is_quantized(&self) -> bool {
+        self.shared.is_quantized()
+    }
+
     pub fn config(&self) -> &NllbConfig {
         &self.config
     }
 
     fn embed(&self, ids: &Tensor, position_start: usize) -> Result<Tensor> {
         let (batch, seq) = ids.dims2()?;
-        // `Tensor::embedding` expects 1-D ids.
+        // `embedding` expects 1-D ids and returns `[batch * seq, d_model]`.
         let x = self.shared.embedding(&ids.flatten_all()?)?.reshape((
             batch,
             seq,
@@ -541,16 +956,55 @@ impl Nllb {
     }
 
     pub fn encode(&self, input_ids: &Tensor) -> Result<Tensor> {
-        let x = self.embed(input_ids, 0)?;
-        self.encoder.forward(x)
+        self.encode_with_cancel(input_ids, &AtomicBool::new(false))
     }
 
-    fn decode_step(&self, input_ids: &Tensor, cache: &mut DecoderCache) -> Result<Tensor> {
+    /// Encodes the source while observing the cancellation flag between layers.
+    pub fn encode_with_cancel(&self, input_ids: &Tensor, cancel: &AtomicBool) -> Result<Tensor> {
+        let x = self.embed(input_ids, 0)?;
+        self.encoder.forward(x, cancel)
+    }
+
+    /// Runs one decoder step and returns the hidden state for the last token.
+    ///
+    /// Skipping the language-model head is useful for the mandatory start
+    /// token, whose logits are discarded: the head reads the whole shared
+    /// vocabulary matrix on every call.
+    fn decode_hidden(
+        &self,
+        input_ids: &Tensor,
+        cache: &mut CacheState,
+        timers: &mut GenerationTimers,
+    ) -> Result<Tensor> {
         let position_start = cache.seq_len();
+        let started = Instant::now();
         let x = self.embed(input_ids, position_start)?;
-        let x = self.decoder.forward(x, cache)?;
-        let last = x.narrow(1, x.dim(1)? - 1, 1)?;
+        timers.embedding += started.elapsed();
+        let x = match cache {
+            CacheState::Tensors(cache) => self.decoder.forward(x, cache, timers)?,
+            CacheState::Cpu(cache) => {
+                let out = self.decoder.forward_cpu(x, cache, timers)?;
+                // The fused path appends at `len`; advancing after the whole
+                // stack makes the position visible to the next call.
+                cache.advance();
+                out
+            }
+        };
+        Ok(x.narrow(1, x.dim(1)? - 1, 1)?)
+    }
+
+    fn decode_step(
+        &self,
+        input_ids: &Tensor,
+        cache: &mut CacheState,
+        timers: &mut GenerationTimers,
+    ) -> Result<Tensor> {
+        let started = Instant::now();
+        let last = self.decode_hidden(input_ids, cache, timers)?;
+        timers.decoder += started.elapsed();
+        let started = Instant::now();
         let logits = self.lm_head.forward(&last)?;
+        timers.lm_head += started.elapsed();
         Ok(logits.squeeze(1)?)
     }
 
@@ -567,15 +1021,92 @@ impl Nllb {
         progress: &mut dyn FnMut(GenerationProgress),
         cancel: &AtomicBool,
     ) -> Result<Vec<u32>> {
+        let mut timers = GenerationTimers::default();
+        self.generate_impl(
+            tokenizer,
+            source_ids,
+            target_language,
+            options,
+            progress,
+            cancel,
+            &mut timers,
+        )
+    }
+
+    /// Same as [`Nllb::generate`], but also returns a stage breakdown.
+    ///
+    /// The timings are wall-clock measurements of the actual inference calls,
+    /// not estimates. They exist so the benchmark harness can attribute time to
+    /// the encoder, the decoder stack, the language-model head and the beam
+    /// search bookkeeping.
+    pub fn generate_with_stats(
+        &self,
+        tokenizer: &NllbTokenizer,
+        source_ids: &[u32],
+        target_language: &str,
+        options: GenerateOptions,
+        progress: &mut dyn FnMut(GenerationProgress),
+        cancel: &AtomicBool,
+    ) -> Result<(Vec<u32>, GenerationStats)> {
+        let mut timers = GenerationTimers::default();
+        let tokens = self.generate_impl(
+            tokenizer,
+            source_ids,
+            target_language,
+            options,
+            progress,
+            cancel,
+            &mut timers,
+        )?;
+        Ok((tokens, timers.finish()))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn generate_impl(
+        &self,
+        tokenizer: &NllbTokenizer,
+        source_ids: &[u32],
+        target_language: &str,
+        options: GenerateOptions,
+        progress: &mut dyn FnMut(GenerationProgress),
+        cancel: &AtomicBool,
+        timers: &mut GenerationTimers,
+    ) -> Result<Vec<u32>> {
+        let total_started = Instant::now();
         let device = self.shared.device();
         let input_ids = Tensor::new(source_ids, device)?.unsqueeze(0)?;
-        let encoder_hidden = self.encode(&input_ids)?;
-        let cross_kv = self.decoder.prepare_cross(&encoder_hidden)?;
-        let mut cache = DecoderCache::new(cross_kv);
+        let started = Instant::now();
+        let encoder_hidden = self.encode_with_cancel(&input_ids, cancel)?;
+        timers.encode += started.elapsed();
 
-        // Step 0: start token (eos), logits ignored.
+        let beams = options.num_beams.max(1);
+        let max_new = options.max_new_tokens.max(1);
+
+        // The fused CPU cache is only used with quantized weights. The generic
+        // path is byte-for-byte the previous implementation, so f32/CUDA/Metal
+        // behaviour does not change.
+        let started = Instant::now();
+        let mut cache = if self.is_quantized() {
+            CacheState::Cpu(CpuDecoderCache::new(
+                &self.decoder,
+                &encoder_hidden,
+                &self.config,
+                beams,
+                max_new + 2,
+            )?)
+        } else {
+            CacheState::Tensors(DecoderCache::new(
+                self.decoder.prepare_cross(&encoder_hidden)?,
+            ))
+        };
+        timers.cross_prepare += started.elapsed();
+        let prefill_started = Instant::now();
+
+        // Step 0: start token (eos), logits ignored. The head is skipped
+        // entirely: its output would be discarded and it reads the full
+        // 256k-entry shared vocabulary matrix.
         let eos = Tensor::new(&[tokenizer.eos_id()], device)?.unsqueeze(0)?;
-        let _ = self.decode_step(&eos, &mut cache)?;
+        let _ = self.decode_hidden(&eos, &mut cache, timers)?;
         if cancel.load(AtomicOrdering::Relaxed) {
             return Err(Error::Cancelled);
         }
@@ -583,15 +1114,14 @@ impl Nllb {
         // Step 1: the target language is forced as the first generated token.
         let target_id = tokenizer.lang_id(target_language)?;
         let target = Tensor::new(&[target_id], device)?.unsqueeze(0)?;
-        let first_logits = self.decode_step(&target, &mut cache)?;
+        let first_logits = self.decode_step(&target, &mut cache, timers)?;
+        timers.prefill += prefill_started.elapsed();
 
-        let beams = options.num_beams.max(1);
-        let mut cache = cache.repeat(beams)?;
+        cache.repeat(beams)?;
         let mut scores = vec![0f64; beams];
         let mut sequences: Vec<Vec<u32>> = vec![Vec::new(); beams];
         let mut rows = logits_rows(&first_logits, beams)?;
 
-        let max_new = options.max_new_tokens.max(1);
         let eos_id = tokenizer.eos_id();
         let mut completed: Vec<(Vec<u32>, f64)> = Vec::new();
         let mut steps = 0usize;
@@ -605,23 +1135,28 @@ impl Nllb {
             // top-k is dominated by the best beam, which can starve the other
             // beams of their EOS candidate and prevent beam search from ever
             // completing `num_beams` hypotheses.
+            let search_started = Instant::now();
             let pooled = top_candidates_per_beam(&rows, &scores, beams * 2);
             let (active, finished) = collect_step(&pooled, eos_id, beams, &sequences);
             completed.extend(finished);
             trim_completed(&mut completed, beams);
+            timers.search += search_started.elapsed();
 
             if active.is_empty() {
                 break;
             }
 
             let parents: Vec<u32> = active.iter().map(|c| c.beam as u32).collect();
+            let parents_usize: Vec<usize> = active.iter().map(|c| c.beam).collect();
             let parents_tensor = Tensor::new(parents.as_slice(), device)?;
-            cache = cache.reorder(&parents_tensor)?;
+            cache.reorder(&parents_tensor, &parents_usize)?;
 
             let tokens: Vec<u32> = active.iter().map(|c| c.token).collect();
             let input_ids = Tensor::new(tokens.as_slice(), device)?.unsqueeze(1)?;
-            let logits = self.decode_step(&input_ids, &mut cache)?;
+            let logits = self.decode_step(&input_ids, &mut cache, timers)?;
+            let rows_started = Instant::now();
             rows = logits_rows(&logits, 1)?;
+            timers.search += rows_started.elapsed();
 
             let new_sequences: Vec<Vec<u32>> = active
                 .iter()
@@ -682,6 +1217,9 @@ impl Nllb {
             ));
         }
 
+        timers.steps = steps;
+        timers.beams = beams;
+        timers.total = total_started.elapsed();
         Ok(best_completed(&completed).unwrap_or_default())
     }
 }
@@ -930,6 +1468,74 @@ pub enum EarlyStopping {
     Never,
 }
 
+/// Wall-clock breakdown of one generation call.
+///
+/// `decoder` covers the embedding lookup, the decoder stack and the KV-cache
+/// updates; `lm_head` covers the shared-vocabulary projection only. `prefill`
+/// contains the two mandatory prompt steps, including their share of
+/// `decoder` and `lm_head`. `search` is beam bookkeeping and log-softmax.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct GenerationStats {
+    pub encode: Duration,
+    /// Cross-attention key/value projection over the encoded source.
+    pub cross_prepare: Duration,
+    pub prefill: Duration,
+    pub decoder: Duration,
+    pub lm_head: Duration,
+    pub search: Duration,
+    pub total: Duration,
+    pub steps: usize,
+    pub beams: usize,
+    /// Decoder sub-stages, accumulated inside `decoder`.
+    pub embedding: Duration,
+    pub projections: Duration,
+    pub kv_cache: Duration,
+    pub self_attn: Duration,
+    pub cross_attn: Duration,
+    pub ffn: Duration,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct GenerationTimers {
+    pub encode: Duration,
+    pub cross_prepare: Duration,
+    pub prefill: Duration,
+    pub decoder: Duration,
+    pub lm_head: Duration,
+    pub search: Duration,
+    pub total: Duration,
+    pub steps: usize,
+    pub beams: usize,
+    pub embedding: Duration,
+    pub projections: Duration,
+    pub kv_cache: Duration,
+    pub self_attn: Duration,
+    pub cross_attn: Duration,
+    pub ffn: Duration,
+}
+
+impl GenerationTimers {
+    fn finish(self) -> GenerationStats {
+        GenerationStats {
+            encode: self.encode,
+            cross_prepare: self.cross_prepare,
+            prefill: self.prefill,
+            decoder: self.decoder,
+            lm_head: self.lm_head,
+            search: self.search,
+            total: self.total,
+            steps: self.steps,
+            beams: self.beams,
+            embedding: self.embedding,
+            projections: self.projections,
+            kv_cache: self.kv_cache,
+            self_attn: self.self_attn,
+            cross_attn: self.cross_attn,
+            ffn: self.ffn,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct GenerateOptions {
     pub max_new_tokens: usize,
@@ -1176,5 +1782,201 @@ mod tests {
             4,
             EarlyStopping::Heuristic
         ));
+    }
+
+    // -- fused attention ---------------------------------------------------
+
+    fn pseudo_random(count: usize, seed: u32) -> Vec<f32> {
+        let mut state = seed;
+        (0..count)
+            .map(|_| {
+                state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+                (state >> 8) as f32 / 8_388_608.0 - 1.0
+            })
+            .collect()
+    }
+
+    /// Reference `softmax(scale q kᵀ) v` built from candle ops.
+    #[allow(clippy::too_many_arguments)]
+    fn reference_attention(
+        q: &[f32],
+        k: &[f32],
+        v: &[f32],
+        beams: usize,
+        kv_beams: usize,
+        heads: usize,
+        head_dim: usize,
+        seq: usize,
+        scale: f32,
+    ) -> Vec<f32> {
+        let device = Device::Cpu;
+        let q = Tensor::from_vec(q.to_vec(), (beams, heads, 1, head_dim), &device).unwrap();
+        let k = Tensor::from_vec(k.to_vec(), (kv_beams, heads, seq, head_dim), &device).unwrap();
+        let v = Tensor::from_vec(v.to_vec(), (kv_beams, heads, seq, head_dim), &device).unwrap();
+        let scores =
+            (q.broadcast_matmul(&k.transpose(2, 3).unwrap()).unwrap() * scale as f64).unwrap();
+        let probs = candle_nn::ops::softmax_last_dim(&scores).unwrap();
+        probs
+            .broadcast_matmul(&v)
+            .unwrap()
+            .flatten_all()
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap()
+    }
+
+    #[test]
+    fn fused_attention_matches_candle_for_broadcast_cross_attention() {
+        let (beams, kv_beams, heads, head_dim, seq, scale) = (2, 1, 3, 8, 5, 0.353_553_4);
+        let q = pseudo_random(beams * heads * head_dim, 1);
+        let k = pseudo_random(kv_beams * heads * seq * head_dim, 2);
+        let v = pseudo_random(kv_beams * heads * seq * head_dim, 3);
+
+        let actual = fused_attention(
+            &q, &k, &v, beams, kv_beams, heads, head_dim, seq, seq, scale,
+        );
+        let expected =
+            reference_attention(&q, &k, &v, beams, kv_beams, heads, head_dim, seq, scale);
+
+        assert_eq!(actual.len(), expected.len());
+        for (index, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (a - e).abs() < 1e-4,
+                "index {index}: fused {a} vs candle {e}"
+            );
+        }
+    }
+
+    #[test]
+    fn fused_attention_matches_candle_for_per_beam_self_attention() {
+        let (beams, heads, head_dim, seq, scale) = (2, 2, 4, 3, 0.5);
+        let q = pseudo_random(beams * heads * head_dim, 11);
+        let k = pseudo_random(beams * heads * seq * head_dim, 12);
+        let v = pseudo_random(beams * heads * seq * head_dim, 13);
+
+        let actual = fused_attention(&q, &k, &v, beams, beams, heads, head_dim, seq, seq, scale);
+        let expected = reference_attention(&q, &k, &v, beams, beams, heads, head_dim, seq, scale);
+
+        for (index, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (a - e).abs() < 1e-4,
+                "index {index}: fused {a} vs candle {e}"
+            );
+        }
+    }
+
+    #[test]
+    fn fused_attention_ignores_cache_slots_past_the_sequence_length() {
+        // The cache is preallocated for the whole token budget, so positions
+        // beyond the current length contain stale data and must never be read.
+        let (heads, head_dim, seq, stride, scale) = (2, 4, 3, 6, 0.25);
+        let q = pseudo_random(heads * head_dim, 21);
+        let mut k = vec![999.0; heads * stride * head_dim];
+        let mut v = vec![999.0; heads * stride * head_dim];
+        let compact_k = pseudo_random(heads * seq * head_dim, 22);
+        let compact_v = pseudo_random(heads * seq * head_dim, 23);
+        for head in 0..heads {
+            let src = head * seq * head_dim;
+            let dst = head * stride * head_dim;
+            k[dst..dst + seq * head_dim].copy_from_slice(&compact_k[src..src + seq * head_dim]);
+            v[dst..dst + seq * head_dim].copy_from_slice(&compact_v[src..src + seq * head_dim]);
+        }
+
+        let actual = fused_attention(&q, &k, &v, 1, 1, heads, head_dim, stride, seq, scale);
+        let expected = reference_attention(
+            &q, &compact_k, &compact_v, 1, 1, heads, head_dim, seq, scale,
+        );
+
+        for (index, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (a - e).abs() < 1e-4,
+                "index {index}: fused {a} vs candle {e}"
+            );
+        }
+    }
+
+    // -- CPU cache bookkeeping --------------------------------------------
+
+    fn test_cache(max_beams: usize, cap: usize, heads: usize, head_dim: usize) -> CpuDecoderCache {
+        let total = heads * cap * head_dim * max_beams;
+        CpuDecoderCache {
+            layers: vec![CpuLayerKv {
+                k: vec![0.0; total],
+                v: vec![0.0; total],
+            }],
+            cross: Vec::new(),
+            src_len: 0,
+            len: 0,
+            cap,
+            active_beams: 1,
+            max_beams,
+            heads,
+            head_dim,
+            d_model: heads * head_dim,
+            scratch_k: vec![0.0; total],
+            scratch_v: vec![0.0; total],
+        }
+    }
+
+    fn position_slice(cache: &CpuDecoderCache, beam: usize, head: usize, pos: usize) -> Vec<f32> {
+        let start = ((beam * cache.heads + head) * cache.cap + pos) * cache.head_dim;
+        cache.layers[0].k[start..start + cache.head_dim].to_vec()
+    }
+
+    #[test]
+    fn cpu_cache_repeat_copies_the_prefill_beam() {
+        let mut cache = test_cache(2, 4, 2, 2);
+        // One beam, two heads of width two, two positions.
+        cache.append(0, &[1.0, 2.0, 3.0, 4.0], &[0.0; 4]);
+        cache.advance();
+        cache.append(0, &[5.0, 6.0, 7.0, 8.0], &[0.0; 4]);
+        cache.advance();
+
+        cache.repeat(2);
+        assert_eq!(cache.active_beams, 2);
+        for head in 0..2 {
+            assert_eq!(
+                position_slice(&cache, 0, head, 0),
+                position_slice(&cache, 1, head, 0)
+            );
+            assert_eq!(
+                position_slice(&cache, 0, head, 1),
+                position_slice(&cache, 1, head, 1)
+            );
+        }
+    }
+
+    #[test]
+    fn cpu_cache_reorder_moves_positions_between_beams() {
+        let mut cache = test_cache(2, 4, 2, 2);
+        cache.append(0, &[1.0, 2.0, 3.0, 4.0], &[0.0; 4]);
+        cache.advance();
+        cache.repeat(2);
+        // Two beams now: beam 0 and 1 both hold the prefill position. Append a
+        // distinct position per beam.
+        cache.append(
+            0,
+            &[10.0, 11.0, 12.0, 13.0, 20.0, 21.0, 22.0, 23.0],
+            &[0.0; 8],
+        );
+        cache.advance();
+
+        cache.reorder(&[1, 0]);
+        for head in 0..2 {
+            assert_eq!(
+                position_slice(&cache, 0, head, 1),
+                vec![20.0 + head as f32 * 2.0, 21.0 + head as f32 * 2.0]
+            );
+            assert_eq!(
+                position_slice(&cache, 1, head, 1),
+                vec![10.0 + head as f32 * 2.0, 11.0 + head as f32 * 2.0]
+            );
+            // The prefill position is identical in both beams, so reordering
+            // must leave it untouched.
+            assert_eq!(
+                position_slice(&cache, 0, head, 0),
+                position_slice(&cache, 1, head, 0)
+            );
+        }
     }
 }
