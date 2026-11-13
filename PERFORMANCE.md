@@ -1,443 +1,390 @@
-# Fluent CPU Performance — Cycle 3
+# Fluent CPU Performance — Cycle 4
 
-This document records the performance work done in Cycle 3 on
-`finalization/cycle-3`. It separates measured facts from estimates, and it
-includes the experiments that were rejected as well as the ones that were kept.
-
-The goal for the cycle was narrow: make long-form CPU translation substantially
-faster without changing generation correctness, translation quality, memory
-safety, cancellation, or the short-input latency achieved in Cycle 2.
+Cycle 4 focused on the cost of the quantized (Q8) CPU path: the unexpectedly
+slow prefill kernel inherited from Cycle 3, the language-model head, and the
+beam-search bookkeeping. The largest measured defect was not arithmetic: beam
+search was copying the entire KV cache on every step to apply an *identity*
+permutation. Fixing the cache layout removed essentially all of that cost.
 
 ## 1. Summary
 
-| Workload (NLLB-200 1.3B, CPU) | Cycle 2 reference | f32 control on this tree | Q8 final | Q8 vs f32 |
-|---|---:|---:|---:|---:|
-| FR → EN, 7 generated tokens | 2.83 s | 2.89 s | **0.64 s** | 4.5× |
-| 32 generated tokens (267-token source) | — | 13.14 s | **4.38 s** | 3.0× |
-| 64 generated tokens (267-token source) | — | 25.08 s | **6.56 s** | 3.8× |
-| 128 generated tokens (267-token source) | — | 50.08 s | **11.19 s** | 4.5× |
-| 200 generated tokens (267-token source) | ≈ 124.5 s | 80.18 s | **16.84 s** | 4.8× |
-| Medium paragraph, 64 generated tokens | — | 21.04 s | **4.73 s** | 4.5× |
-| Long paragraph, 64 generated tokens | — | 25.19 s | **6.58 s** | 3.8× |
-
-The 200-token acceptance target (< 60 s) is met with a wide margin on the
-reference CPU. The short FR → EN target (< 5 s) is met at 0.64 s.
-
-All 12 benchmark outputs are byte-identical between the Q8 path and the f32
-control, including a forced 200-token continuation and a source near the
-512-token truncation limit.
+- **Beam-search cache reorder: 2.30 s → 0.003 s per 200-token run**
+  (median of 3 repetitions). The old implementation copied every destination
+  beam on every step. The cache now keeps a physical-slot permutation and only
+  copies rows when two beams genuinely share a parent. Beam parents were
+  identity in every measured workload, so the common case became free.
+- **17/17 corpus cases produce token-identical output between Q8 and f32**,
+  including accents, numbers, proper nouns, repeated terms, paragraph
+  boundaries, and forced 32/64/128/200-token continuations.
+- **11/11 previously recorded Q8 outputs are unchanged** by the cache change.
+- **14/14 scalar-kernel outputs match the AVX2 outputs** token for token.
+- **The tiled Q8 prefill kernel was implemented and measured, then rejected.**
+  Tile sizes 4/8/16/24/32 were benchmarked, but the in-situ A/B showed no
+  reliable end-to-end win: the quantized prefill is arithmetic-bound, not
+  weight-bandwidth-bound, because the FFN weights fit in L3. The previous
+  kernel is retained.
+- Lifecycle, cancellation and repeatability are now covered by integration
+  tests: unload/reload returns identical output, five repeated translations
+  are identical with +1 MB RSS, and encoder cancellation is observed within
+  ~32 ms of the signal.
+- 200-token segment: **17.61 s** in this session (17.11–17.66 s, 11.36 tok/s)
+  versus **23.21 s** (20.11–24.64 s) for the pre-change tree. The machine was
+  in a slower state during the baseline run (every compute stage was ~20%
+  slower), so the attributable gain is the measured reorder delta of
+  ~1.8–2.3 s, not the full 5.6 s total.
 
 ## 2. Environment
 
-Measured on the reference-class laptop, not on a synthetic CI runner.
-
 | Item | Value |
 |---|---|
-| CPU | 11th Gen Intel Core i5-11400H @ 2.70 GHz (6 cores / 12 threads) |
+| CPU | Intel Core i5-11400H (6 cores / 12 threads, 2.70 GHz base) |
 | RAM | 15,757 MB |
-| OS | Nobara Linux 44 (KDE Plasma Desktop Edition), x86-64 |
-| Rust | 1.99.0 (Fedora 1.99.0-1.fc44) |
-| Cargo | 1.99.0 |
-| Candle | 0.11.0 (`candle-core`, `candle-nn`) |
-| Model | NLLB-200 1.3B, `d_model=1024`, 24 encoder + 24 decoder layers, FFN 8192, 16 heads, vocab 256,206, shared embedding, ReLU, `max_position_embeddings=1024` |
-| Model file | local `pytorch_model.bin` (5.48 GB), f32 |
-| CPU features used | `avx2` + `fma`, selected at runtime; scalar fallback always available |
-| CPU features present but unused | `avx512f` (see rejected experiments) |
-| DVFS governor | `powersave` (not changed by the benchmark) |
+| OS | Nobara Linux 44 (KDE Plasma), kernel 7.3.1-202.nobara.fc44.x86_64 |
+| Rust | rustc 1.99.0 / cargo 1.99.0 |
+| Inference stack | Candle 0.11.0 |
+| Model | NLLB-200 1.3B, f32 checkpoint, 24 encoder + 24 decoder layers, d_model 1024, FFN 8192, 16 heads, vocabulary 256,206 |
+| SIMD | AVX2/FMA selected at runtime; `powersave` CPU governor |
+| Repository | `/tmp/opencode/fluent-cycle2`, branch `finalization/cycle-4`, based on `f062bda` |
+| Model path | `/home/neon/Documents/CODE LOCAL/Fluent/models/nllb-200-1.3b` (read-only) |
 
-The machine is shared with a desktop session. Absolute numbers drift by a few
-percent between runs; the reported figures use medians of repeated runs where
-noted.
+The machine is shared and the governor is `powersave`, so absolute timings vary
+by more than 20% between sessions. Comparisons below therefore use (a) the
+stage-level measurements, which isolate the changed code, and (b) median of
+three repetitions within one session. The same binary produced 19.0 s and
+23.2 s for the same 200-token workload minutes apart in this cycle.
 
-## 3. Benchmark harness
+## 3. Method and harness
 
-The checked-in harness is `crates/fluent-core/examples/bench.rs`. It calls the
-same `Nllb` and `NllbTokenizer` APIs as the product, so it measures the real
-inference path rather than a synthetic approximation.
+The harness is `crates/fluent-core/examples/bench.rs`. Cycle 4 added:
 
-```bash
-cargo run --release -p fluent-core --example bench -- \
-    models/nllb-200-1.3b --reps 3 --budgets 32,64,128,200 \
-    --json /tmp/fluent-bench.json
-```
+- Encoder sub-stage timers (`encode_attn`, `encode_ffn`), search sub-stage
+  timers (`search_logits`, `search_extract`, `search_topk`) and a separate
+  `reorder` timer. All are reported in the JSON and the stage tables.
+- A rewritten `--matmul-bench` covering prefill-sized `m` (1, 4, 8, 16, 32,
+  64, 128, 267) for 1024×1024 and 8192×1024 weights, plus 256206×1024 for
+  `m = 1, 4, 8`; it also measures candle's encoder self-attention and the
+  logits post-processing path.
+- Five corpus fixtures (accents, numbers/currency, proper nouns, repeated
+  terms, paragraph boundary) and generated token ids in the JSON so quality
+  comparisons are exact rather than text-only.
 
-Properties:
+Model loading, tokenization and detokenization are measured separately from
+generation. Every case uses the same fixture text, target language, beam count
+and generation settings across implementations.
 
-- **Fixed corpus in source.** Five short cases (FR→EN, EN→FR, EN→DE, ES→EN,
-  IT→EN), one medium EN→FR paragraph, and two long paragraphs (EN→FR 267 source
-  tokens, DE→EN 193 source tokens). The texts are original and
-  redistributable.
-- **Product cases** use the default heuristic early stopping and the default
-  beam count (4), so they reflect what a user sees.
-- **Forced-budget cases** run the long EN→FR fixture with
-  `EarlyStopping::Never` at 32, 64, 128 and 200 tokens. These measure raw
-  throughput and deliberately do not stop early.
-- **Timing windows.** `generation_ms` covers tokenization, encoder, cache
-  preparation, prefill, all decoder steps, logits, search and detokenization —
-  i.e. everything the product does per request. `end_to_end_ms` is measured
-  around the same sequence at the harness level. Model loading is timed
-  separately and is never mixed into generation throughput.
-- **Cold or warm?** The model is loaded once, then all cases run in the same
-  process. Each case is repeated `--reps` times and the median is reported;
-  the first repetition is therefore effectively a warm-up for the process and
-  the page cache, but no case is artificially discarded.
-- **Output.** Human-readable tables (per-case generation time, end-to-end time,
-  min/max, tokens/s, ms/token, stage breakdown, decoder sub-stages) plus a
-  machine-readable JSON document (`schema: "fluent-bench/1"`) containing every
-  sample, environment data, model identity, load time and RSS.
-- **Explicit unavailable data.** RSS is `null` on platforms where it cannot be
-  read; the harness never invents a value.
-- **Kernel micro-benchmark.** `--matmul-bench` times the Q8 kernel and the
-  candle attention path without loading the model.
-
-The f32 control is the same harness and the same binary with
-`FLUENT_QUANT=off`, which disables the Q8 weight path:
-
-```bash
-FLUENT_QUANT=off cargo run --release -p fluent-core --example bench -- \
-    models/nllb-200-1.3b --reps 1 --budgets 32,64,128,200 \
-    --json /tmp/fluent-bench-f32.json
-```
-
-### Baseline caveat
-
-The harness itself was introduced in Cycle 3, so there is no pristine
-Cycle 2 harness run. The Cycle 2 figures above are historical observations made
-with the previous ad-hoc methodology; they are context, not a controlled
-comparison. The **f32 control on the current tree** is the apples-to-apples
-reference for the Q8 effect: it uses the original candle f32 inference path and
-the original cache representation. It does include Cycle 3's step-0 logits
-shortcut, which makes it a slightly *faster* baseline than the literal Cycle 2
-code, so the reported Q8 speedups are conservative.
+The reference corpus is now 13 product-like cases plus the forced
+32/64/128/200-token matrix on the long English paragraph, 17 cases in total.
+Product-like cases stop on EOS (heuristic early stopping); the forced matrix
+uses `EarlyStopping::Never` so this is a pure throughput measurement, not a
+user-visible latency claim.
 
 ## 4. Where the time went
 
-Before optimization, profiling on the 200-token workload showed the decoder
-forward pass and the language-model head dominated; tokenization was
-negligible. The measured final breakdown on the long EN→FR case confirms the
-shape of the problem:
+200 generated tokens, 267-token source, Q8, median of 3 (`c4-final`):
 
-| Stage (200 tokens, 267-token source) | f32 control | Q8 final |
+| Stage | Pre-change tree | Final tree |
 |---|---:|---:|
 | Tokenization | 0.4 ms | 0.4 ms |
-| Encoder | 1,083 ms | 2,008 ms |
-| Cross-attention cache preparation | 99 ms | 226 ms |
-| Prefill | 359 ms | 74 ms |
-| Decoder (24 layers × 200 steps) | 60,784 ms | 9,424 ms |
-| └ FFN | 26,501 ms | 4,787 ms |
-| └ Q/K/V/out projections | 9,050 ms | 2,083 ms |
-| └ Cross-attention | 18,611 ms | 1,339 ms |
-| └ Self-attention | 4,917 ms | 1,108 ms |
-| └ KV-cache append/copy | 1,812 ms | 92 ms |
-| Logits (`lm_head`) | 13,297 ms | 2,140 ms |
-| Beam search (top-k, reorder, EOS) | 1,273 ms | 1,380 ms |
-| Detokenization (preview) | 0.1 ms | 0.1 ms |
-| **Generation total** | **80,181 ms** | **16,842 ms** |
+| Encoder | 2,095 ms | 2,244 ms |
+| Cross-attention cache preparation | 287 ms | 254 ms |
+| Prefill (start + language token) | 94 ms | 87 ms |
+| Decoder (24 layers × 200 steps) | 13,899 ms | 11,157 ms |
+| └ FFN | 6,859 ms | 5,685 ms |
+| └ Q/K/V/out projections | 3,210 ms | 2,475 ms |
+| └ Cross-attention | 2,028 ms | 1,588 ms |
+| └ Self-attention | 1,685 ms | 1,306 ms |
+| └ KV-cache append | 95 ms | 89 ms |
+| Language-model head | 2,754 ms | 2,396 ms |
+| Beam search | 1,794 ms | 1,488 ms |
+| └ logits/log-softmax + extraction | 1,573 ms | 1,347 ms |
+| └ top-k | 222 ms | 196 ms |
+| **Beam cache reorder** | **2,302 ms** | **3 ms** |
+| **Generation total** | **23,214 ms** | **17,609 ms** |
 
-Two conclusions drove the work:
+The pre-change run was collected when the CPU was slower: every arithmetic
+stage is 15–25% higher, so the two totals are not a controlled A/B. The cache
+reorder is the one stage that changed by orders of magnitude and is measured
+directly by the same instrumentation in both runs.
 
-1. Roughly 90% of the time was streaming f32 weights (decoder FFN,
-   projections, `lm_head`) through the CPU. On this class of hardware that is a
-   memory-bandwidth problem, not an arithmetic problem.
-2. Cross-attention through the general candle broadcasting path was expensive
-   (18.6 s over 200 steps) and the KV cache was rebuilt per step (1.8 s).
+Encoder split at 267 source tokens: attention ≈ 0.63 s, FFN ≈ 1.61 s,
+everything else ≈ 5 ms.
 
-Tokenization and detokenization were measured and deliberately left alone.
+## 5. Implemented: physical-slot beam cache (kept)
 
-## 5. Implemented optimizations
+### Problem
 
-### 5.1 In-memory Q8 weight quantization (kept)
+`CpuDecoderCache` stores `[beam][head][capacity][head_dim]` K/V rows and used to
+implement `reorder(parents)` by copying every destination beam from its parent
+through a scratch buffer, then swapping. With 4 beams, 24 layers, 16 heads and
+200 positions this copies roughly 150 MB per step and ~30 GB over a 200-token
+run.
 
-`crates/fluent-core/src/model/quant.rs`
+Profiling showed that beam parents were `[0, 1, 2, 3]` on every step of every
+measured workload: each beam's own best candidate already occupied the pooled
+top-k slots. The old code was therefore copying the whole cache onto itself.
+Even for non-identity permutations the copy was wasteful: distinct parents need
+no movement at all.
 
-- Weights are stored as Q8 blocks of 32 values with one f32 scale per block
-  (the well-tested `Q8_0` layout). This is 9 bytes per 32 values instead of
-  128 bytes, about 3.5× less traffic and resident memory.
-- Activations are quantized per block at call time; the inner loop is an
-  `i8 × i8 → i32` dot product accumulated in f32 per block. This keeps the
-  arithmetic in f32 at block granularity without a full f32 copy of the weights.
-- Two kernels: a register-blocked one for the decoding case (`m ≤ 8`, weights
-  loaded once per block and reused across beams) and a prefill kernel for many
-  input rows. Both have AVX2/FMA and scalar implementations.
-- The AVX2 path is selected at runtime with
-  `is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma")`. The
-  portable build does not require `-C target-cpu` and always retains a scalar
-  fallback.
-- Quantization happens once during model load and is **never written back to
-  disk**. The f32 tensor is dropped immediately after conversion, so the format
-  is internal to the process.
-- Enabled automatically only for the CPU f32 path. CUDA, Metal and explicit f16
-  keep the previous candle path unchanged.
-- Overrides for diagnosis and safety: `FLUENT_QUANT=off` disables the Q8 path;
-  `FLUENT_QUANT_SIMD=off` forces the scalar kernels.
+### Design
 
-Why it is safe: the model file is untouched, the scheme is per-block and
-symmetric, no new model asset or dependency on a quantized checkpoint format is
-introduced, and the scalar fallback is always compiled in.
+- `CpuDecoderCache` now keeps `phys: Vec<usize>`, the physical slot holding each
+  logical beam's rows.
+- `append` and self-attention address rows through `phys`.
+- `reorder(parents)` rewrites `phys[dest] = phys[parent]` and then
+  `ensure_unique_slots()`: beams whose parent is distinct keep their slot at
+  zero cost; aliases are materialized by copying into unused slots.
+- `fused_attention` takes a slot map instead of an implicit beam index.
+  Cross-attention passes an empty map because all beams share one K/V row.
+- `repeat()` sets all logical beams to the prefill slot; the same
+  `ensure_unique_slots()` materializes the copies once.
+- Cache buffers remain preallocated; no per-step reconstruction or new
+  allocation proportional to sequence length was introduced.
 
-### 5.2 Fused CPU attention and preallocated KV cache (kept)
+### Correctness tests
 
-`crates/fluent-core/src/model/nllb.rs`
+`crates/fluent-core/src/model/nllb.rs`:
 
-The general candle path transposes, broadcasts and concatenates tensors every
-step. For the quantized CPU path, attention now runs through a small fused
-kernel and a preallocated cache:
+- `cpu_cache_physical_slots_match_reference_bookkeeping` drives prefill,
+  `repeat`, three reorders with duplicate parents (`[2,0,2,2]`, `[1,1,3,0]`,
+  `[0,0,0,0]`) and appends, comparing every beam's K/V rows against a compact
+  reference cache that copies on every reorder. It also asserts that physical
+  slots stay distinct.
+- `cpu_cache_attention_uses_the_physical_slot` checks that after `[1,0]` the
+  logical beam attends to the rows the other beam accumulated, not its own old
+  rows.
+- Existing `cpu_cache_repeat_copies_the_prefill_beam` and
+  `cpu_cache_reorder_moves_positions_between_beams` were updated to resolve
+  logical beams through `phys`.
+- `fused_attention_matches_candle_for_broadcast_cross_attention` and the
+  per-beam self-attention test still compare against candle's reference.
 
-- `CpuDecoderCache` stores self-attention keys/values for all beams in a
-  `[beams][heads][capacity][head_dim]` layout with a per-beam length. The cache
-  is appended in place, repeated once after prefill, reordered when beams
-  reorder, and advanced exactly once per decoder pass.
-- Cross-attention keys/values are encoded once into the same compact layout and
-  broadcast over beams without copying.
-- The fused kernel computes scores, softmax and value accumulation without
-  intermediate transposes or per-step allocation.
-- The `Tensors` cache representation and the original candle attention remain
-  the path for f32, CUDA and Metal. The change is scoped to the new CPU path.
+The change is bit-identical for the cache contents and attention arithmetic:
+the reference-bookkeeping test compares exact f32 slices, and the attention
+test compares exact output vectors.
 
-Regression tests compare the fused kernel against the candle reference with
-broadcast cross-attention, per-beam self-attention and stride padding, and test
-cache repeat/reorder semantics.
+## 6. Investigated and rejected
 
-### 5.3 Cancellation inside the encoder (kept)
+### 6.1 Tiled Q8 prefill kernel (implemented, measured, reverted)
 
-`crates/fluent-core/src/model/nllb.rs`
+The Cycle 3 report identified Q8 prefill as slower than f32 GEMM. A tiled
+kernel was implemented for both the scalar and AVX2 paths: process `T` input
+rows while each quantized weight block is decoded once, keep `T` f32
+accumulators, and handle partial final tiles. The previous row-at-a-time
+kernels were retained and a `FLUENT_QUANT_LEGACY=1` diagnostic switch allowed
+an in-binary A/B. Exactness tests asserted bit-identical outputs for
+`m = 1,4,7,8,9,15,16,17,23,31,32,33,64,67,70` on both kernels.
 
-The decoder already checked cancellation between steps, but a long source could
-block inside `encoder.forward` for more than a second after the user pressed
-Cancel. `Nllb::encode_with_cancel` now checks the flag between encoder layers;
-the public `encode` remains as a non-cancellable wrapper. Post-signal latency
-dropped from about 1.5 s to 17–62 ms in repeated measurements.
+Tile sizes 4, 8, 16, 24 and 32 were measured on the kernel micro-benchmark
+(8192×1024 weights, prefill-sized `m`). Tile 16 was the best of the set
+(m = 16: 1.36 ms / 197 GFLOP/s; m = 267: 22.7 ms / 198 GFLOP/s), but the
+end-to-end A/B was noise-dominated:
 
-### 5.4 Step-0 logits shortcut (kept)
+| Round | Workload | Legacy encode | Tiled encode |
+|---|---|---:|---:|
+| A | 32 tokens | 2,390 ms | 1,997 ms |
+| A | 200 tokens | 1,993 ms | 1,974 ms |
+| B | 32 tokens | 2,110 ms | 2,374 ms |
+| B | 200 tokens | 2,033 ms | 2,340 ms |
 
-The first decoding step only needs the last beam's logits for candidate
-selection; the harness/product do not need the full `lm_head` projection for
-every beam at step 0. `decode_hidden` returns the hidden state and the head is
-skipped where it cannot affect the result. This is a small but measurable
-saving on every request and applies to both f32 and Q8.
+The tiled kernel is a faithful, exact implementation, but it does not
+outperform the original reliably. The explanation is visible in the profile:
+the 9 MB FFN weight matrix fits in the 12 MB L3, so re-reading it does not hit
+DRAM, and the quantized dot product is arithmetic-bound at roughly
+140–190 GFLOP/s. Per the cycle policy, the previous kernel is retained and the
+alternative is documented rather than merged. `crates/fluent-core/src/model/quant.rs`
+is unchanged.
 
-### 5.5 Memory estimate follows the weight path (kept)
+### 6.2 Cross-attention batching (implemented, measured, reverted)
 
-`crates/fluent-core/src/engine.rs`, `lib.rs`, `crates/fluent-gui/src/app.rs`
+Cross-attention re-reads the source K/V once per beam. A specialized kernel
+processed all beams for one head and halved/tquartered the source traffic.
+Measured cross-attention stayed at 1.57–1.64 s versus 1.57 s for the original
+kernel: reducing the task count from 64 to 32/16 costs more parallelism than
+the traffic saves on this CPU. Reverted.
 
-`estimate_memory` was conservative and ignored quantization, so the GUI warned
-about ~5 GB when a Q8 CPU load actually needs ~1.6 GB. The new
-`estimate_memory_for_choice` takes the device into account: CPU f32 uses the
-9/32 weight factor, while unknown/GPU devices keep the conservative estimate.
-`estimate_memory` remains the conservative public entry point. This only
-affects the pre-load advisory; it does not change loading behaviour.
+### 6.3 LM head tiling (investigated, no safe win)
 
-### 5.6 Instrumentation and harness (kept)
+`lm_head` is 2.40 s over 200 steps, i.e. ~12 ms per step for a
+`[4][256206] × [256206][1024]` product: 2.1 GFLOP per step at ~180 GFLOP/s and
+~24 GB/s of weight traffic. That matches the Cycle 3 micro-benchmark
+(11.1 ms/call, 189 GFLOP/s) and the measured kernel roofline. The existing
+kernel already tiles across the four beams; no safe change was found that
+improves the end-to-end number. Beam-search semantics were not touched.
 
-`GenerationStats` / `GenerationTimers` in `nllb.rs` record encode,
-cross-cache preparation, prefill, decoder, `lm_head`, search, total, step count
-and beam count, plus decoder sub-stages (embedding, projections, KV cache,
-self-attention, cross-attention, FFN). They are zero-cost when unused and are
-only collected through `generate_with_stats`; the product path is unchanged.
-The harness described in section 3 consumes them.
+### 6.4 Logits post-processing (investigated, deferred)
 
-## 6. Experiment log
+Per 200-token run the logits path costs 1.34 s: candle `log_softmax` ~5.8 ms
+per step, extraction 0.2–0.3 ms, top-k 0.75 ms in isolation. A manual
+logsumexp costs 2.8 ms per step, but changes the summation order compared with
+candle's reduction. The expected saving is ~0.4–0.6 s per 200-token run (2–3%);
+it was left out because it would introduce a numerical difference in the
+search scores without a demonstrated quality benefit. The measurement and the
+reason are recorded here so Cycle 5 can decide with the quality corpus in
+place.
 
-| ID | Hypothesis | Change | Result | Decision |
-|---|---|---|---|---|
-| E1 | The decoder and `lm_head` dominate; tokenization is irrelevant | Added stage timers and a checked-in harness | Decoder + head ≈ 90% of 200-token time; tokenization 0.4 ms | Keep |
-| E2 | CPU decoding is bandwidth-bound on f32 weights | In-memory Q8 blocks + AVX2/scalar kernels | 4.5–4.8× faster long-form; RSS 5.3 GB → 1.6 GB; identical outputs | Keep |
-| E3 | General candle attention rebuilds and broadcasts too much per step | Fused CPU attention + preallocated per-beam cache | Cross-attention 18.6 s → 1.34 s at 200 tokens; KV cache 1.8 s → 0.09 s | Keep |
-| E4 | The scalar fallback must remain correct on non-AVX2 CPUs | Forced `FLUENT_QUANT_SIMD=off` and ran the full test suite plus a benchmark | All tests pass; outputs identical; ~2.4× slower than AVX2, still faster than f32 | Keep |
-| E5 | A long source delays cancellation inside the encoder | Check the flag between encoder layers | Post-signal latency 1.5 s → 17–62 ms | Keep |
-| E6 | The GUI memory warning is wrong for Q8 | Device-aware weight factor | Advisory drops to the real footprint; conservative form retained | Keep |
-| E7 | AVX-512 would add throughput on this CPU | Runtime-detected AVX-512 kernel | Not implemented: extra code paths and validation for a workload already 3.5× inside target; AVX2 is sufficient | Reject |
-| E8 | Keeping the encoder in f32 would fix its prefill regression | Dense encoder + quantized decoder | Adds ~2 GB RSS and only saves ~1 s on long inputs; violates the memory goal | Reject |
-| E9 | Fewer beams (1 or 2) would speed up decoding | Measure beam counts 1/2/4 | Beam search is a product-quality decision; no quality evidence justified changing the default, and the acceptance target is already met | Reject for this cycle |
-| E10 | Thread count should be raised or pinned | Change rayon pool / `OMP_NUM_THREADS` | No measured benefit over the default pool; risks oversubscription on 6C/12T and on other machines | Reject |
-| E11 | Dequantizing weights once per call would simplify the kernel | Dense f32 tiles per matmul | Reintroduces the f32 traffic that caused the bottleneck; rejected on first principles and by the stage profile | Reject |
-| E12 | Quantize CUDA/Metal weights too | Extend Q8 to GPU paths | Untested backends in this environment and no CPU benefit; outside the cycle scope and risk budget | Reject |
+## 7. Benchmarks
 
-## 7. Performance comparison
+### 7.1 Product-like cases (Q8, median of 3, heuristic EOS stop)
 
-Same binary, same harness, same model, same machine. Q8 = 3 repetitions
-(median); f32 control = 1 repetition because it is 5× slower and only used to
-isolate the optimization.
+| Case | Source tokens | Generated | Median | Min | Max | tok/s | ms/token |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| FR → EN | 13 | 7 | 0.83 s | 0.83 | 0.89 | 8.40 | 119.1 |
+| EN → FR | 15 | 16 | 1.28 s | 1.26 | 1.50 | 12.54 | 79.7 |
+| EN → DE | 15 | 19 | 1.51 s | 1.51 | 1.56 | 12.56 | 79.6 |
+| ES → EN | 16 | 11 | 0.98 s | 0.96 | 0.98 | 11.25 | 88.9 |
+| IT → EN | 20 | 20 | 1.58 s | 1.56 | 1.59 | 12.66 | 79.0 |
+| EN → FR medium | 81 | 64 | 5.53 s | 4.95 | 5.69 | 11.57 | 86.4 |
+| EN → FR long | 267 | 64 | 7.33 s | 7.17 | 7.57 | 8.73 | 114.6 |
+| DE → EN long | 193 | 64 | 6.32 s | 6.23 | 6.49 | 10.12 | 98.8 |
+| FR → EN accented | 40 | 21 | 1.92 s | 1.88 | 1.95 | 10.92 | 91.6 |
+| EN → FR numbers | 25 | 27 | 2.13 s | 2.13 | 2.13 | 12.68 | 78.9 |
+| EN → DE names | 26 | 27 | 2.22 s | 2.12 | 2.23 | 12.16 | 82.3 |
+| ES → EN repeated terms | 27 | 24 | 1.98 s | 1.95 | 2.04 | 12.11 | 82.6 |
+| EN → FR paragraphs | 45 | 55 | 4.21 s | 4.16 | 4.34 | 13.07 | 76.5 |
 
-### Short and product-like cases
+### 7.2 Forced budgets (long EN → FR, `EarlyStopping::Never`)
 
-| Case | Source tokens | Generated | f32 control | Q8 final | Speedup |
-|---|---:|---:|---:|---:|---:|
-| FR → EN | 13 | 7 | 2.89 s | 0.64 s | 4.50× |
-| EN → FR | 15 | 16 | 5.45 s | 1.18 s | 4.63× |
-| EN → DE | 15 | 19 | 6.32 s | 1.36 s | 4.65× |
-| ES → EN | 16 | 11 | 4.02 s | 0.89 s | 4.52× |
-| IT → EN | 20 | 20 | 6.66 s | 1.45 s | 4.61× |
-| EN → FR medium paragraph | 81 | 64 | 21.04 s | 4.73 s | 4.45× |
-| EN → FR long paragraph | 267 | 64 | 25.19 s | 6.58 s | 3.83× |
-| DE → EN long paragraph | 193 | 64 | 23.17 s | 5.89 s | 3.93× |
+| Budget | Pre-change Q8 | Final Q8 | Final min–max | tok/s | ms/token | f32 control (Cycle 3) |
+|---:|---:|---:|---:|---:|---:|---:|
+| 32 | 5.93 s | 4.67 s | 4.66–4.81 | 6.86 | 145.9 | 13.14 s |
+| 64 | 8.57 s | 7.00 s | 6.92–7.05 | 9.14 | 109.4 | 25.08 s |
+| 128 | 12.20 s | 11.57 s | 11.56–11.63 | 11.06 | 90.4 | 50.08 s |
+| 200 | 23.21 s | 17.61 s | 17.11–17.66 | 11.36 | 88.0 | 80.18 s |
 
-### Forced token budgets (long EN → FR, `EarlyStopping::Never`)
+The f32 column is the committed Cycle 3 control, measured with the same
+harness and hardware; the f32 inference path was not modified in Cycle 4. A
+Cycle 4 single-repetition f32 run on the same corpus produced 14.52 / 28.98 /
+62.77 / 93.26 s, confirming the ~3–5× Q8 advantage; it is slower than the
+Cycle 3 control because of the machine state, not a code change.
 
-| Budget | f32 control | Q8 final | Speedup | Q8 ms/token | Q8 tokens/s |
-|---:|---:|---:|---:|---:|---:|
-| 32 | 13.14 s | 4.38 s | 3.00× | 137.0 | 7.30 |
-| 64 | 25.08 s | 6.56 s | 3.82× | 102.5 | 9.76 |
-| 128 | 50.08 s | 11.19 s | 4.47× | 87.4 | 11.44 |
-| 200 | 80.18 s | 16.84 s | 4.76× | 84.2 | 11.88 |
+The pre-change Q8 column was collected with the same binary instrumentation but
+while the CPU was ~20% slower; the reorder stage is the directly comparable
+part (2,302 ms → 3 ms). The remaining total difference should not be attributed
+to the cache change alone.
 
-Dispersion at 200 tokens was 16.82–16.84 s across three repetitions. The
-32-token case has a lower speedup because the fixed encoder cost is a larger
-share of a short run, and the Q8 prefill kernel is currently slower than the
-f32 GEMM at that matrix shape (see section 10).
+Model load: 8.35 s for Q8 (1,586 MB RSS, 2,431 MB peak during quantization)
+versus 5.97 s for f32 (5,334 MB). Load time is excluded from all generation
+numbers.
 
-### Cycle 2 context
+### 7.3 Kernel micro-benchmark
 
-The Cycle 2 reference observations were 2.83 s for short FR → EN, 15.80 s for a
-44-token paragraph, 67.06 s for 84 generated tokens and ≈124.5 s for 200
-generated tokens. They were produced with an earlier, less controlled
-methodology, so only the direction is comparable:
-
-- short FR → EN: 2.83 s → 0.64 s (4.4×)
-- 200 generated tokens: ≈124.5 s → 16.84 s (7.4×)
-- 84 generated tokens: 67.06 s in Cycle 2; the nearest measured points on the
-  final tree are 64 tokens in 6.56 s and 128 tokens in 11.19 s
-
-### Kernel micro-benchmark (`--matmul-bench`, m = 4)
-
-| Matrix | Q8 ms/call | Effective GB/s | GFLOP/s |
-|---|---:|---:|---:|
-| 1024 × 1024 | 0.090 | 13.2 | 93.4 |
-| 8192 × 1024 (FFN) | 0.325 | 29.0 | 206.5 |
-| 256,206 × 1024 (`lm_head`) | 11.094 | 26.6 | 189.2 |
-
-The `lm_head` cost matches the end-to-end measurement: 11.1 ms × 200 steps ≈
-2.2 s, which is what the stage breakdown reports.
+With AVX2, 8192×1024 weights, `m = 267`: ~22.7 ms per call, ~198 GFLOP/s.
+256,206×1024, `m = 4`: ~21 ms per call at the prefill-sized micro-benchmark
+(the warm in-pipeline value is ~12 ms, as reported above). These numbers vary
+with the machine state; they are used for relative kernel comparisons only.
 
 ## 8. Translation quality
 
 ### Method
 
-The fixed corpus covers:
+The corpus covers FR→EN, EN→FR, EN→DE, ES→EN and IT→EN; short, medium, long
+and two-paragraph inputs; accents; punctuation; numbers, currency and dates;
+proper nouns; repeated terminology; EOS-stopped generation; forced
+32/64/128/200-token continuation on a 267-token source. All texts are
+original and redistributable, and token ids are recorded in the benchmark
+JSON.
 
-- EN → FR (short, medium and long)
-- FR → EN
-- EN → DE
-- ES → EN
-- IT → EN
-- punctuation, accents, numbers, proper nouns, paragraph boundaries, repeated
-  terms, EOS behaviour and a forced 200-token continuation
-- an additional manual near-truncation case: a 512-token English source
-  truncated explicitly, translated EN → DE with a forced 32-token budget
+### Results
 
-### Result
+- **Q8 vs f32: 17/17 cases token-identical**, including the forced 200-token
+  continuation.
+- **Pre-change Q8 vs final Q8: 11/11 outputs identical** (the overlapping
+  benchmark cases; the five new fixtures were added in this cycle).
+- **Scalar vs AVX2 Q8: 14/14 cases token-identical** (13 fixtures + the
+  32-token forced case).
+- Examples from the new fixtures:
+  - FR→EN accented: “Last summer in Montreal, we visited an exhibition of the
+    work of a very famous Quebec artist.”
+  - EN→FR numbers: “La facture de 1 250,75 euros a été émise le 3 mars 2024 et
+    doit être payée dans les 30 jours.”
+  - ES→EN repeated terms: “The committee reviewed the budget, approved the
+    budget and published the revised budget on the committee's website.”
 
-- **All 12 harness cases produced byte-identical output between Q8 and f32**,
-  including the 200-token forced continuation.
-- **The near-truncation case was byte-identical**, with `truncated=true` in both
-  runs. Q8 took 6.81 s; f32 took 18.62 s.
-- The scalar Q8 fallback produced identical output to the AVX2 Q8 path on the
-  same cases.
+Byte-identical output is stronger than the cycle required, but it is an
+empirical result on a small corpus, not a guarantee. No BLEU-like score is
+reported: the outputs are identical, so a corpus metric would add noise without
+information. The corpus is single-model and does not cover domain-specific
+terminology beyond the fixtures above.
 
-Byte-identical output is a stronger result than was required. It is a
-consequence of the per-block Q8 scheme and the beam decisions staying stable;
-it is not guaranteed for every input, and numerical behaviour should be
-re-evaluated if the block size or kernel accumulation order changes in a future
-cycle.
+## 9. Memory reliability
 
-No BLEU-like score was used: the corpus is small, the outputs are identical, and
-a corpus-level metric would add noise without adding information. This is a
-limitation of the evidence, not a hidden regression.
-
-## 9. Memory and reliability
-
-### Memory
-
-| Measurement | f32 control | Q8 final |
+| Measurement | f32 | Q8 |
 |---|---:|---:|
-| RSS after load | 5,337 MB | 1,586 MB |
-| Peak RSS while loading | 5,337 MB | 2,433 MB |
-| Peak RSS over the whole run | 5,673 MB | 2,433 MB |
-| RSS at end of run | 5,373 MB | 1,587 MB |
-| Model load time | 5.72 s | 7.48 s |
+| RSS after load | 5,334 MB | 1,586 MB |
+| Peak during load | 5,334 MB | 2,431 MB |
+| Peak during benchmark | 5,643 MB | 2,431 MB |
 
-Q8 uses about 3.4× less resident memory. The load is ~1.8 s slower because the
-weights are quantized once at load; that cost is paid once per process and is
-not included in generation timing. The Q8 peak during loading is higher than
-steady state because the f32 tensor and the Q8 copy briefly coexist during
-conversion; the f32 peak during the run comes from ordinary activation and
-cache allocations.
+`crates/fluent-core/tests/reliability.rs` (runs against
+`FLUENT_TEST_MODEL`; skips cleanly without it):
 
-### Repeated runs and cache correctness
+- **Lifecycle**: load → translate → `unload()` → translate (auto-reload) →
+  identical text. RSS 1,635 MB loaded, 1,385 MB after unload; the model state
+  is released, the remaining RSS is allocator retention.
+- **Repeated translations**: five runs, identical text each time, RSS
+  1,689 MB → 1,690 MB.
+- **Cancellation**: an already-cancelled call returns immediately; a signal
+  200 ms into the encoder returns `Error::Cancelled` after 232 ms total
+  (~32 ms post-signal); the engine remains usable afterwards.
+- **Cache correctness**: the reference-bookkeeping and slot-attention tests
+  above run on every `cargo test`, and the fused attention kernels are checked
+  against candle.
 
-- Three consecutive 48-token runs on the same source produced identical tokens
-  and text; RSS stayed at 1,613–1,614 MB across runs, ending at 1,587 MB.
-- Tests cover fused attention against the candle reference, cache
-  repeat/reorder, per-beam cache state, early stopping, EOS discovery, source
-  truncation and maximum token limits.
-- No panics, deadlocks, shape errors or cross-translation contamination were
-  observed.
+## 10. Scalar and AVX2 behaviour
 
-### Cancellation
+- Runtime detection is unchanged; `FLUENT_QUANT_SIMD=off` forces the scalar
+  path.
+- The cache change is scalar-independent (plain Rust slices) and both paths
+  passed the full unit suite under `FLUENT_QUANT_SIMD=off`.
+- Scalar is ~1.75× slower than AVX2 (32-token forced run: 8.15 s vs 4.67 s)
+  and produced the same tokens on all 14 compared cases.
+- No AVX-512 or other new instruction set was introduced.
 
-With cancellation signalled 200 / 500 / 1,500 ms into a 200-token run, the
-translation returned in 230 / 517 / 1,563 ms respectively; post-signal latency
-was **30 / 17 / 62 ms** after encoder-layer checks were added. Before that
-change the same test showed ~1.5 s of post-signal latency.
+## 11. Remaining technical debt
 
-### Model unloading
+1. **Q8 prefill is still slower than f32 GEMM** (2.2 s vs ~1.1 s encoder at
+   267 tokens). The kernel is arithmetic-bound; a faster dot product
+   (e.g. wider integer multiply-accumulate or different block scaling) is the
+   next kernel-level opportunity. It costs ~1 s on a 200-token run.
+2. **Logits exponentiation is the largest search cost** (1.29 s per 200-token
+   run). A faster, numerically validated logsumexp could recover ~0.4–0.6 s.
+3. **Decoder FFN and projections dominate** (5.7 s + 2.5 s); they are close to
+   the measured memory roofline. Further gains need different weight layouts
+   or a lower-bit format, not more threads.
+4. **Cross-attention is recomputed for every beam** (1.6 s). Batching was
+   measured and rejected on this CPU; a SIMD dot product would change the
+   trade-off.
+5. **Load time**: 8.35 s for Q8, ~2.4 s of which is one-time quantization.
+6. **No AVX-512/VNNI path**, no quantized GPU path, and no end-to-end CI
+   performance gate; the required runner would need a fixed governor, a
+   pinned CPU set and a stable thermal state.
+7. **The quality corpus is still small** (17 cases, one model). It is enough to
+   catch regressions in the changed code but not to claim general equivalence.
+8. **Cycle 2 debt remains**: packaging/signing, model acquisition flow,
+   Windows/macOS validation, and the NLLB weight license boundary.
 
-Model loading was exercised repeatedly by the benchmark process and the
-diagnostic runs. A dedicated in-process unload/reload measurement was not added:
-the product unloads by dropping the engine and, in practice, by ending the
-process, so there is no user-facing path that keeps several models resident.
-The absence of that measurement is recorded as a limitation rather than
-presented as a pass.
-
-## 10. Known limitations and remaining debt
-
-1. **Q8 prefill is slower than f32 GEMM at large `m`.** On the 267-token
-   source, encode is 2.01 s in Q8 versus 1.08 s in f32, and cross-cache
-   preparation is 0.23 s versus 0.10 s. This costs about 1.05 s on a 200-token
-   run. The decoder kernel is register-blocked across beams, but the prefill
-   kernel loops inputs outside blocks and re-reads weight blocks per input; a
-   tiled/register-blocked prefill kernel is the obvious next improvement.
-   It does not threaten acceptance because the decoder and `lm_head` savings
-   are much larger.
-2. **Decoder is still bandwidth-bound.** Effective weight streaming is
-   ~19–28 GB/s against a measured kernel peak of ~29 GB/s on this machine.
-   Further gains need larger tiles, fewer passes over `lm_head`, or a different
-   head-selection strategy — not more threads.
-3. **Beam search overhead is now visible.** Search is 1.38 s of the 16.84 s
-   run (8%). Beam reordering and top-k are single-threaded.
-4. **Load time increased** by ~1.8 s because of one-time quantization.
-5. **No AVX-512 path.** `avx512f` is present on the reference CPU but was not
-   used; the added code paths and validation cost were disproportionate once
-   the target was met.
-6. **Long-standing Cycle 2 debt remains:** heuristic language/generation
-   detection, GPU quantized paths untested, no packaging/CI/signing, no model
-   acquisition flow, and the repository's MIT license coexists with
-   CC BY-NC 4.0 NLLB weights.
-7. **The f32 control is not a pristine Cycle 2 binary.** It is the current tree
-   with quantization disabled, as explained in section 3.
-
-## 11. Quality gates (final tree)
+## 12. Quality gates (final tree)
 
 | Command | Result |
 |---|---|
 | `cargo fmt --all -- --check` | Pass (no diff) |
 | `cargo check --workspace` | Pass |
-| `cargo test --workspace` | Pass: 42 core + 7 GUI = 49 tests, 0 failed |
-| `cargo clippy --workspace --all-targets -- -D warnings` | Pass (no warnings) |
+| `cargo test --workspace` | Pass: 44 core + 3 reliability (skipped without model) + 7 GUI = 54 tests, 0 failed |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Pass |
 | `cargo build --release -p fluent-gui` | Pass |
-| `FLUENT_QUANT_SIMD=off cargo test -p fluent-core` | Pass: 42 tests |
-| Q8 benchmark, 3 repetitions, 12 cases | Pass, JSON saved outside the repo |
-| f32 control benchmark, 1 repetition | Pass |
-| Near-truncation EN → DE comparison | Pass, byte-identical |
+| `FLUENT_QUANT_SIMD=off cargo test -p fluent-core` | Pass: 44 + 3 tests |
+| `FLUENT_TEST_MODEL=… cargo test --release -p fluent-core --test reliability` | Pass: 3/3, lifecycle/repeat/cancellation results above |
+| Q8 benchmark, 3 repetitions, 17 cases | Pass, JSON outside the repo |
+| Q8 vs f32 corpus comparison | Pass: 17/17 token-identical |
+| Scalar vs AVX2 corpus comparison | Pass: 14/14 token-identical |
+| GUI launch smoke test (8 s, Wayland) | Pass: process stayed up, no error output |
+| `--matmul-bench` (Q8 kernels, attention, logits) | Pass |
 
-Benchmark JSON and logs are deliberately not committed. They contain absolute
-paths and machine-specific data and would be stale as soon as the model or
-compiler changes.
+Benchmark JSON and logs are not committed: they contain machine-specific
+timings and absolute paths.
 
-## 12. Reproducing the results
+## 13. Reproducing the results
 
 ```bash
-# Build the harness
 cargo build --release -p fluent-core --example bench
 
 # Q8 (default on CPU f32)
@@ -450,21 +397,27 @@ FLUENT_QUANT=off ./target/release/examples/bench models/nllb-200-1.3b \
 
 # Scalar fallback
 FLUENT_QUANT_SIMD=off ./target/release/examples/bench models/nllb-200-1.3b \
-    --reps 1 --budgets 32
+    --reps 1 --budgets 32 --json /tmp/fluent-bench-scalar.json
 
-# Kernel and attention micro-benchmarks
+# Kernel micro-benchmarks
 ./target/release/examples/bench --matmul-bench
+
+# Lifecycle, cancellation and repeatability (needs weights)
+FLUENT_TEST_MODEL=models/nllb-200-1.3b \
+    cargo test --release -p fluent-core --test reliability -- --nocapture
 ```
 
-To compare outputs between paths, run both JSON files and compare the `output`
-field for each `(id, budget, early_stopping)` key.
+To compare quality, diff the `tokens` array for each `(id, budget,
+early_stopping)` key in the two JSON reports.
 
-## 13. Recommendation for the next cycle
+## 14. Recommendation for Cycle 5
 
-The measured next bottleneck is the quantized prefill kernel, followed by
-`lm_head` and beam-search overhead. The highest-value next step is a
-register-blocked/tiled prefill kernel (process 4–8 input rows per weight pass)
-to remove the ~1 s encoder regression and improve 32-token latency. After that,
-evaluate a tiled `lm_head` and a cheaper beam-reorder path. These are
-incremental optimizations; the current cycle already meets its acceptance
-targets with identical output quality.
+The measured order is: (1) quantized prefill arithmetic, (2) logits
+post-processing, (3) decoder FFN/projection bandwidth. The highest-value next
+step is a faster Q8 dot product for prefill (integer multiply-accumulate with
+validated scaling and a scalar fallback), because it is the only remaining
+regression against f32 and it affects every long source. It should be
+benchmarked in situ, not only with the micro-benchmark, and gated on
+token-identical corpus output. A validated logsumexp is the second step; LM
+head tiling has no measured headroom on this CPU and should wait for a
+different weight layout or hardware.
