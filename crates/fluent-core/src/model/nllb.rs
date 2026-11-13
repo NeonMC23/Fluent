@@ -224,18 +224,22 @@ impl EncoderLayer {
         })
     }
 
-    fn forward(&self, x: &Tensor) -> Result<Tensor> {
+    fn forward(&self, x: &Tensor, timers: &mut GenerationTimers) -> Result<Tensor> {
         let residual = x;
+        let started = Instant::now();
         let h = self.self_attn_layer_norm.forward(x)?;
         let (q, k, v) = self.self_attn.project_qkv(&h)?;
         let h = self.self_attn.attend(&q, &k, &v)?;
         let x = (residual + h)?;
+        timers.encode_attn += started.elapsed();
 
         let residual = &x;
+        let started = Instant::now();
         let h = self.final_layer_norm.forward(&x)?;
         let h = self.fc1.forward(&h)?;
         let h = self.activation.apply(&h)?;
         let h = self.fc2.forward(&h)?;
+        timers.encode_ffn += started.elapsed();
         Ok((residual + h)?)
     }
 }
@@ -273,7 +277,12 @@ impl Encoder {
         })
     }
 
-    fn forward(&self, x: Tensor, cancel: &AtomicBool) -> Result<Tensor> {
+    fn forward(
+        &self,
+        x: Tensor,
+        cancel: &AtomicBool,
+        timers: &mut GenerationTimers,
+    ) -> Result<Tensor> {
         let mut x = x;
         for layer in &self.layers {
             // The encoder takes a meaningful share of the wall-clock time on
@@ -282,7 +291,7 @@ impl Encoder {
             if cancel.load(AtomicOrdering::Relaxed) {
                 return Err(Error::Cancelled);
             }
-            x = layer.forward(&x)?;
+            x = layer.forward(&x, timers)?;
         }
         Ok(self.layer_norm.forward(&x)?)
     }
@@ -586,8 +595,14 @@ struct CpuDecoderCache {
     heads: usize,
     head_dim: usize,
     d_model: usize,
-    scratch_k: Vec<f32>,
-    scratch_v: Vec<f32>,
+    /// Physical slot holding each logical beam's rows.
+    ///
+    /// Beam search frequently asks several destination beams to inherit the
+    /// same parent. Instead of copying every destination beam, the cache keeps
+    /// the parent rows where they are and only materializes a copy for the
+    /// duplicate parents. Attention and `append` go through this indirection,
+    /// so the layout stays invisible to the rest of the decoder.
+    phys: Vec<usize>,
 }
 
 impl CpuDecoderCache {
@@ -626,8 +641,7 @@ impl CpuDecoderCache {
             heads,
             head_dim,
             d_model: cfg.d_model,
-            scratch_k: vec![0.0; total],
-            scratch_v: vec![0.0; total],
+            phys: (0..max_beams).collect(),
         })
     }
 
@@ -641,9 +655,10 @@ impl CpuDecoderCache {
         let pos = self.len;
         let layer = &mut self.layers[index];
         for beam in 0..self.active_beams {
+            let slot = self.phys[beam];
             for head in 0..heads {
                 let src = (beam * heads + head) * head_dim;
-                let dst = ((beam * heads + head) * cap + pos) * head_dim;
+                let dst = ((slot * heads + head) * cap + pos) * head_dim;
                 layer.k[dst..dst + head_dim].copy_from_slice(&k_new[src..src + head_dim]);
                 layer.v[dst..dst + head_dim].copy_from_slice(&v_new[src..src + head_dim]);
             }
@@ -659,35 +674,75 @@ impl CpuDecoderCache {
             "cache was sized for {} beams but {beams} were requested",
             self.max_beams
         );
-        let (heads, head_dim, cap, len) = (self.heads, self.head_dim, self.cap, self.len);
-        for layer in &mut self.layers {
-            for beam in 1..beams {
-                for head in 0..heads {
-                    let src = head * cap * head_dim;
-                    let dst = ((beam * heads + head) * cap) * head_dim;
-                    layer.k.copy_within(src..src + len * head_dim, dst);
-                    layer.v.copy_within(src..src + len * head_dim, dst);
-                }
-            }
-        }
         self.active_beams = beams;
+        let source = self.phys[0];
+        for slot in self.phys[..beams].iter_mut() {
+            *slot = source;
+        }
+        self.ensure_unique_slots();
     }
 
     /// Reorders the cache so that destination beam `i` inherits `parents[i]`.
+    ///
+    /// Rows are addressed through `phys`, so a distinct parent costs nothing:
+    /// the destination simply points at the same physical slot. Only beams
+    /// that share a parent need a real copy, which is what beam search usually
+    /// produces (two or three children of the best beam).
     fn reorder(&mut self, parents: &[usize]) {
+        let beams = self.active_beams;
+        debug_assert_eq!(parents.len(), beams);
+        let previous = &self.phys[..beams];
+        let mut next = vec![0usize; beams];
+        for (dest, &parent) in parents.iter().enumerate() {
+            next[dest] = previous[parent.min(beams - 1)];
+        }
+        self.phys[..beams].copy_from_slice(&next);
+        self.ensure_unique_slots();
+    }
+
+    /// Gives every logical beam a distinct physical slot, copying rows only
+    /// for beams that currently alias an earlier one.
+    fn ensure_unique_slots(&mut self) {
+        let beams = self.active_beams;
+        let mut used = vec![false; self.max_beams];
+        let mut remap = vec![usize::MAX; beams];
+        for (beam, &slot) in self.phys[..beams].iter().enumerate() {
+            if slot < self.max_beams && !used[slot] {
+                used[slot] = true;
+                remap[beam] = slot;
+            }
+        }
+        let mut free: Vec<usize> = (0..self.max_beams).filter(|slot| !used[*slot]).collect();
+        for (beam, slot) in remap.iter_mut().enumerate() {
+            if *slot != usize::MAX {
+                continue;
+            }
+            let source = self.phys[beam];
+            let Some(&destination) = free.first() else {
+                debug_assert!(false, "cache has no free physical slot");
+                return;
+            };
+            free.remove(0);
+            used[destination] = true;
+            self.copy_slot(source, destination);
+            *slot = destination;
+        }
+        self.phys[..beams].copy_from_slice(&remap);
+    }
+
+    /// Copies `len` positions of every head from one physical slot to another.
+    fn copy_slot(&mut self, source: usize, destination: usize) {
         let (heads, head_dim, cap, len) = (self.heads, self.head_dim, self.cap, self.len);
         let bytes = len * head_dim;
         for layer in &mut self.layers {
-            for (dest, &parent) in parents.iter().enumerate() {
-                for head in 0..heads {
-                    let src = ((parent * heads + head) * cap) * head_dim;
-                    let dst = ((dest * heads + head) * cap) * head_dim;
-                    self.scratch_k[dst..dst + bytes].copy_from_slice(&layer.k[src..src + bytes]);
-                    self.scratch_v[dst..dst + bytes].copy_from_slice(&layer.v[src..src + bytes]);
-                }
+            for head in 0..heads {
+                let src = ((source * heads + head) * cap) * head_dim;
+                let dst = ((destination * heads + head) * cap) * head_dim;
+                // `copy_within` handles the case where two heads of the same
+                // slot overlap; destinations are always unused slots.
+                layer.k.copy_within(src..src + bytes, dst);
+                layer.v.copy_within(src..src + bytes, dst);
             }
-            std::mem::swap(&mut layer.k, &mut self.scratch_k);
-            std::mem::swap(&mut layer.v, &mut self.scratch_v);
         }
     }
 
@@ -699,7 +754,7 @@ impl CpuDecoderCache {
             &layer.k,
             &layer.v,
             self.active_beams,
-            self.active_beams,
+            &self.phys[..self.active_beams],
             self.heads,
             self.head_dim,
             self.cap,
@@ -715,7 +770,7 @@ impl CpuDecoderCache {
             k,
             v,
             self.active_beams,
-            1,
+            &[],
             self.heads,
             self.head_dim,
             self.src_len,
@@ -736,16 +791,18 @@ fn as_f32_vec(tensor: &Tensor) -> Result<Vec<f32>> {
 
 /// `softmax(scale * q kᵀ) v` for a single query position.
 ///
-/// `q` is `[beams][heads][head_dim]`, `k`/`v` are `[kv_beams][heads][stride][head_dim]`
-/// (cross-attention uses a single, shared `kv_beams`). The result is laid out
-/// `[beams][heads * head_dim]`, ready for the output projection.
+/// `q` is `[beams][heads][head_dim]`, `k`/`v` are `[kv_beam][heads][stride][head_dim]`.
+/// `slots[beam]` selects the key/value rows, which lets the cache keep beam
+/// rows in place across reorders; an empty slice means every beam shares row 0
+/// (cross-attention). The result is laid out `[beams][heads * head_dim]`,
+/// ready for the output projection.
 #[allow(clippy::too_many_arguments)]
 fn fused_attention(
     q: &[f32],
     k: &[f32],
     v: &[f32],
     beams: usize,
-    kv_beams: usize,
+    slots: &[usize],
     heads: usize,
     head_dim: usize,
     stride: usize,
@@ -758,7 +815,7 @@ fn fused_attention(
         .map_init(Vec::<f32>::new, |scores, (task, dst)| {
             let beam = task / heads;
             let head = task % heads;
-            let kv_beam = beam.min(kv_beams.saturating_sub(1));
+            let kv_beam = slots.get(beam).copied().unwrap_or(0);
             let q_row = &q[(beam * heads + head) * head_dim..][..head_dim];
             let base = ((kv_beam * heads + head) * stride) * head_dim;
 
@@ -961,8 +1018,18 @@ impl Nllb {
 
     /// Encodes the source while observing the cancellation flag between layers.
     pub fn encode_with_cancel(&self, input_ids: &Tensor, cancel: &AtomicBool) -> Result<Tensor> {
+        let mut timers = GenerationTimers::default();
+        self.encode_impl(input_ids, cancel, &mut timers)
+    }
+
+    fn encode_impl(
+        &self,
+        input_ids: &Tensor,
+        cancel: &AtomicBool,
+        timers: &mut GenerationTimers,
+    ) -> Result<Tensor> {
         let x = self.embed(input_ids, 0)?;
-        self.encoder.forward(x, cancel)
+        self.encoder.forward(x, cancel, timers)
     }
 
     /// Runs one decoder step and returns the hidden state for the last token.
@@ -1076,7 +1143,7 @@ impl Nllb {
         let device = self.shared.device();
         let input_ids = Tensor::new(source_ids, device)?.unsqueeze(0)?;
         let started = Instant::now();
-        let encoder_hidden = self.encode_with_cancel(&input_ids, cancel)?;
+        let encoder_hidden = self.encode_impl(&input_ids, cancel, timers)?;
         timers.encode += started.elapsed();
 
         let beams = options.num_beams.max(1);
@@ -1117,10 +1184,14 @@ impl Nllb {
         let first_logits = self.decode_step(&target, &mut cache, timers)?;
         timers.prefill += prefill_started.elapsed();
 
+        let repeat_started = Instant::now();
         cache.repeat(beams)?;
+        timers.reorder += repeat_started.elapsed();
         let mut scores = vec![0f64; beams];
         let mut sequences: Vec<Vec<u32>> = vec![Vec::new(); beams];
-        let mut rows = logits_rows(&first_logits, beams)?;
+        let first_rows_started = Instant::now();
+        let mut rows = logits_rows(&first_logits, beams, timers)?;
+        timers.search_logits += first_rows_started.elapsed();
 
         let eos_id = tokenizer.eos_id();
         let mut completed: Vec<(Vec<u32>, f64)> = Vec::new();
@@ -1136,7 +1207,9 @@ impl Nllb {
             // beams of their EOS candidate and prevent beam search from ever
             // completing `num_beams` hypotheses.
             let search_started = Instant::now();
+            let topk_started = Instant::now();
             let pooled = top_candidates_per_beam(&rows, &scores, beams * 2);
+            timers.search_topk += topk_started.elapsed();
             let (active, finished) = collect_step(&pooled, eos_id, beams, &sequences);
             completed.extend(finished);
             trim_completed(&mut completed, beams);
@@ -1149,13 +1222,16 @@ impl Nllb {
             let parents: Vec<u32> = active.iter().map(|c| c.beam as u32).collect();
             let parents_usize: Vec<usize> = active.iter().map(|c| c.beam).collect();
             let parents_tensor = Tensor::new(parents.as_slice(), device)?;
+            let reorder_started = Instant::now();
             cache.reorder(&parents_tensor, &parents_usize)?;
+            timers.reorder += reorder_started.elapsed();
 
             let tokens: Vec<u32> = active.iter().map(|c| c.token).collect();
             let input_ids = Tensor::new(tokens.as_slice(), device)?.unsqueeze(1)?;
             let logits = self.decode_step(&input_ids, &mut cache, timers)?;
             let rows_started = Instant::now();
-            rows = logits_rows(&logits, 1)?;
+            rows = logits_rows(&logits, 1, timers)?;
+            timers.search_logits += rows_started.elapsed();
             timers.search += rows_started.elapsed();
 
             let new_sequences: Vec<Vec<u32>> = active
@@ -1279,10 +1355,16 @@ fn build_position_table(config: &NllbConfig, dtype: DType, device: &Device) -> R
     Ok(Tensor::from_vec(data, (rows, dim), device)?.to_dtype(dtype)?)
 }
 
-fn logits_rows(logits: &Tensor, repeat: usize) -> Result<Vec<Vec<f32>>> {
+fn logits_rows(
+    logits: &Tensor,
+    repeat: usize,
+    timers: &mut GenerationTimers,
+) -> Result<Vec<Vec<f32>>> {
     let logits = logits.to_dtype(DType::F32)?.to_device(&Device::Cpu)?;
     let log_probs = candle_nn::ops::log_softmax(&logits, 1)?;
+    let started = Instant::now();
     let rows = log_probs.to_vec2::<f32>()?;
+    timers.search_extract += started.elapsed();
     if repeat <= 1 || rows.len() >= repeat {
         Ok(rows)
     } else {
@@ -1477,12 +1559,21 @@ pub enum EarlyStopping {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GenerationStats {
     pub encode: Duration,
+    /// Encoder sub-stages, accumulated inside `encode`.
+    pub encode_attn: Duration,
+    pub encode_ffn: Duration,
     /// Cross-attention key/value projection over the encoded source.
     pub cross_prepare: Duration,
     pub prefill: Duration,
     pub decoder: Duration,
     pub lm_head: Duration,
     pub search: Duration,
+    /// Beam-search sub-stages, accumulated inside `search` plus `reorder`.
+    pub search_logits: Duration,
+    /// Portion of `search_logits` spent copying the row into a Rust vector.
+    pub search_extract: Duration,
+    pub search_topk: Duration,
+    pub reorder: Duration,
     pub total: Duration,
     pub steps: usize,
     pub beams: usize,
@@ -1498,11 +1589,19 @@ pub struct GenerationStats {
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct GenerationTimers {
     pub encode: Duration,
+    pub encode_attn: Duration,
+    pub encode_ffn: Duration,
     pub cross_prepare: Duration,
     pub prefill: Duration,
     pub decoder: Duration,
     pub lm_head: Duration,
     pub search: Duration,
+    /// Beam-search sub-stages, accumulated inside `search` plus `reorder`.
+    pub search_logits: Duration,
+    /// Portion of `search_logits` spent copying the row into a Rust vector.
+    pub search_extract: Duration,
+    pub search_topk: Duration,
+    pub reorder: Duration,
     pub total: Duration,
     pub steps: usize,
     pub beams: usize,
@@ -1518,11 +1617,17 @@ impl GenerationTimers {
     fn finish(self) -> GenerationStats {
         GenerationStats {
             encode: self.encode,
+            encode_attn: self.encode_attn,
+            encode_ffn: self.encode_ffn,
             cross_prepare: self.cross_prepare,
             prefill: self.prefill,
             decoder: self.decoder,
             lm_head: self.lm_head,
             search: self.search,
+            search_logits: self.search_logits,
+            search_extract: self.search_extract,
+            search_topk: self.search_topk,
+            reorder: self.reorder,
             total: self.total,
             steps: self.steps,
             beams: self.beams,
@@ -1832,9 +1937,10 @@ mod tests {
         let k = pseudo_random(kv_beams * heads * seq * head_dim, 2);
         let v = pseudo_random(kv_beams * heads * seq * head_dim, 3);
 
-        let actual = fused_attention(
-            &q, &k, &v, beams, kv_beams, heads, head_dim, seq, seq, scale,
-        );
+        // A single shared kv beam is the cross-attention case: every query
+        // beam reads slot 0.
+        let slots = vec![0usize; beams];
+        let actual = fused_attention(&q, &k, &v, beams, &slots, heads, head_dim, seq, seq, scale);
         let expected =
             reference_attention(&q, &k, &v, beams, kv_beams, heads, head_dim, seq, scale);
 
@@ -1854,7 +1960,8 @@ mod tests {
         let k = pseudo_random(beams * heads * seq * head_dim, 12);
         let v = pseudo_random(beams * heads * seq * head_dim, 13);
 
-        let actual = fused_attention(&q, &k, &v, beams, beams, heads, head_dim, seq, seq, scale);
+        let slots: Vec<usize> = (0..beams).collect();
+        let actual = fused_attention(&q, &k, &v, beams, &slots, heads, head_dim, seq, seq, scale);
         let expected = reference_attention(&q, &k, &v, beams, beams, heads, head_dim, seq, scale);
 
         for (index, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
@@ -1882,7 +1989,7 @@ mod tests {
             v[dst..dst + seq * head_dim].copy_from_slice(&compact_v[src..src + seq * head_dim]);
         }
 
-        let actual = fused_attention(&q, &k, &v, 1, 1, heads, head_dim, stride, seq, scale);
+        let actual = fused_attention(&q, &k, &v, 1, &[0], heads, head_dim, stride, seq, scale);
         let expected = reference_attention(
             &q, &compact_k, &compact_v, 1, 1, heads, head_dim, seq, scale,
         );
@@ -1913,13 +2020,13 @@ mod tests {
             heads,
             head_dim,
             d_model: heads * head_dim,
-            scratch_k: vec![0.0; total],
-            scratch_v: vec![0.0; total],
+            phys: (0..max_beams).collect(),
         }
     }
 
     fn position_slice(cache: &CpuDecoderCache, beam: usize, head: usize, pos: usize) -> Vec<f32> {
-        let start = ((beam * cache.heads + head) * cache.cap + pos) * cache.head_dim;
+        let slot = cache.phys[beam];
+        let start = ((slot * cache.heads + head) * cache.cap + pos) * cache.head_dim;
         cache.layers[0].k[start..start + cache.head_dim].to_vec()
     }
 
@@ -1978,5 +2085,177 @@ mod tests {
                 position_slice(&cache, 1, head, 0)
             );
         }
+    }
+
+    /// Reference beam bookkeeping: one compact `[heads][len][head_dim]` buffer
+    /// per logical beam, copied on every reorder. Slow but obviously correct.
+    struct ReferenceCache {
+        beams: Vec<(Vec<f32>, Vec<f32>)>,
+        heads: usize,
+        head_dim: usize,
+    }
+
+    impl ReferenceCache {
+        fn new(heads: usize, head_dim: usize) -> Self {
+            Self {
+                beams: vec![(Vec::new(), Vec::new())],
+                heads,
+                head_dim,
+            }
+        }
+
+        fn append(&mut self, k: &[f32], v: &[f32]) {
+            let width = self.heads * self.head_dim;
+            for (beam, rows) in self.beams.iter_mut().enumerate() {
+                rows.0
+                    .extend_from_slice(&k[beam * width..(beam + 1) * width]);
+                rows.1
+                    .extend_from_slice(&v[beam * width..(beam + 1) * width]);
+            }
+        }
+
+        fn repeat(&mut self, beams: usize) {
+            while self.beams.len() < beams {
+                self.beams.push(self.beams[0].clone());
+            }
+        }
+
+        fn reorder(&mut self, parents: &[usize]) {
+            self.beams = parents
+                .iter()
+                .map(|&parent| self.beams[parent].clone())
+                .collect();
+        }
+
+        fn rows(&self, beam: usize) -> (Vec<f32>, Vec<f32>) {
+            self.beams[beam].clone()
+        }
+    }
+
+    /// Rows in the compact `[position][head][head_dim]` layout used by the
+    /// reference cache.
+    fn cache_rows(cache: &CpuDecoderCache, beam: usize) -> (Vec<f32>, Vec<f32>) {
+        let slot = cache.phys[beam];
+        let mut k = Vec::new();
+        let mut v = Vec::new();
+        for position in 0..cache.len {
+            for head in 0..cache.heads {
+                let start = ((slot * cache.heads + head) * cache.cap + position) * cache.head_dim;
+                k.extend_from_slice(&cache.layers[0].k[start..start + cache.head_dim]);
+                v.extend_from_slice(&cache.layers[0].v[start..start + cache.head_dim]);
+            }
+        }
+        (k, v)
+    }
+
+    #[test]
+    fn cpu_cache_physical_slots_match_reference_bookkeeping() {
+        let (heads, head_dim, cap, beams) = (2, 2, 8, 4);
+        let mut cache = test_cache(beams, cap, heads, head_dim);
+        let mut reference = ReferenceCache::new(heads, head_dim);
+        let mut state = 0x1234_5678u32;
+        let mut numbers = |count: usize| {
+            (0..count)
+                .map(|_| {
+                    state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+                    (state >> 8) as f32 / 8_388_608.0 - 1.0
+                })
+                .collect::<Vec<_>>()
+        };
+
+        // Prefill: one beam, three positions.
+        for _ in 0..3 {
+            let (k, v) = (numbers(heads * head_dim), numbers(heads * head_dim));
+            cache.append(0, &k, &v);
+            reference.append(&k, &v);
+            cache.advance();
+        }
+        cache.repeat(beams);
+        reference.repeat(beams);
+        assert_eq!(cache.phys[..beams], [0, 1, 2, 3]);
+
+        // Two steps with duplicate parents, checking the rows after each
+        // reorder and after the following append.
+        for parents in [vec![2, 0, 2, 2], vec![1, 1, 3, 0], vec![0, 0, 0, 0]] {
+            cache.reorder(&parents);
+            reference.reorder(&parents);
+            for beam in 0..beams {
+                assert_eq!(
+                    cache_rows(&cache, beam),
+                    reference.rows(beam),
+                    "beam {beam}"
+                );
+            }
+            let mut unique = cache.phys[..beams].to_vec();
+            unique.sort_unstable();
+            unique.dedup();
+            assert_eq!(unique.len(), beams, "physical slots must be distinct");
+
+            let k: Vec<f32> = numbers(beams * heads * head_dim);
+            let v: Vec<f32> = numbers(beams * heads * head_dim);
+            cache.append(0, &k, &v);
+            reference.append(&k, &v);
+            cache.advance();
+            for beam in 0..beams {
+                assert_eq!(
+                    cache_rows(&cache, beam),
+                    reference.rows(beam),
+                    "beam {beam}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cpu_cache_attention_uses_the_physical_slot() {
+        // After reordering [1, 0], logical beam 0 must attend to the rows that
+        // beam 1 had accumulated, not to its own old rows.
+        let (heads, head_dim, cap) = (2, 2, 6);
+        let mut cache = test_cache(2, cap, heads, head_dim);
+        cache.append(0, &[1.0, 0.0, 0.0, 1.0], &[1.0; 4]);
+        cache.advance();
+        cache.repeat(2);
+
+        // Distinct second token per logical beam: beam 0 writes (0,2)/(2,0),
+        // beam 1 writes (5,6)/(7,8).
+        cache.append(0, &[0.0, 2.0, 2.0, 0.0, 5.0, 6.0, 7.0, 8.0], &[2.0; 8]);
+        cache.reorder(&[1, 0]);
+
+        let q: Vec<f32> = vec![1.0; 2 * heads * head_dim];
+        let actual = cache.self_attention(0, &q, 1.0);
+
+        // Logical beam 0 now owns the rows that beam 1 had accumulated:
+        // position 0 (shared prefill) followed by beam 1's second token.
+        // Logical beam 1 owns beam 0's old rows: prefill plus (0,2)/(2,0).
+        let slot_one_k: Vec<f32> = vec![1.0, 0.0, 5.0, 6.0, 0.0, 1.0, 7.0, 8.0];
+        let slot_zero_k: Vec<f32> = vec![1.0, 0.0, 0.0, 2.0, 0.0, 1.0, 2.0, 0.0];
+        let v: Vec<f32> = vec![1.0, 1.0, 2.0, 2.0, 1.0, 1.0, 2.0, 2.0];
+        let beam_rows = heads * head_dim;
+        let beam_zero = fused_attention(
+            &q[..beam_rows],
+            &slot_one_k,
+            &v,
+            1,
+            &[0],
+            heads,
+            head_dim,
+            2,
+            2,
+            1.0,
+        );
+        let beam_one = fused_attention(
+            &q[beam_rows..],
+            &slot_zero_k,
+            &v,
+            1,
+            &[0],
+            heads,
+            head_dim,
+            2,
+            2,
+            1.0,
+        );
+        let expected: Vec<f32> = beam_zero.into_iter().chain(beam_one).collect();
+        assert_eq!(actual, expected);
     }
 }
