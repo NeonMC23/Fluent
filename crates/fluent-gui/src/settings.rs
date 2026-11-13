@@ -4,18 +4,13 @@ use serde::{Deserialize, Serialize};
 
 use fluent_core::{DeviceChoice, Mode, Precision, ProjectConfig};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ThemeChoice {
+    #[default]
     System,
     Light,
     Dark,
-}
-
-impl Default for ThemeChoice {
-    fn default() -> Self {
-        Self::System
-    }
 }
 
 impl ThemeChoice {
@@ -181,4 +176,59 @@ impl Settings {
 pub fn settings_path() -> Option<PathBuf> {
     directories::ProjectDirs::from("io", "fluent", "Fluent")
         .map(|dirs| dirs.config_dir().join("settings.json"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn device_strings_round_trip() {
+        for choice in [
+            DeviceChoice::Auto,
+            DeviceChoice::Cpu,
+            DeviceChoice::Cuda(0),
+            DeviceChoice::Cuda(1),
+            DeviceChoice::Metal(0),
+        ] {
+            let mut settings = Settings::default();
+            settings.set_device(choice);
+            assert_eq!(settings.device_choice(), choice);
+        }
+    }
+
+    #[test]
+    fn unknown_device_strings_fall_back_to_automatic() {
+        let mut settings = Settings {
+            device: "quantum".to_string(),
+            ..Settings::default()
+        };
+        assert_eq!(settings.device_choice(), DeviceChoice::Auto);
+        settings.device = "cuda:not-a-number".to_string();
+        assert_eq!(settings.device_choice(), DeviceChoice::Cuda(0));
+    }
+
+    #[test]
+    fn sanitize_clamps_generation_settings() {
+        let mut settings = Settings {
+            num_beams: 0,
+            max_length: 10,
+            source_language: String::new(),
+            target_language: "auto".to_string(),
+            device: String::new(),
+            ..Settings::default()
+        };
+        settings.sanitize();
+        assert_eq!(settings.num_beams, 1);
+        assert_eq!(settings.max_length, 64);
+        assert_eq!(settings.source_language, "auto");
+        assert_eq!(settings.target_language, "eng_Latn");
+        assert_eq!(settings.device, "auto");
+
+        settings.num_beams = 99;
+        settings.max_length = 9_000;
+        settings.sanitize();
+        assert_eq!(settings.num_beams, 8);
+        assert_eq!(settings.max_length, 1024);
+    }
 }

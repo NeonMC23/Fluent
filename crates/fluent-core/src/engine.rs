@@ -22,19 +22,14 @@ use crate::{Error, Mode, Result};
 // ---------------------------------------------------------------------------
 
 /// Numerical precision used for the weights.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Precision {
     /// f32 for the 1.3B model on CPU, f16 for the 3.3B model or a GPU.
+    #[default]
     Auto,
     F32,
     F16,
-}
-
-impl Default for Precision {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl Precision {
@@ -48,19 +43,14 @@ impl Precision {
 }
 
 /// Device on which the model runs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum DeviceChoice {
     /// First available GPU, otherwise CPU.
+    #[default]
     Auto,
     Cpu,
     Cuda(usize),
     Metal(usize),
-}
-
-impl Default for DeviceChoice {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl DeviceChoice {
@@ -682,4 +672,53 @@ fn dtype_label(dtype: DType) -> String {
         other => return format!("{other:?}").to_lowercase(),
     }
     .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn available_memory_adds_free_swap() {
+        let info = MemoryInfo {
+            available_mb: Some(8_000),
+            swap_free_mb: Some(2_000),
+            total_mb: Some(16_000),
+        };
+        assert_eq!(info.available_with_swap_mb(), Some(10_000));
+    }
+
+    #[test]
+    fn available_memory_tolerates_partial_information() {
+        let without_swap = MemoryInfo {
+            available_mb: Some(4_000),
+            swap_free_mb: None,
+            total_mb: None,
+        };
+        assert_eq!(without_swap.available_with_swap_mb(), Some(4_000));
+
+        let unknown = MemoryInfo::default();
+        assert_eq!(unknown.available_with_swap_mb(), None);
+    }
+
+    #[test]
+    fn memory_estimate_compares_against_available_memory() {
+        let estimate = MemoryEstimate {
+            weights_mb: 5_000,
+            overhead_mb: 1_000,
+            needed_mb: 6_000,
+            info: MemoryInfo {
+                available_mb: Some(7_000),
+                swap_free_mb: Some(1_000),
+                total_mb: Some(16_000),
+            },
+        };
+        assert!(estimate.fits());
+
+        let too_big = MemoryEstimate {
+            needed_mb: 10_000,
+            ..estimate
+        };
+        assert!(!too_big.fits());
+    }
 }

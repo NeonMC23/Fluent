@@ -1,4 +1,23 @@
-./target/
-./models/
+# Rust build output
+/target/
+
+# Local NLLB-200 model weights (multi-gigabyte, never commit)
+/models/
+*.gguf
+*.safetensors
+*.bin
+*.pth
+
+# Python legacy components
 __pycache__/
-*.pyc
+*.py[cod]
+.venv/
+venv/
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/

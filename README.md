@@ -73,6 +73,12 @@ Fluent supports two translation engines:
 | ⚡ **Fast** | `facebook/nllb-200-1.3B` | 5.2 GB | Lower-memory systems |
 | 🎯 **Accurate** | `facebook/nllb-200-3.3B` | 17.5 GB | Systems with more memory or GPU resources |
 
+> **Model license:** Meta releases the NLLB-200 model weights under
+> **CC BY-NC 4.0 (non-commercial)**. Fluent's MIT license covers the
+> application code only. Fluent does not bundle or redistribute model
+> weights; download them from Hugging Face and comply with the model
+> license. Check the license before using Fluent for commercial work.
+
 Place each model's files in the corresponding directory:
 
 ```text

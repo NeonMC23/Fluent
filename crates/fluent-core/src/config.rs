@@ -186,3 +186,86 @@ fn resolve_model_path(base_dir: &Path, value: &str) -> PathBuf {
         base_dir.join(path)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let unique = format!(
+            "fluent-config-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let dir = std::env::temp_dir().join(unique);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn relative_paths_resolve_against_the_config_directory() {
+        let dir = temp_dir("relative");
+        fs::create_dir_all(dir.join("models/nllb-200-1.3b")).unwrap();
+        fs::create_dir_all(dir.join("models/nllb-200-3.3b")).unwrap();
+        fs::write(
+            dir.join("config.json"),
+            r#"{
+                "default_source_language": "auto",
+                "default_target_language": "fra_Latn",
+                "models": {"fast": "models/nllb-200-1.3b", "accurate": "models/nllb-200-3.3b"},
+                "generation": {"max_length": 5000, "num_beams": 42}
+            }"#,
+        )
+        .unwrap();
+
+        let config = ProjectConfig::load_from(&dir.join("config.json")).unwrap();
+        assert_eq!(config.base_dir, dir);
+        assert_eq!(config.fast_model, dir.join("models/nllb-200-1.3b"));
+        assert_eq!(config.accurate_model, dir.join("models/nllb-200-3.3b"));
+        assert_eq!(config.default_target_language, "fra_Latn");
+        // Out-of-range values are clamped.
+        assert_eq!(config.max_length, 1024);
+        assert_eq!(config.num_beams, 8);
+
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn missing_model_directory_falls_back_to_the_conventional_name() {
+        let dir = temp_dir("fallback");
+        fs::create_dir_all(dir.join("models/nllb-200-1.3b")).unwrap();
+        fs::create_dir_all(dir.join("models/nllb-200-3.3b")).unwrap();
+        fs::write(
+            dir.join("config.json"),
+            r#"{"models": {"fast": "elsewhere", "accurate": "elsewhere-too"}}"#,
+        )
+        .unwrap();
+
+        let config = ProjectConfig::load_from(&dir.join("config.json")).unwrap();
+        assert_eq!(config.fast_model, dir.join("models/nllb-200-1.3b"));
+        assert_eq!(config.accurate_model, dir.join("models/nllb-200-3.3b"));
+
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn invalid_generation_values_are_ignored() {
+        let dir = temp_dir("generation");
+        fs::write(
+            dir.join("config.json"),
+            r#"{"default_mode": "unknown", "generation": {"max_length": 1, "num_beams": 0}}"#,
+        )
+        .unwrap();
+
+        let config = ProjectConfig::load_from(&dir.join("config.json")).unwrap();
+        assert_eq!(config.default_mode, Mode::Fast);
+        assert_eq!(config.max_length, 16);
+        assert_eq!(config.num_beams, 1);
+
+        fs::remove_dir_all(dir).ok();
+    }
+}

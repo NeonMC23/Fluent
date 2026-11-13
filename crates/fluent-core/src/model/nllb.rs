@@ -16,18 +16,13 @@ use super::checkpoint::Checkpoint;
 // Configuration
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Activation {
+    #[default]
     Relu,
     Gelu,
     Silu,
-}
-
-impl Default for Activation {
-    fn default() -> Self {
-        Self::Relu
-    }
 }
 
 impl Activation {
@@ -719,7 +714,7 @@ fn build_position_table(config: &NllbConfig, dtype: DType, device: &Device) -> R
         }
     }
     // The padding row is zero in the NLLB implementation.
-    if config.pad_token_id as usize + 1 <= rows && dim > 0 {
+    if (config.pad_token_id as usize) < rows && dim > 0 {
         let start = config.pad_token_id as usize * dim;
         data[start..start + dim].fill(0.0);
     }
@@ -808,4 +803,38 @@ pub struct GenerationProgress {
     pub generated: usize,
     pub max: usize,
     pub preview: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn top_candidates_are_sorted_by_cumulative_score() {
+        let rows = vec![vec![0.0, -1.0], vec![-2.0, -0.5]];
+        let beam_scores = vec![0.0, -0.1];
+        let candidates = top_candidates(&rows, &beam_scores, 4);
+
+        assert_eq!(candidates.len(), 4);
+        let scores: Vec<f64> = candidates.iter().map(|candidate| candidate.score).collect();
+        assert_eq!(scores, vec![0.0, -0.6, -1.0, -2.1]);
+        assert_eq!(candidates[0].beam, 0);
+        assert_eq!(candidates[0].token, 0);
+        assert_eq!(candidates[1].beam, 1);
+        assert_eq!(candidates[1].token, 1);
+    }
+
+    #[test]
+    fn top_candidates_limits_the_result_size() {
+        let rows = vec![vec![0.0, -1.0, -2.0]];
+        let candidates = top_candidates(&rows, &[0.0], 2);
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(candidates[0].token, 0);
+        assert_eq!(candidates[1].token, 1);
+    }
+
+    #[test]
+    fn default_activation_is_relu() {
+        assert_eq!(Activation::default(), Activation::Relu);
+    }
 }

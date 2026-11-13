@@ -134,3 +134,26 @@ impl std::str::FromStr for Mode {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mode_parsing_accepts_labels_and_model_sizes() {
+        assert_eq!("fast".parse::<Mode>().unwrap(), Mode::Fast);
+        assert_eq!("FAST".parse::<Mode>().unwrap(), Mode::Fast);
+        assert_eq!("1.3B".parse::<Mode>().unwrap(), Mode::Fast);
+        assert_eq!("accurate".parse::<Mode>().unwrap(), Mode::Accurate);
+        assert_eq!(" 3.3b ".parse::<Mode>().unwrap(), Mode::Accurate);
+        assert!("medium".parse::<Mode>().is_err());
+    }
+
+    #[test]
+    fn mode_labels_are_stable() {
+        assert_eq!(Mode::Fast.as_str(), "fast");
+        assert_eq!(Mode::Accurate.as_str(), "accurate");
+        assert_eq!(Mode::Fast.label(), "Fast");
+        assert_eq!(Mode::Accurate.model_label(), "NLLB-200 3.3B");
+    }
+}

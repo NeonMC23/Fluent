@@ -30,7 +30,7 @@ const els = {
 };
 
 function labelFor(language) {
-  if (language.code === "auto") return "Auto - detecter";
+  if (language.code === "auto") return "Auto - detect";
   return `${language.name} (${language.code})`;
 }
 
@@ -100,25 +100,25 @@ async function refreshStatus() {
   try {
     const response = await fetch("/api/status");
     const status = await response.json();
-    els.engineStatus.innerHTML = `<span class="status-dot"></span><span>${status.device.toUpperCase()} pret</span>`;
+    els.engineStatus.innerHTML = `<span class="status-dot"></span><span>${status.device.toUpperCase()} ready</span>`;
     els.deviceLabel.textContent = status.cuda ? "GPU CUDA" : "CPU";
   } catch (error) {
-    els.engineStatus.innerHTML = '<span class="status-dot"></span><span>Hors ligne</span>';
-    els.deviceLabel.textContent = "Indisponible";
+    els.engineStatus.innerHTML = '<span class="status-dot"></span><span>Offline</span>';
+    els.deviceLabel.textContent = "Unavailable";
   }
 }
 
 async function translate() {
   const text = els.sourceText.value.trim();
   if (!text) {
-    setMessage("Saisissez un texte avant de traduire.", true);
+    setMessage("Enter some text before translating.", true);
     return;
   }
 
   els.translateButton.disabled = true;
-  setMessage("Traduction en cours. Le premier lancement peut charger le modele local.");
+  setMessage("Translation in progress. The first run may load the local model.");
   els.translationOutput.textContent = "";
-  els.translationOutput.append(Object.assign(document.createElement("span"), { className: "placeholder", textContent: "Traduction en cours..." }));
+  els.translationOutput.append(Object.assign(document.createElement("span"), { className: "placeholder", textContent: "Translation in progress..." }));
 
   try {
     const response = await fetch("/api/translate", {
@@ -132,14 +132,14 @@ async function translate() {
       }),
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "La traduction a echoue.");
+    if (!response.ok) throw new Error(data.error || "Translation failed.");
     els.translationOutput.textContent = data.translation;
     const source = data.detected_language ? languageName(data.detected_language.code) : languageName(data.source_language);
-    els.detectedLanguage.textContent = `Source: ${source} vers ${languageName(data.target_language)}`;
-    setMessage(`Termine avec le mode ${data.mode} sur ${data.device.toUpperCase()}.`);
+    els.detectedLanguage.textContent = `Source: ${source} → ${languageName(data.target_language)}`;
+    setMessage(`Done with ${data.mode} mode on ${data.device.toUpperCase()}.`);
     refreshStatus();
   } catch (error) {
-    els.translationOutput.innerHTML = '<span class="placeholder">Aucune traduction disponible.</span>';
+    els.translationOutput.innerHTML = '<span class="placeholder">No translation available.</span>';
     setMessage(error.message, true);
   } finally {
     els.translateButton.disabled = false;
@@ -148,7 +148,7 @@ async function translate() {
 
 function swapLanguages() {
   if (els.sourceLanguage.value === "auto") {
-    setMessage("Choisissez une langue source precise avant l'echange.", true);
+    setMessage("Choose a specific source language before swapping.", true);
     return;
   }
   const oldSource = els.sourceLanguage.value;
@@ -158,7 +158,7 @@ function swapLanguages() {
   if (output && !els.translationOutput.querySelector(".placeholder")) {
     els.sourceText.value = output;
     updateCount();
-    els.translationOutput.innerHTML = '<span class="placeholder">La traduction apparaitra ici.</span>';
+    els.translationOutput.innerHTML = '<span class="placeholder">The translation will appear here.</span>';
   }
 }
 
@@ -174,8 +174,8 @@ function bindEvents() {
   els.swapLanguages.addEventListener("click", swapLanguages);
   els.clearText.addEventListener("click", () => {
     els.sourceText.value = "";
-    els.translationOutput.innerHTML = '<span class="placeholder">La traduction apparaitra ici.</span>';
-    els.detectedLanguage.textContent = "Detection automatique disponible";
+    els.translationOutput.innerHTML = '<span class="placeholder">The translation will appear here.</span>';
+    els.detectedLanguage.textContent = "Automatic detection available";
     updateCount();
     setMessage("");
   });
@@ -183,7 +183,7 @@ function bindEvents() {
     const text = els.translationOutput.textContent.trim();
     if (!text || els.translationOutput.querySelector(".placeholder")) return;
     await navigator.clipboard.writeText(text);
-    setMessage("Traduction copiee.");
+    setMessage("Translation copied.");
   });
   els.reloadStatus.addEventListener("click", refreshStatus);
   els.themeToggle.addEventListener("click", cycleTheme);

@@ -1169,10 +1169,10 @@ impl FluentApp {
                 ui.add_space(8.0);
                 widgets::divider(ui, &palette);
                 ui.horizontal(|ui| {
-                    if self.status.is_some() {
-                        if widgets::ghost_button(ui, &palette, "Unload model").clicked() {
-                            unload_clicked = true;
-                        }
+                    if self.status.is_some()
+                        && widgets::ghost_button(ui, &palette, "Unload model").clicked()
+                    {
+                        unload_clicked = true;
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if widgets::primary_button(ui, &palette, "Close", true).clicked() {
