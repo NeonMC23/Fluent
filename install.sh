@@ -48,7 +48,8 @@ Options:
   --binary FILE           Install a prebuilt executable instead of building
   --skip-models           Create model directories but do not install models
   --models-src DIR        Directory containing nllb-200-1.3b/ and nllb-200-3.3b/
-                          (default: ./models; a legacy ~/.fluent/models is also
+                          (default: ./models, which in a fresh checkout contains
+                          only a README; a legacy ~/.fluent/models is also
                           considered when the target is empty)
   --icon FILE             Install an SVG application icon
   --no-desktop            Skip the desktop entry and icon (Linux)
@@ -141,6 +142,8 @@ desktop_quote() {
 model_is_valid() {
     local dir="$1" file size
     [ -d "$dir" ] || return 1
+    [ -s "$dir/config.json" ] || return 1
+    [ -s "$dir/tokenizer.json" ] || return 1
 
     for file in "$dir/pytorch_model.bin" "$dir/model.safetensors"; do
         if [ -f "$file" ] && [ "$(file_size "$file")" -gt 1000000 ]; then
@@ -573,7 +576,7 @@ install_model() {
         return 0
     fi
     if dir_has_entries "$target"; then
-        warn "$name: $target contains files but no complete checkpoint; leaving it untouched"
+        warn "$name: $target contains files but no complete model package (config.json, tokenizer.json and a checkpoint); leaving it untouched"
         return 0
     fi
 
@@ -591,7 +594,7 @@ install_model() {
             break
         fi
         if dir_has_entries "$candidate"; then
-            warn "$name: $candidate has no complete checkpoint (placeholder files?)"
+            warn "$name: $candidate has no complete model package (placeholder files?)"
         fi
     done
 

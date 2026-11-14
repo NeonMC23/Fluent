@@ -50,6 +50,7 @@ FAKE_SRC="$TMP/model source"
 mkdir -p "$FAKE_SRC/nllb-200-1.3b"
 truncate -s 2000000 "$FAKE_SRC/nllb-200-1.3b/pytorch_model.bin"
 printf '{"model_type":"m2m_100"}\n' > "$FAKE_SRC/nllb-200-1.3b/config.json"
+printf '{"version":"1.0","model":{}}\n' > "$FAKE_SRC/nllb-200-1.3b/tokenizer.json"
 
 ICON="$TMP/icon.svg"
 printf '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"></svg>\n' > "$ICON"

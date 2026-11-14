@@ -746,6 +746,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn missing_model_directory_is_reported_without_starting_a_load() {
+        let dir = std::env::temp_dir().join(format!(
+            "fluent-missing-model-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut engine = Engine::new(EngineConfig::new(Mode::Fast, &dir));
+        let cancel = AtomicBool::new(false);
+        let error = engine
+            .load(&mut |_| {}, &cancel)
+            .expect_err("missing model must fail");
+        match error {
+            Error::ModelNotFound(reported) => assert_eq!(reported, dir),
+            other => panic!("unexpected error: {other}"),
+        }
+        assert!(!engine.is_loaded());
+    }
+
+    #[test]
     fn available_memory_adds_free_swap() {
         let info = MemoryInfo {
             available_mb: Some(8_000),

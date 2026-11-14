@@ -135,3 +135,36 @@ fn clean_text(text: &str) -> String {
     }
     output.trim().to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_tokenizer_file_has_an_actionable_error() {
+        let dir = std::env::temp_dir().join(format!(
+            "fluent-tokenizer-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let error = match NllbTokenizer::from_dir(&dir) {
+            Err(error) => error,
+            Ok(_) => panic!("empty directory unexpectedly produced a tokenizer"),
+        };
+        match error {
+            Error::MissingModelFile {
+                dir: reported,
+                hint,
+            } => {
+                assert_eq!(reported, dir);
+                assert!(hint.contains("tokenizer.json"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}
