@@ -160,6 +160,34 @@ const FIXTURES: &[Fixture] = &[
         target_lang: "fra_Latn",
         text: "The library opens at eight. Visitors can borrow up to ten books for three weeks.\n\nThe reading room closes at seven on weekdays, but it stays open until nine on Thursdays.",
     },
+    Fixture {
+        id: "quotes-en-fr",
+        category: "short",
+        source_lang: "eng_Latn",
+        target_lang: "fra_Latn",
+        text: "The report (published by the \u{201c}Institut national de la statistique\u{201d} in 2024) states that approx. 12,000 residents \u{2014} i.e., about 8% \u{2014} support the plan; Dr. Martin disagreed, saying \u{201c}the numbers are misleading.\u{201d}",
+    },
+    Fixture {
+        id: "measure-en-de",
+        category: "short",
+        source_lang: "eng_Latn",
+        target_lang: "deu_Latn",
+        text: "The parcel weighs 2.5 kg, measures 30 \u{00d7} 20 \u{00d7} 10 cm, and costs \u{20ac}49.99 (including VAT); delivery within the EU usually takes 3\u{2013}5 business days.",
+    },
+    Fixture {
+        id: "boundary-en-fr",
+        category: "long",
+        source_lang: "eng_Latn",
+        target_lang: "fra_Latn",
+        text: "The regional planning office published its annual review on Thursday. The document describes how eleven coastal towns have changed since the harbour was modernised. It combines satellite maps, household surveys and interviews with local officials.\n\nAccording to the review, the population grew by twelve percent over the last decade, while the number of permanent jobs increased more slowly. Younger residents often commute to the capital, and several families have converted seasonal cottages into year-round homes.\n\nTransport remains the most contested topic. The new bus line reduced travel time to the hospital, but the evening service is still limited. Cyclists have asked for protected lanes along the main road, and shopkeepers worry that construction will reduce parking.\n\nThe report also examines the fishing fleet. Catches have declined, although prices rose enough to keep several boats in operation. The authors recommend a shared cold-storage facility and training programmes for crews who want to move into maintenance or tourism.\n\nWater management has become a second priority. The reservoir reached its lowest level in forty years last summer, and restrictions on garden watering lasted for six weeks. Engineers are studying a pipeline that would connect the region to the northern network, but the estimated cost is high.\n\nSchools report a shortage of teachers in science and mathematics. The district has offered housing support to new staff, and two retired teachers returned part-time. Parents have welcomed the measures but say class sizes remain too large in the eastern villages.\n\nFinally, the review considers the old school building. The council has not decided whether to renovate it as a library or sell the site to a developer. Public comments will be accepted until the end of March, and a final vote is expected in May.\n\nThe office will repeat the survey next year and publish an updated map of land use. Residents can download the full document, including the technical annexes, from the regional website or consult a printed copy at the library.",
+    },
+    Fixture {
+        id: "truncated-en-fr",
+        category: "long",
+        source_lang: "eng_Latn",
+        target_lang: "fra_Latn",
+        text: "When the first trains arrived in the valley, few people believed that the small farming community would become an industrial centre within a single generation. The river had always provided water for the orchards, and the surrounding hills were covered with forests that supplied timber for the new factories. Engineers from the capital surveyed the land in 1857 and proposed a network of tracks that would connect the mines to the harbour.\n\nThe harbour authority approved a new warehouse near the eastern quay last month. The building will store grain before it is loaded onto ships, and it is expected to reduce waiting times during the harvest. Fishermen have asked for a separate cold room, arguing that the current facility is too small for the summer catch.\n\nA university consortium will open a research centre in the former textile mill next spring. The project includes laboratories for water analysis, a small auditorium and offices for visiting scientists. Local companies will be able to rent equipment, and the organisers hope that students will stay in the region after graduation.\n\nThe hospital announced that its emergency department will be renovated in two phases. During the first phase, patients will be redirected to a temporary unit beside the car park. The second phase will add two operating rooms and a dedicated imaging suite; officials say the work should finish before the winter.\n\nFarmers in the southern plain have started planting cover crops between the rows of vines. The practice reduces erosion and improves the soil, although it requires additional seed and careful timing. Several cooperatives are sharing machinery to lower the cost, and the regional council offers a small grant for the first three years.\n\nThe energy cooperative installed solar panels on the roofs of eleven public buildings. On sunny days the panels cover most of the demand, and the surplus is sold to the grid. The cooperative is now studying a battery system that would store electricity for the evening, when consumption rises sharply.\n\nThe city museum has digitised its collection of nineteenth-century photographs. Volunteers cleaned and scanned more than four thousand glass plates, many of which had never been displayed. The images can be browsed online, and a travelling exhibition will visit schools in the surrounding villages over the next year.\n\nA public meeting about the new flood defences will take place on the ninth of October in the town hall. Engineers will present three designs and explain how each affects the riverside paths. Residents who cannot attend may submit written comments until the end of the month; the final choice is expected in December.",
+    },
 ];
 
 // ---------------------------------------------------------------------------
