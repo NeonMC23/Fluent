@@ -184,12 +184,13 @@ version. Test builds are produced as **GitHub Actions workflow artifacts**:
 1. Open <https://github.com/NeonMC23/Fluent/actions>.
 2. Choose **CI and build artifacts** and a successful run.
 3. Download `fluent-linux-x86_64`, `fluent-windows-x86_64`,
-   `fluent-macos-arm64`, or the combined `fluent-release-candidate` artifact
+   `fluent-macos`, or the combined `fluent-release-candidate` artifact
    from the run summary. They expire after 14 days.
 
 These are not release assets. The Linux artifact is an application-only
-tar.gz; Windows is a portable ZIP; macOS is an arm64 `.app` ZIP. Models are
-never included. Verify checksums and, when present, Minisign signatures using
+tar.gz; Windows is a portable ZIP; macOS is an `.app` ZIP whose filename
+records the runner architecture (the current `macos-latest` matrix produces
+arm64). Models are never included. Verify checksums and, when present, Minisign signatures using
 [docs/RELEASE.md](docs/RELEASE.md).
 
 ## ⌁ Using Fluent

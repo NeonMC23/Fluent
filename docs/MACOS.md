@@ -68,17 +68,17 @@ for now.
 
 ## CI, application ZIP and validation status
 
-The CI workflow defines a native `macos-14` (arm64) job that runs
+The CI workflow defines a native `macos-latest` job that runs
 `cargo test --workspace`, a release GUI build, `scripts/package-macos.sh` and
-`scripts/package-macos-archive.py`. It uploads an unsigned
-`Fluent-<version>-macos-arm64.zip` workflow artifact (14-day retention). It has
+`scripts/package-macos-archive.py`. It uploads the `fluent-macos` workflow
+artifact containing an unsigned `Fluent-<version>-macos-<arch>.zip` (14-day
+retention; the current runner is arm64). It has
 **not executed on GitHub**, and no macOS GUI has been launched. Compilation is
 not runtime validation; Metal, Intel macOS, universal binaries and
 notarization remain untested.
 
 The ZIP contains the staged `Fluent.app` bundle (Info.plist, executable,
-Fluent.icns, PkgInfo). Models and user configuration are excluded. Intel
-macOS is not produced by the current matrix.
+Fluent.icns, PkgInfo). Models and user configuration are excluded. Intel macOS is not produced by the current matrix.
 
 ## Packaging, signing and notarization
 

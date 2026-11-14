@@ -10,7 +10,7 @@ CI definitions, CI execution and actual GUI runtime validation.
 | Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum) | **No** | **Yes** (Nobara host + Ubuntu 22.04 container) | Portable tar.gz |
 | Linux AArch64 | No | No | No | No | No |
 | Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP) | **No** | **No** | Portable ZIP; no installer |
-| macOS arm64 (Apple Silicon) | No toolchain | Yes (tests, release GUI, `.app` ZIP) | **No** | **No** | arm64 `.app` ZIP; unsigned |
+| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP) | **No** | **No** | `.app` ZIP; unsigned; Intel not produced |
 
 “CI job defined” means the workflow contains the job; it does not mean it has
 run or passed. No GitHub Actions run occurred in this cycle.

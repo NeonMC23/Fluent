@@ -17,8 +17,9 @@ Workflow: `.github/workflows/ci.yml` — **CI and build artifacts**.
 - **Windows** (`windows-latest`, x86-64): workspace tests, release GUI build
   with embedded ICO/metadata, portable ZIP. Uploads
   `fluent-windows-x86_64`.
-- **macOS** (`macos-14`, arm64): workspace tests, release GUI build,
-  `Fluent.app` staging, app ZIP. Uploads `fluent-macos-arm64`.
+- **macOS** (`macos-latest`, currently arm64): workspace tests, release GUI
+  build, `Fluent.app` staging, app ZIP. Uploads `fluent-macos`; the filename
+  records the runner architecture. Intel macOS is not separately built.
 - **Release integrity** (only non-PR events): downloads all three artifacts,
   optionally signs archives with Minisign when `MINISIGN_SECRET_KEY` is
   configured, generates `release-manifest.json`, and uploads the combined
@@ -109,7 +110,7 @@ the current matrix.
 |---|---|---|
 | Linux | `fluent-0.2.0-linux-x86_64.tar.gz` | `bin/fluent`, `LICENSE`, `README.txt` |
 | Windows | `fluent-0.2.0-windows-x86_64.zip` | `fluent.exe`, `LICENSE`, `README.txt` |
-| macOS | `Fluent-0.2.0-macos-arm64.zip` | `Fluent.app` with Info.plist, executable, ICNS, PkgInfo |
+| macOS | `Fluent-0.2.0-macos-<arch>.zip` | `Fluent.app` with Info.plist, executable, ICNS, PkgInfo |
 | Aggregate | `fluent-release-candidate` | all archives, `.sha256`, optional `.minisig`, `release-manifest.json` |
 
 No artifact contains model weights, tokenizer assets, user configuration,
