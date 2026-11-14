@@ -82,7 +82,7 @@ case "$(uname -m)" in
     *) die "unsupported Linux architecture: $(uname -m)" ;;
 esac
 
-VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$ROOT/Cargo.toml" | head -n 1)"
+VERSION="$("$ROOT/scripts/version.sh")"
 [ -n "$VERSION" ] || die "could not read the workspace version from Cargo.toml"
 
 NAME="fluent-$VERSION-linux-$ARCH"
@@ -156,7 +156,8 @@ Runtime requirements
 
       objdump -T bin/fluent | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1
 - X11 or Wayland with an OpenGL 3.3 capable driver (eframe/glow renderer).
-- fontconfig and the usual desktop libraries. Run:
+- fontconfig, libxkbcommon and the usual desktop libraries. On X11 install
+  libxkbcommon-x11-0 (Ubuntu/Debian) or libxkbcommon-x11 (Fedora). Run:
 
       ldd bin/fluent
 

@@ -48,6 +48,9 @@ pub struct FluentApp {
     picker: Option<PickerTarget>,
     picker_search: String,
     picker_focus: bool,
+
+    /// Non-interactive CI smoke test: close after N painted frames.
+    smoke_frames: Option<u32>,
 }
 
 impl FluentApp {
@@ -85,7 +88,15 @@ impl FluentApp {
             picker: None,
             picker_search: String::new(),
             picker_focus: false,
+            smoke_frames: None,
         }
+    }
+
+    /// Ask the GUI to close itself after a few painted frames. This exercises
+    /// window creation, GL context setup, theme application and one full
+    /// layout pass without requiring user interaction.
+    pub fn set_smoke_frames(&mut self, frames: u32) {
+        self.smoke_frames = Some(frames.max(1));
     }
 
     // ------------------------------------------------------------------
@@ -386,6 +397,9 @@ impl FluentApp {
             .corner_radius(egui::CornerRadius::same(255))
             .inner_margin(egui::Margin::symmetric(10, 5))
             .show(ui, |ui| {
+                // The frame's 5px vertical margins plus this 22px content
+                // make the chip 34px tall, matching icon_button.
+                ui.set_min_height(22.0);
                 ui.horizontal(|ui| {
                     widgets::status_dot(ui, color);
                     ui.label(egui::RichText::new(label).size(11.5).color(palette.muted));
@@ -437,15 +451,25 @@ impl FluentApp {
                 ui.add_space(15.0);
                 let enabled = swap_enabled(&self.settings.source_language);
                 let tooltip = if enabled {
-                    "Swap languages"
+                    "Swap source and target languages"
                 } else {
                     "Choose a specific source language to swap"
                 };
-                let mut clicked = false;
-                ui.add_enabled_ui(enabled, |ui| {
-                    clicked = widgets::icon_button(ui, &palette, "⇄", tooltip).clicked();
-                });
-                if clicked {
+                let color = if enabled {
+                    palette.accent
+                } else {
+                    palette.faint
+                };
+                let swap = egui::Button::new(egui::RichText::new("⇄").size(18.0).color(color))
+                    .fill(palette.card_alt)
+                    .stroke(egui::Stroke::new(1.0, palette.border))
+                    .corner_radius(egui::CornerRadius::same(255))
+                    .min_size(egui::vec2(44.0, 44.0));
+                if ui
+                    .add_enabled(enabled, swap)
+                    .on_hover_text(tooltip)
+                    .clicked()
+                {
                     self.swap_languages();
                 }
             });
@@ -555,6 +579,7 @@ impl FluentApp {
             ));
 
             ui.horizontal(|ui| {
+                ui.set_min_height(22.0);
                 widgets::section_label(ui, &palette, "Source text");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let count = self.source_text.chars().count();
@@ -594,8 +619,10 @@ impl FluentApp {
             });
             widgets::divider(ui, &palette);
 
-            let footer_height = if self.busy { 58.0 } else { 44.0 };
-            let text_height = (ui.available_height() - footer_height).max(90.0);
+            let footer_height = if self.busy { 64.0 } else { 44.0 };
+            // Both cards reserve the same footer and 4px gap, so their text
+            // areas have the same effective height at every window size.
+            let text_height = (ui.available_height() - footer_height - 4.0).max(90.0);
             // Make the editor grow with its content inside a scroll area, instead of
             // clipping the text when it exceeds the card height.
             let font = egui::FontId::proportional(16.0);
@@ -704,6 +731,7 @@ impl FluentApp {
             ));
 
             ui.horizontal(|ui| {
+                ui.set_min_height(22.0);
                 widgets::section_label(ui, &palette, "Translation");
                 if let Some(language) = find_language(&self.settings.target_language) {
                     widgets::badge(ui, &palette, language.name, palette.accent);
@@ -736,8 +764,8 @@ impl FluentApp {
             });
             widgets::divider(ui, &palette);
 
-            let footer_height = if self.busy { 64.0 } else { 40.0 };
-            let text_height = (ui.available_height() - footer_height).max(90.0);
+            let footer_height = if self.busy { 64.0 } else { 44.0 };
+            let text_height = (ui.available_height() - footer_height - 4.0).max(90.0);
             let body = self.result.as_ref().map(|result| result.text.as_str());
             let shown = if self.busy {
                 self.preview.trim()
@@ -894,7 +922,7 @@ impl FluentApp {
         let response = egui::Modal::new(egui::Id::unique("fluent_settings"))
             .frame(frame)
             .show(ctx, |ui| {
-                ui.set_width(560.0);
+                ui.set_width(600.0);
                 ui.set_max_height(ctx.content_rect().height() * 0.86);
 
                 ui.horizontal(|ui| {
@@ -923,13 +951,15 @@ impl FluentApp {
 
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
-                    .max_height(ctx.content_rect().height() * 0.62)
+                    .max_height(ctx.content_rect().height() * 0.66)
                     .show(ui, |ui| {
                         widgets::section_label(ui, &palette, "Translation model");
                         ui.add_space(6.0);
-                        ui.horizontal(|ui| {
-                            let mut selected_mode = self.settings.mode;
-                            for mode in [Mode::Fast, Mode::Accurate] {
+                        let mut selected_mode = self.settings.mode;
+                        ui.columns(2, |columns| {
+                            for (ui, mode) in
+                                columns.iter_mut().zip([Mode::Fast, Mode::Accurate])
+                            {
                                 let selected = self.settings.mode == mode;
                                 let fill = if selected {
                                     palette.accent_soft
@@ -944,9 +974,10 @@ impl FluentApp {
                                     .fill(fill)
                                     .stroke(stroke)
                                     .corner_radius(egui::CornerRadius::same(12))
-                                    .inner_margin(egui::Margin::same(12))
+                                    .inner_margin(egui::Margin::same(14))
                                     .show(ui, |ui| {
-                                        ui.set_min_width(230.0);
+                                        ui.set_min_width(ui.available_width());
+                                        ui.set_min_height(64.0);
                                         ui.label(
                                             egui::RichText::new(mode.model_label())
                                                 .size(14.0)
@@ -977,8 +1008,8 @@ impl FluentApp {
                                     selected_mode = mode;
                                 }
                             }
-                            self.settings.mode = selected_mode;
                         });
+                        self.settings.mode = selected_mode;
 
                         ui.add_space(8.0);
                         let model_dir = self.project.model_path(self.settings.mode);
@@ -988,11 +1019,14 @@ impl FluentApp {
                                     .size(12.0)
                                     .color(palette.muted),
                             );
-                            ui.label(
-                                egui::RichText::new(model_dir.display().to_string())
-                                    .monospace()
-                                    .size(11.0)
-                                    .color(palette.faint),
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(model_dir.display().to_string())
+                                        .monospace()
+                                        .size(11.0)
+                                        .color(palette.faint),
+                                )
+                                .truncate(),
                             );
                         });
 
@@ -1055,37 +1089,76 @@ impl FluentApp {
                         }
 
                         ui.add_space(10.0);
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Device")
-                                    .size(13.0)
-                                    .color(palette.text),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    let current = self.settings.device_choice();
-                                    egui::ComboBox::from_id_salt("device_combo")
-                                        .selected_text(current.label())
-                                        .width(230.0)
-                                        .show_ui(ui, |ui| {
-                                            for choice in [
-                                                DeviceChoice::Auto,
-                                                DeviceChoice::Cpu,
-                                                DeviceChoice::Cuda(0),
-                                                DeviceChoice::Metal(0),
-                                            ] {
-                                                if ui
-                                                    .selectable_label(current == choice, choice.label())
-                                                    .clicked()
-                                                {
-                                                    self.settings.set_device(choice);
+                        egui::Grid::new("settings_device_precision")
+                            .num_columns(2)
+                            .spacing([16.0, 8.0])
+                            .show(ui, |ui| {
+                                ui.label(
+                                    egui::RichText::new("Device")
+                                        .size(13.0)
+                                        .color(palette.text),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        let current = self.settings.device_choice();
+                                        egui::ComboBox::from_id_salt("device_combo")
+                                            .selected_text(current.label())
+                                            .width(230.0)
+                                            .show_ui(ui, |ui| {
+                                                for choice in [
+                                                    DeviceChoice::Auto,
+                                                    DeviceChoice::Cpu,
+                                                    DeviceChoice::Cuda(0),
+                                                    DeviceChoice::Metal(0),
+                                                ] {
+                                                    if ui
+                                                        .selectable_label(
+                                                            current == choice,
+                                                            choice.label(),
+                                                        )
+                                                        .clicked()
+                                                    {
+                                                        self.settings.set_device(choice);
+                                                    }
                                                 }
-                                            }
-                                        });
-                                },
-                            );
-                        });
+                                            });
+                                    },
+                                );
+                                ui.end_row();
+
+                                ui.label(
+                                    egui::RichText::new("Precision")
+                                        .size(13.0)
+                                        .color(palette.text),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        egui::ComboBox::from_id_salt("precision_combo")
+                                            .selected_text(self.settings.precision.label())
+                                            .width(230.0)
+                                            .show_ui(ui, |ui| {
+                                                for precision in [
+                                                    Precision::Auto,
+                                                    Precision::F32,
+                                                    Precision::F16,
+                                                ] {
+                                                    if ui
+                                                        .selectable_label(
+                                                            self.settings.precision == precision,
+                                                            precision.label(),
+                                                        )
+                                                        .clicked()
+                                                    {
+                                                        self.settings.precision = precision;
+                                                    }
+                                                }
+                                            });
+                                    },
+                                );
+                                ui.end_row();
+                            });
                         widgets::hint(
                             ui,
                             &palette,
@@ -1095,38 +1168,6 @@ impl FluentApp {
                                 "CUDA / Metal require a dedicated build (--features cuda or metal)."
                             },
                         );
-
-                        ui.add_space(6.0);
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new("Precision")
-                                    .size(13.0)
-                                    .color(palette.text),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    egui::ComboBox::from_id_salt("precision_combo")
-                                        .selected_text(self.settings.precision.label())
-                                        .width(230.0)
-                                        .show_ui(ui, |ui| {
-                                            for precision in
-                                                [Precision::Auto, Precision::F32, Precision::F16]
-                                            {
-                                                if ui
-                                                    .selectable_label(
-                                                        self.settings.precision == precision,
-                                                        precision.label(),
-                                                    )
-                                                    .clicked()
-                                                {
-                                                    self.settings.precision = precision;
-                                                }
-                                            }
-                                        });
-                                },
-                            );
-                        });
 
                         ui.add_space(8.0);
                         ui.add(
@@ -1170,7 +1211,8 @@ impl FluentApp {
                                     palette.card_alt
                                 })
                                 .stroke(egui::Stroke::new(1.0, palette.border))
-                                .corner_radius(egui::CornerRadius::same(9));
+                                .corner_radius(egui::CornerRadius::same(9))
+                                .min_size(egui::vec2(100.0, 30.0));
                                 if ui.add(button).clicked() {
                                     self.settings.theme = choice;
                                 }
@@ -1210,7 +1252,8 @@ impl FluentApp {
                         ui.add_space(4.0);
                         ui.label(
                             egui::RichText::new(format!(
-                                "Fluent 0.1.0 · {} {} · NLLB-200 engine in Rust",
+                                "Fluent {} · {} {} · NLLB-200 engine in Rust",
+                                env!("CARGO_PKG_VERSION"),
                                 std::env::consts::OS,
                                 std::env::consts::ARCH
                             ))
@@ -1226,11 +1269,17 @@ impl FluentApp {
                             .color(palette.muted),
                         );
                         if let Some(path) = settings_path() {
-                            ui.label(
-                                egui::RichText::new(format!("Settings: {}", path.display()))
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(format!(
+                                        "Settings: {}",
+                                        path.display()
+                                    ))
                                     .monospace()
                                     .size(10.5)
                                     .color(palette.faint),
+                                )
+                                .truncate(),
                             );
                         }
                     });
@@ -1438,6 +1487,18 @@ impl FluentApp {
 
 impl eframe::App for FluentApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        if let Some(frames) = self.smoke_frames.as_mut() {
+            if *frames == 0 {
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                ui.ctx().request_repaint();
+                return;
+            }
+            *frames -= 1;
+            // Keep the event loop awake long enough to paint the requested
+            // frames and process the close request on every backend.
+            ui.ctx().request_repaint_after(Duration::from_millis(16));
+        }
+
         let ctx = ui.ctx().clone();
         self.drain_events();
 

@@ -38,7 +38,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$ROOT/Cargo.toml" | head -n 1)"
+VERSION="$("$ROOT/scripts/version.sh")"
 [ -n "$VERSION" ] || die "could not read workspace version"
 [ -n "$DIST" ] && [ "$DIST" != "/" ] || die "refusing to use an unsafe output directory"
 

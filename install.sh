@@ -16,6 +16,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROG="$(basename -- "${BASH_SOURCE[0]}")"
+VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$SCRIPT_DIR/Cargo.toml" 2>/dev/null | head -n 1)"
+[ -n "$VERSION" ] || VERSION="unknown"
 APP_ID="io.fluent.Fluent"
 APP_EXE="fluent"
 
@@ -682,6 +684,7 @@ if [ "$DO_DESKTOP" -eq 1 ]; then
         printf '%s\n' 'Categories=Utility;'
         printf '%s\n' 'Keywords=translation;language;offline;'
         printf '%s\n' 'StartupWMClass=io.fluent.Fluent'
+        printf 'X-Fluent-Version=%s\n' "$VERSION"
         printf '%s\n' 'X-Fluent-Installer=1'
     } > "$TMP_DESKTOP"
     chmod 0644 "$TMP_DESKTOP"
@@ -724,6 +727,7 @@ cat <<EOF
 Fluent installed successfully.
 
   Platform     : $PLATFORM
+  Version      : $VERSION
   Application  : $APP_DIR/fluent
   Launcher     : $LAUNCHER
   Configuration: $CONFIG_FILE

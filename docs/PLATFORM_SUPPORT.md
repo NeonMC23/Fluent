@@ -7,13 +7,15 @@ CI definitions, CI execution and actual GUI runtime validation.
 
 | Platform | Local build | CI job defined | CI executed | GUI runtime validated | Distribution artifact |
 |---|---|---|---|---|---|
-| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`) | **No** | **Yes** (Nobara host + Ubuntu 22.04 container) | Portable tar.gz |
+| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum + smoke) | **Yes** (run 43621221912) | **Yes** (Nobara host + Ubuntu 22.04 container + Xvfb) | Portable tar.gz |
 | Linux AArch64 | No | No | No | No | No |
-| Windows x86-64 | No toolchain | Yes (compile/test + release GUI, icon resource) | **No** | **No** | No installer |
-| macOS Apple Silicon / Intel | No toolchain | Yes (compile/test + release GUI + bundle staging) | **No** | **No** | Staged `.app`; no signing |
+| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43621221912) | **Partial**: self-test on runner; GUI skipped (no OpenGL) | Portable ZIP; no installer |
+| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43621221912) | **Yes on CI runner** (bundle GUI smoke) | `.app` ZIP; unsigned; Intel not produced |
 
-“CI job defined” means the workflow contains the job; it does not mean it has
-run or passed. No GitHub Actions run occurred in this cycle.
+The current fully green run is `43621221912` (`09a71e9`), including packaged
+application smoke tests and artifact verification. Earlier successful runs are
+`43605074905`, `43606018556`, `43606646499` and `43620495032`. GitHub-runner
+execution is still not physical-device validation.
 
 ## Linux
 
@@ -33,7 +35,7 @@ run or passed. No GitHub Actions run occurred in this cycle.
 - **Branding:** the official 256 px PNG is installed automatically by the
   installer, the window icon is embedded in the binary, and the main window
   header shows the official mark next to the Fluent wordmark.
-- **Archive:** `dist/fluent-0.1.0-linux-x86_64.tar.gz`; application-only
+- **Archive:** `dist/fluent-0.2.0-linux-x86_64.tar.gz`; application-only
   (binary, LICENSE, README); no models or tokenizer files.
 - **Not tested:** Debian/Fedora stable releases other than the build/runtime
   hosts, ARM Linux, non-glibc systems, X11-only sessions (the container used
@@ -42,21 +44,23 @@ run or passed. No GitHub Actions run occurred in this cycle.
 
 ## Windows
 
-- The workflow now runs `cargo test --workspace` and a release GUI build on
-  `windows-latest`.
-- This is a compile/test definition only. It has not run on GitHub, and no
-  Windows GUI has ever been launched by this project.
+- The workflow runs `cargo test --workspace`, a release GUI build, the portable
+  ZIP, and executes the packaged `fluent.exe --version` / `--self-test`.
+- Run `43621221912` passed those checks. GitHub's hosted Windows runner has no
+  OpenGL 2.0+ context, so the temporary GUI-window smoke is SKIPPED there.
+  This is still not physical-device GUI validation.
 - No installer, Start Menu integration, DLL inventory, CUDA build, or
   uninstaller is provided.
 - See [WINDOWS.md](WINDOWS.md) for prerequisites and paths.
 
 ## macOS
 
-- The workflow now runs `cargo test --workspace` and a release GUI build on
+- The workflow runs `cargo test --workspace`, a release GUI build, `.app`
+  staging, plist/Mach-O validation and a bundled GUI smoke test on
   `macos-latest`.
-- No macOS GUI has been launched, no `.app`/`.icns`/`Info.plist` exists, and
-  Metal, universal binaries, signing and notarization are unvalidated.
-- The CI job is compile/test only; it is not runtime validation.
+- Run `43621221912` passed all of those steps, so the arm64 `.app` is runtime
+  validated on the CI runner. Metal, Intel macOS, universal binaries, signing
+  and notarization remain unvalidated.
 - See [MACOS.md](MACOS.md) for the CPU-only/Metal build commands and remaining
   bundle work.
 

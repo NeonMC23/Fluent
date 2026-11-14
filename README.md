@@ -2,6 +2,8 @@
 
 **Private AI translation. No cloud. Your machine.**
 
+_Development version 0.2.0 · last published 0.1.0_
+
 A native, local-first translation application powered by Meta's NLLB-200 models — built in Rust for Linux, Windows, and macOS.
 
 Translate across **190+ languages and dialects** with a clean desktop interface, selectable translation modes, and optional GPU acceleration.
@@ -174,6 +176,42 @@ directory. See [docs/LINUX.md](docs/LINUX.md) for migration from the old
 | `--app-dir`, `--bin-dir`, `--config-dir`, `--models-dir` | Override individual locations. |
 | `--install-dir DIR` | Legacy alias for `--app-dir`. |
 
+## ⬇️ Downloads and CI artifacts
+
+There is no public GitHub Release for the unreleased `0.2.0` development
+version. Test builds are produced as **GitHub Actions workflow artifacts**:
+
+1. Open <https://github.com/NeonMC23/Fluent/actions>.
+2. Choose **CI and build artifacts** and a successful run.
+3. Download `fluent-linux-x86_64`, `fluent-windows-x86_64`,
+   `fluent-macos`, or the combined `fluent-release-candidate` artifact
+   from the run summary. They expire after 14 days.
+
+These are not release assets. Successful runs include
+[43605074905](https://github.com/NeonMC23/Fluent/actions/runs/43605074905)
+(code commit `ae1dfcb`), the documentation follow-up
+[43606018556](https://github.com/NeonMC23/Fluent/actions/runs/43606018556),
+the final path-remapping build
+[43606646499](https://github.com/NeonMC23/Fluent/actions/runs/43606646499)
+(`af7dbca`), and the Cycle 11 packaged-smoke run
+[43621221912](https://github.com/NeonMC23/Fluent/actions/runs/43621221912)
+(`09a71e9`): Linux, Windows, macOS and the aggregate release candidate all
+passed. The Linux artifact is an application-only tar.gz;
+Windows is a portable ZIP; macOS is an `.app` ZIP whose filename records the
+runner architecture (the current `macos-latest` matrix produces arm64). Models
+are never included. Every build supports:
+
+```bash
+fluent --version          # version, OS and architecture
+fluent --self-test        # icon, config, language and model checks
+fluent --smoke-test-gui   # open a window, paint once and exit
+```
+
+The Minisign public key is committed at `docs/keys/minisign.pub` (key ID
+`B504F2189BB21013`). CI artifacts are currently **unsigned** until the
+`MINISIGN_SECRET_KEY` Actions secret is configured. Verify checksums and, when
+present, signatures with [docs/RELEASE.md](docs/RELEASE.md).
+
 ## ⌁ Using Fluent
 
 1. Select a source language or leave automatic detection enabled.
@@ -272,7 +310,7 @@ Install the required system packages:
 
 ```bash
 sudo dnf install gcc gcc-c++ make cmake pkgconf-pkg-config \
-    libxkbcommon-devel wayland-devel mesa-libGL-devel \
+    libxkbcommon-devel libxkbcommon-x11 wayland-devel mesa-libGL-devel \
     fontconfig-devel libX11-devel libXcursor-devel libXi-devel libXrandr-devel
 ```
 
@@ -288,15 +326,18 @@ cargo build --release -p fluent-gui
 
 ### Windows
 
-Windows is not validated in this cycle and no Windows installer is provided.
-See [docs/WINDOWS.md](docs/WINDOWS.md) for prerequisites, the MSVC build
-command, and configuration/model paths.
+Windows x86-64 is built and smoke-tested by CI (executable startup, version,
+icon and self-test); the hosted runner cannot create an OpenGL context, so the
+GUI window is not validated there. No Windows installer is provided. See
+[docs/WINDOWS.md](docs/WINDOWS.md) for prerequisites, the MSVC build command,
+and configuration/model paths.
 
 ### macOS
 
-macOS is not validated in this cycle. See [docs/MACOS.md](docs/MACOS.md) for
-the CPU-only and Metal build commands, Apple Silicon limitations, and the
-bundle/signing work that remains.
+macOS arm64 is built and its `.app` bundle is smoke-tested by CI, including a
+temporary GUI window. Intel macOS, universal binaries, signing and notarization
+are not provided. See [docs/MACOS.md](docs/MACOS.md) for the CPU-only and Metal
+build commands and remaining bundle/signing work.
 
 ### CLI example
 
@@ -382,6 +423,8 @@ the unresolved tokenizer-redistribution question.
 - [Model package specification](docs/MODEL_PACKAGE.md)
 - [Model provenance and licensing](docs/MODEL_PROVENANCE.md)
 - [Branding assets and icon integration](docs/ASSETS.md)
+- [Versioning](docs/VERSIONING.md)
+- [Builds, CI artifacts, signing and release verification](docs/RELEASE.md)
 
 ---
 
