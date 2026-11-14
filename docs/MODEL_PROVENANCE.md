@@ -35,7 +35,7 @@ per-file license notice.
 | `sentencepiece.bpe.model`, `special_tokens_map.json`, `tokenizer_config.json` | NLLB-200 release | Same assumption | Medium | **Removed in Cycle 7** | Same |
 | NLLB model cards (`README.md`) and `gitattributes` | NLLB-200 release | Cards carry the CC-BY-NC-4.0 metadata | Medium | **Removed in Cycle 7** | Same |
 | Weight placeholder files (1 byte) | Created for this repository | Inert placeholder, no model content | High | **Removed in Cycle 7** | None |
-| Screenshots (`src/image1.png`, `src/image2.png`) | This project | MIT with the source | High | Present | Redistributable |
+| Screenshot (`src/image1.png`) | This project (captured from the running app) | Project asset; treated as MIT with the source | High | Present | Redistributable |
 | Runtime crates | crates.io / projects | See table below | High | Not bundled | Per-crate licenses apply |
 | CUDA toolkit / Metal | NVIDIA / Apple | Vendor terms | High | Not redistributed | Users install/build their own |
 

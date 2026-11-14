@@ -42,6 +42,8 @@ builds and installers need no image tooling.
 |---|---|---|---|---|
 | `png/fluent-16.png` … `fluent-512.png` | PNG, RGBA | 16, 24, 32, 48, 64, 128, 256, 512 px | Linux/source variants, documentation, ICO/ICNS inputs | IHDR dimensions checked |
 | `window/fluent-256.rgba` | raw RGBA8 | 256×256, 262,144 B | Compile-time embedded window icon | Exact length checked; used by `main.rs` |
+| `ui/fluent-mark-256.png` | PNG RGBA | 256×256 | Documentation/preview of the header mark | IHDR checked |
+| `ui/fluent-mark-256.rgba` | raw RGBA8 | 256×256, 262,144 B | Compile-time embedded header mark | Exact length checked; used by `app.rs` |
 | `windows/fluent.ico` | ICO | 7 entries: 16, 24, 32, 48, 64, 128, 256; 32-bit | Windows executable resource | Directory/BMP payloads parsed independently |
 | `macos/Fluent.icns` | ICNS | 11 PNG chunks: 16, 32, 64, 128, 256, 512, 1024 plus 2× variants | macOS bundle icon | Header/chunk lengths and PNG dimensions parsed independently |
 
@@ -53,6 +55,8 @@ Fluent.icns        8016e6005b889bd463bb30c4afb4d3ff01a758a11a71b0ba5fc1965636150
 fluent-256.png     8b4212285d6d33cc786cc54d0dc0715da4ce9127757d946e2a23daca848c0de9
 fluent-512.png     ca62ea2c784fd58cc32a5bf44e655c31a9ecaaee6028262fe0402fc00d7f4d4e
 fluent-256.rgba    6eb9909db6a7b702a862731de84f5551e957a0c08cb3f31346e4139ad779d7a2
+fluent-mark.png    061a732acbec76cf91c9108ffec65383bd44d7a6919c13599e2851a016759e60
+fluent-mark.rgba   22c92da9c4d9eefaa1524300b7f3e961a1332f21bb5b6f0ce6dc67c6e5b45ac3
 ```
 
 ## 3. Generation and validation
@@ -92,6 +96,7 @@ needed when the master changes.
 | Target | Integration | Status |
 |---|---|---|
 | GUI window icon | `include_bytes!("…/window/fluent-256.rgba")` in `crates/fluent-gui/src/main.rs`; no runtime file lookup or image decoder | Implemented |
+| GUI header | Mark-only `ui/fluent-mark-256.rgba` loaded once as an egui texture in `app.rs`; the “Fluent” wordmark remains text | Implemented and visible in a real app screenshot (`src/image1.png`) |
 | Linux desktop entry | Installer copies the bundled `fluent-256.png` to `hicolor/256x256/apps/io.fluent.Fluent.png`; explicit SVG/PNG `--icon` still supported | Implemented and tested |
 | Linux portable archive | Window icon embedded in the binary; no external icon files needed for running | Implemented |
 | Windows executable | `build.rs` uses `winres` to embed `windows/fluent.ico`, ProductName, FileDescription, OriginalFilename and numeric file/product version | Prepared; no Windows build executed |

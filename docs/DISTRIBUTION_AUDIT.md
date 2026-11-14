@@ -23,7 +23,7 @@ Linux is not evidence that Windows or macOS binaries work.
 | CPU feature detection remains safe. | `quant.rs` selects AVX2/FMA through `is_x86_feature_detected!`; the scalar path is always compiled and was exercised in Cycle 5. |
 | CUDA and Metal are optional. | Workspace/gui features default to empty; `engine.rs` compiles CPU fallbacks when the features are absent. |
 | The legacy `install.sh` mixed application, configuration, models, and launcher in `~/.fluent`. | Audit of the previous script; replaced in Cycle 6. |
-| Branding is integrated for Linux, window, Windows resource and macOS bundle staging. | `src/logo/generated`, `main.rs` embedded RGBA, installer default PNG, `build.rs`/`winres`, `scripts/package-macos.sh`; asset structure validated. Windows/macOS runtime still unvalidated. |
+| Branding is integrated for the GUI header/window, Linux desktop, Windows resource and macOS bundle staging. | `src/logo/generated`, embedded header/window RGBA, installer default PNG, `build.rs`/`winres`, `scripts/package-macos.sh`; actual Linux GUI screenshot captured. Windows/macOS runtime still unvalidated. |
 
 ### Platform-sensitive code
 

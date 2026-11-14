@@ -21,6 +21,8 @@ PNG_DIR = GENERATED / "png"
 ICO = GENERATED / "windows/fluent.ico"
 ICNS = GENERATED / "macos/Fluent.icns"
 RGBA = GENERATED / "window/fluent-256.rgba"
+UI_PNG = GENERATED / "ui/fluent-mark-256.png"
+UI_RGBA = GENERATED / "ui/fluent-mark-256.rgba"
 
 MASTER_SHA = "bce82ebd549e4e6a0001a605a7bb8ff3efc8bfedf30fc20c3803801db884b5e7"
 BANNER_SHA = "ce3deeb9bab7a9cf847ba06568886e8cb5b10d88080bc1c55363300f35925545"
@@ -149,6 +151,10 @@ def check_icns() -> None:
 def check_rgba() -> None:
     if RGBA.stat().st_size != 256 * 256 * 4:
         fail("raw RGBA window icon has the wrong size")
+    if png_dims(UI_PNG.read_bytes(), str(UI_PNG)) != (256, 256):
+        fail("UI mark PNG has the wrong dimensions")
+    if UI_RGBA.stat().st_size != 256 * 256 * 4:
+        fail("raw RGBA UI mark has the wrong size")
 
 
 def main() -> None:
@@ -159,8 +165,8 @@ def main() -> None:
     check_icns()
     check_rgba()
     print(
-        "PASS: branding masters, 8 PNG variants, 7-entry ICO, 11-chunk ICNS "
-        "and 256x256 raw RGBA are valid"
+        "PASS: branding masters, 8 PNG variants, UI mark, 7-entry ICO, "
+        "11-chunk ICNS and raw RGBA assets are valid"
     )
 
 

@@ -11,8 +11,13 @@ The masters are never modified:
 Derived output:
     src/logo/generated/png/fluent-<size>.png
     src/logo/generated/window/fluent-256.rgba
+    src/logo/generated/ui/fluent-mark-256.rgba
+    src/logo/generated/ui/fluent-mark-256.png
     src/logo/generated/windows/fluent.ico
     src/logo/generated/macos/Fluent.icns
+
+The UI mark is a faithful crop of the mark above the wordmark (the wordmark is
+already present in the UI header), not a redraw.
 """
 
 from __future__ import annotations
@@ -29,6 +34,7 @@ MASTER = ROOT / "src/logo/logo.png"
 GENERATED = ROOT / "src/logo/generated"
 PNG_DIR = GENERATED / "png"
 WINDOW_DIR = GENERATED / "window"
+UI_DIR = GENERATED / "ui"
 ICO = GENERATED / "windows/fluent.ico"
 ICNS = GENERATED / "macos/Fluent.icns"
 
@@ -77,7 +83,7 @@ def generate() -> None:
     if master.size != (1024, 1024):
         raise SystemExit(f"unexpected logo dimensions: {master.size}")
 
-    for directory in (PNG_DIR, WINDOW_DIR, ICO.parent, ICNS.parent):
+    for directory in (PNG_DIR, WINDOW_DIR, UI_DIR, ICO.parent, ICNS.parent):
         directory.mkdir(parents=True, exist_ok=True)
 
     for size in PNG_SIZES:
@@ -89,6 +95,13 @@ def generate() -> None:
         master.resize((256, 256), Image.Resampling.LANCZOS).tobytes()
     )
 
+    # The header uses the mark only; the wordmark is rendered as text next to
+    # it. Crop the mark above the wordmark, preserving the official artwork.
+    mark = master.crop((270, 190, 745, 665))
+    mark_256 = mark.resize((256, 256), Image.Resampling.LANCZOS)
+    mark_256.save(UI_DIR / "fluent-mark-256.png", format="PNG", optimize=True)
+    (UI_DIR / "fluent-mark-256.rgba").write_bytes(mark_256.tobytes())
+
     master.save(ICO, format="ICO", sizes=ICO_SIZES, bitmap_format="bmp")
 
     chunks = []
@@ -99,7 +112,7 @@ def generate() -> None:
     ICNS.write_bytes(b"icns" + struct.pack(">I", 8 + len(body)) + body)
 
     print(f"master sha256: {sha256(MASTER)}")
-    print(f"generated: {len(PNG_SIZES)} PNG, 1 ICO, 1 ICNS, 1 raw RGBA")
+    print(f"generated: {len(PNG_SIZES)} PNG, 1 mark PNG/RGBA, 1 window RGBA, 1 ICO, 1 ICNS")
     print(f"ICO sha256: {sha256(ICO)}")
     print(f"ICNS sha256: {sha256(ICNS)}")
 

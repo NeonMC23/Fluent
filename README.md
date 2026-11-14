@@ -14,9 +14,7 @@ Translate across **190+ languages and dialects** with a clean desktop interface,
 
 ## ◈ Preview
 
-![Fluent — Translation interface](./src/image1.png)
-
-![Fluent — Application preview](./src/image2.png)
+![Fluent — Branded translation interface](./src/image1.png)
 
 *Powerful translation. A native interface. Your data stays yours.*
 

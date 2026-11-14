@@ -31,7 +31,8 @@ run or passed. No GitHub Actions run occurred in this cycle.
   the usual desktop libraries loaded by `winit`/`glutin`; not all appear in
   `ldd`.
 - **Branding:** the official 256 px PNG is installed automatically by the
-  installer and the window icon is embedded in the binary.
+  installer, the window icon is embedded in the binary, and the main window
+  header shows the official mark next to the Fluent wordmark.
 - **Archive:** `dist/fluent-0.1.0-linux-x86_64.tar.gz`; application-only
   (binary, LICENSE, README); no models or tokenizer files.
 - **Not tested:** Debian/Fedora stable releases other than the build/runtime
