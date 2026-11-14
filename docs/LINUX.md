@@ -66,7 +66,7 @@ The binary can be launched directly or from the desktop menu.
 | `--metal` | Rejected on Linux. |
 | `--binary FILE` | Install a prebuilt binary instead of building. |
 | `--skip-build` | Use `target/release/fluent` without running Cargo. |
-| `--models-src DIR` | Directory containing `nllb-200-1.3b/` and `nllb-200-3.3b/`. Default: `./models`. A legacy `~/.fluent/models` is also checked. |
+| `--models-src DIR` | Directory containing `nllb-200-1.3b/` and `nllb-200-3.3b/`. Default: `./models`, which is empty in a fresh checkout. A legacy `~/.fluent/models` is also checked. |
 | `--skip-models` | Create empty model directories only. |
 | `--icon FILE` | Install an SVG icon and reference it from the desktop entry. |
 | `--no-desktop` | Do not create a desktop entry or icon. |
@@ -80,18 +80,18 @@ Environment equivalents: `FLUENT_APP_DIR`, `FLUENT_BIN_DIR`,
 
 ## Models
 
-Fluent does not download or bundle NLLB. Put the complete checkpoint,
-configuration, and tokenizer files in:
+Fluent does not download or bundle NLLB, and this repository commits no NLLB
+assets. Put the complete checkpoint, configuration, and tokenizer files in:
 
 ```text
 ~/.local/share/fluent/models/nllb-200-1.3b/
 ~/.local/share/fluent/models/nllb-200-3.3b/
 ```
 
-Each directory needs a real checkpoint (`pytorch_model.bin`, `model.safetensors`,
-or complete shards plus an index), plus the tokenizer and config files. The
-installer rejects placeholder or incomplete directories and never overwrites a
-working model.
+Each directory needs `config.json`, `tokenizer.json`, and a real checkpoint
+(`pytorch_model.bin`, `model.safetensors`, or complete shards plus an index).
+The installer rejects placeholder or incomplete directories and never
+overwrites a working model. See [MODEL_PACKAGE.md](MODEL_PACKAGE.md) for the exact contract.
 
 If you already have a `~/.fluent/models` directory from the previous
 single-directory installer, the new installer uses it as a read-only source
@@ -100,6 +100,67 @@ otherwise. The old directory is not modified or deleted; remove it manually
 once you have verified the new installation.
 
 Models are subject to the NLLB license. See [MODEL_PROVENANCE.md](MODEL_PROVENANCE.md).
+
+## Portable archive
+
+A reproducible application-only archive can be produced locally:
+
+```bash
+./scripts/package-linux.sh
+```
+
+The output is `dist/fluent-<version>-linux-<arch>.tar.gz` plus a `.sha256`
+file. It contains only:
+
+```text
+fluent-<version>-linux-<arch>/
+├── bin/fluent
+├── LICENSE
+└── README.txt
+```
+
+Models, tokenizer files, configuration and user data are **not** included. The
+archive README explains how to place models next to it. The tar metadata is
+normalised (sorted entries, fixed timestamp, numeric owner) and the packaging
+build remaps Cargo/repository paths out of the binary. Re-running the script
+with the same binary produces the same SHA-256. The Rust binary itself is not
+guaranteed bit-reproducible across hosts or toolchains.
+
+Verify an archive from the directory containing it:
+
+```bash
+sha256sum -c fluent-<version>-linux-<arch>.tar.gz.sha256
+```
+
+A checksum proves integrity relative to the channel that supplied it; it is not
+a signature.
+
+### glibc compatibility boundary
+
+The archive is built on the current host, whose glibc is **2.43**. Its strongest
+symbol requirement is `GLIBC_2.43` (from `atan2f`); older libraries such as
+Ubuntu 24.04's glibc 2.39 **cannot run this exact binary**. To support older
+distributions, rebuild on the oldest glibc you intend to support (for example a
+Debian/Ubuntu container) and rerun the compatibility checks:
+
+```bash
+./scripts/package-linux.sh
+objdump -T target/release/fluent | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1
+ldd target/release/fluent
+```
+
+The binary is a dynamically linked x86-64 PIE. X11/Wayland, OpenGL and font
+libraries are loaded at runtime by `winit`/`glutin`; they do not all appear in
+`ldd`, so the graphical session still needs the development/runtime packages
+listed above. There is no RPATH/RUNPATH pointing into the build tree.
+
+CPU dispatch is unchanged: the binary contains AVX2/FMA kernels selected by
+runtime detection, with a scalar fallback. It is not compiled with
+`target-cpu=native`; installing it on a CPU without AVX2 is intended to work
+through the scalar path and was covered by the scalar test suite.
+
+This archive has only been executed on the host described in the validation
+section. Other distributions and older glibc versions remain untested.
 
 ## Launch and desktop integration
 
@@ -176,6 +237,11 @@ tests touched the real user environment.
   with the config file removed: stayed up, no error output.
 - `scripts/test-installer.sh`: passes all fresh/repeat/uninstall, missing
   binary, `--no-desktop`, `--skip-models` and placeholder-model checks.
+- `scripts/package-linux.sh`: archive created, contents inspected, SHA-256
+  verified, extraction and GUI launch tested from a directory containing
+  spaces, and the archive hash reproduced with `--skip-build`. No model or
+  tokenizer asset was present. Runtime dependency/glibc inspection performed
+  with `file`, `readelf`, `ldd` and `objdump`.
 
 Not validated: other Linux distributions, non-glibc systems, ARM Linux, distro
 packaging, AppImage/Flatpak, and desktop environments other than the KDE/Wayland

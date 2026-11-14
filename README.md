@@ -93,18 +93,23 @@ Fluent supports two translation engines:
 > [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md), including the
 > unresolved tokenizer-asset question.
 
-Place each model's files in the corresponding directory:
+This repository intentionally contains **no** NLLB weights, tokenizer, or model
+configuration files. Place each model's files in the corresponding directory:
 
 ```text
 ~/.local/share/fluent/models/
 ├── nllb-200-1.3b/
+│   ├── config.json
+│   ├── tokenizer.json
+│   └── pytorch_model.bin   (or safetensors / sharded checkpoint)
 └── nllb-200-3.3b/
 ```
 
-Each model directory must contain the required model configuration, tokenizer,
-and supported checkpoint files. Sharded checkpoints are supported. The
-installer validates that a real checkpoint exists and refuses to install
-placeholder-only directories.
+Each model directory must contain `config.json`, `tokenizer.json`, and the
+supported checkpoint files. Sharded checkpoints are supported; extra files from
+a Hugging Face download are ignored. The installer validates the package and
+refuses to install placeholder-only directories. See
+[docs/MODEL_PACKAGE.md](docs/MODEL_PACKAGE.md) for the exact contract.
 
 Alternatively, point the installer at an existing model source:
 
@@ -125,6 +130,22 @@ Or launch **Fluent** from the desktop application menu. The models are loaded
 on demand when you perform your first translation. The GUI starts even when no
 model is installed and shows an actionable error on the first translation.
 
+### Portable archive (Linux)
+
+For a no-install layout, build the application archive locally:
+
+```bash
+./scripts/package-linux.sh
+sha256sum -c dist/fluent-*-linux-*.tar.gz.sha256
+tar -xzf dist/fluent-*-linux-*.tar.gz
+cd fluent-*-linux-*/
+./bin/fluent
+```
+
+The archive contains only the executable, `LICENSE` and a runtime README. It
+does not include models or tokenizer assets, and the current build requires
+glibc 2.43 or newer. See [docs/LINUX.md](docs/LINUX.md) for details.
+
 ### Uninstall
 
 ```bash
@@ -144,7 +165,7 @@ directory. See [docs/LINUX.md](docs/LINUX.md) for migration from the old
 | `--metal` | Build with Metal support (macOS only). |
 | `--binary FILE` | Install a prebuilt executable instead of building. |
 | `--skip-build` | Reuse an existing `target/release/fluent` binary. |
-| `--models-src DIR` | Model source containing `nllb-200-1.3b/` and `nllb-200-3.3b/`. |
+| `--models-src DIR` | Model source containing `nllb-200-1.3b/` and `nllb-200-3.3b/` (the repository default `./models` is empty in a fresh checkout). |
 | `--skip-models` | Create empty model directories only. |
 | `--icon FILE` | Install an SVG icon and reference it from the desktop entry. |
 | `--no-desktop` | Skip desktop integration. |
@@ -356,6 +377,7 @@ the unresolved tokenizer-redistribution question.
 - [Linux installation](docs/LINUX.md)
 - [Windows build guide](docs/WINDOWS.md)
 - [macOS build guide](docs/MACOS.md)
+- [Model package specification](docs/MODEL_PACKAGE.md)
 - [Model provenance and licensing](docs/MODEL_PROVENANCE.md)
 - [Icon and branding requirements](docs/ASSETS.md)
 

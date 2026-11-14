@@ -1,7 +1,8 @@
-# Distribution Audit — Cycle 6
+# Distribution Audit — Cycles 6–7
 
-Status: **Linux foundation implemented and validated; Windows and macOS
-unvalidated; public distribution blocked by model-asset licensing.**
+Status: **Linux foundation implemented and validated; NLLB assets removed from
+HEAD; Windows and macOS unvalidated; public Git-history release still blocked by
+the NLLB assets retained in history.**
 
 This document records what was verified, what changed in Cycle 6, and what
 remains unknown. It is intentionally conservative: source code compiling on
@@ -14,7 +15,7 @@ Linux is not evidence that Windows or macOS binaries work.
 | The Rust GUI is independent of the Python/Flask components. | `crates/fluent-gui` and `crates/fluent-core` contain no references to `backend/`, `frontend/`, or `start.py`; the release GUI starts and runs without them. |
 | The application needs no files from the source checkout at runtime. | The release binary reads `config.json` from the executable directory, its parent, the platform config directory, or the current directory. Models are ordinary files referenced by that config. |
 | Model weights are not committed. | `models/*/pytorch_model*.bin` are 1-byte placeholders; the real weights used for testing live outside the repository. |
-| Tokenizer and model-config assets **are** committed under `models/`. | `git ls-files models` lists tokenizer JSON/SentencePiece files and model cards. See `MODEL_PROVENANCE.md`. |
+| NLLB tokenizer/model-config assets are **not** in the current tree. | They were removed in Cycle 7; `git ls-files models` now lists only `models/README.md`. Earlier commits still contain them. See `MODEL_PROVENANCE.md`. |
 | Settings already follow platform conventions. | `directories::ProjectDirs::from("io", "fluent", "Fluent")` in `crates/fluent-gui/src/settings.rs`; Linux path verified as `~/.config/fluent/settings.json`. |
 | The GUI can start without any model installed. | Installed release binary launched for 6 s under Wayland with a temp HOME and empty model directories; it stayed up and emitted no errors. |
 | A missing model produces an actionable error. | `Error::ModelNotFound(path)` and `Error::MissingModelFile { dir, hint }` are surfaced in the GUI error banner. |
@@ -105,6 +106,7 @@ application read user-owned configuration from `~/.config/fluent`.
 | GUI launch | Yes (Wayland, installed payload) | Not run | Not run |
 | Installer | Yes (temp HOMEs, spaces, uninstall) | Not provided | Best-effort script; **untested** |
 | Desktop entry | Yes (`desktop-file-validate`) | N/A | N/A |
+| Portable archive build | Yes (generated, checksum verified, extracted and launched) | N/A | N/A |
 | Models/config separation | Yes | Documented only | Documented only |
 | CUDA | Feature compiles? Not built this cycle | Not run | N/A |
 | Metal | N/A | N/A | Not run |
@@ -126,31 +128,38 @@ installing a new toolchain; that was out of scope.
 
 - **Chosen now:** per-user source build + installer + desktop integration.
   This is validated and does not require root.
-- **Next format:** a portable `tar.gz` containing the release binary, `LICENSE`,
-  a configuration template, and a short README. It is straightforward and can
-  be tested locally without FUSE or sandbox runtimes. Not implemented this
-  cycle.
+- **Implemented:** a portable application-only `tar.gz` via
+  `scripts/package-linux.sh` (binary, `LICENSE`, runtime README; no models or
+  configuration). It has deterministic tar metadata, path remapping, a SHA-256
+  file and a validated extraction/launch test. The current host build requires
+  glibc 2.43; older distributions need a rebuild on an older baseline.
 - **AppImage:** deferred. Requires `linuxdeploy`/`appimagetool`, additional
   validation, and a decision on how models and config are supplied.
 - **Flatpak:** deferred. Requires a manifest, runtime selection, portal
   permissions, and a model-storage strategy outside the sandbox.
-- No artifact was produced, uploaded, or published in this cycle.
+- No artifact was uploaded or published. The local archive was generated, checksummed, extracted and launched for validation; it remains untracked under `dist/`.
 
 ## 6. Remaining blockers
 
-1. **Model and tokenizer licensing** — NLLB-200 assets are CC-BY-NC-4.0. The
-   repository currently commits tokenizer/model-card files; public
-   redistribution needs legal review or removal with a working alternative.
+1. **NLLB licensing in Git history** — the working tree no longer contains
+   NLLB assets (Cycle 7), but earlier commits do. A public Git repository or
+   full-history clone still redistributes them. A release decision is needed:
+   rewrite history for a release mirror, or distribute the source archive from
+   HEAD only. The model weights remain CC-BY-NC-4.0 and user-supplied.
 2. **Windows runtime validation** — no MSVC toolchain or Windows machine.
 3. **macOS build/bundle/signing** — no macOS machine; no `.app`, `.icns`,
    universal binary, codesigning, or notarization.
 4. **Official icon/logo** — no brand asset exists; the `--icon` path is ready
    but intentionally unused.
-5. **Model acquisition** — no downloader; see `MODEL_PROVENANCE.md` for the
+5. **glibc portability** — the archive built on this host requires glibc 2.43
+   (strongest symbol is `atan2f`), so it will not run on Ubuntu 24.04 (2.39) or
+   older. A release build on an older baseline or container is required for
+   broader Linux support.
+6. **Model acquisition** — no downloader; see `MODEL_PROVENANCE.md` for the
    required consent/checksum workflow.
-6. **Installer signing/checksums** — source installs do not need them, but
-   packaged artifacts will.
-7. **CI execution** — a workflow is added, but it cannot run locally; only
+7. **Release signing/checksums** — the archive has a SHA-256 file, but no
+   signature or trusted release channel yet.
+8. **CI execution** — a workflow is added, but it cannot run locally; only
    syntax was validated here.
 
 ## 7. Unverified assumptions
@@ -161,6 +170,10 @@ installing a new toolchain; that was out of scope.
   user's environment).
 - macOS Apple Silicon CPU inference is functional through the scalar Q8 path.
   It has not been executed on Apple hardware.
-- The tokenizer assets are covered by the NLLB CC-BY-NC-4.0 release terms. This
-  is the most plausible reading of the model card but has not been reviewed by
-  counsel.
+- The NLLB tokenizer/config files were covered by the CC-BY-NC-4.0 release
+  terms. This was the most plausible reading of the model card but was not
+  reviewed by counsel; the files are now out of the working tree regardless.
+- The packaged source archive at HEAD is free of NLLB-derived assets; the Git
+  history is not.
+- The portable archive only runs on glibc 2.43 or newer until it is rebuilt on
+  an older baseline.
