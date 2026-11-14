@@ -1,4 +1,31 @@
-./target/
-./models/
+# Rust build output
+/target/
+
+# Local NLLB-200 model assets (multi-gigabyte, never commit). The README
+# explains the required user-supplied layout and is intentionally tracked.
+/models/*
+!/models/README.md
+*.gguf
+*.safetensors
+*.bin
+*.pth
+
+# Python legacy components
 __pycache__/
-*.pyc
+*.py[cod]
+.venv/
+venv/
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# Distribution artifacts (never commit generated packages)
+/dist/
+*.AppImage
+*.deb
+*.rpm

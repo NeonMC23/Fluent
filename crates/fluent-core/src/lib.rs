@@ -17,8 +17,9 @@ use std::path::PathBuf;
 pub use config::ProjectConfig;
 pub use detect::Detection;
 pub use engine::{
-    estimate_memory, memory_info, DeviceChoice, Engine, EngineConfig, EngineStatus, MemoryEstimate,
-    MemoryInfo, Precision, Progress, ProgressStage, TranslationRequest, TranslationResult,
+    default_generation_budget, estimate_memory, estimate_memory_for_choice, memory_info,
+    DeviceChoice, Engine, EngineConfig, EngineStatus, MemoryEstimate, MemoryInfo, Precision,
+    Progress, ProgressStage, TranslationRequest, TranslationResult,
 };
 pub use languages::{find_language, languages, popular_languages};
 pub use tokenizer::NllbTokenizer;
@@ -132,5 +133,28 @@ impl std::str::FromStr for Mode {
             "accurate" | "3.3b" => Ok(Self::Accurate),
             other => Err(Error::Config(format!("unknown translation mode: {other}"))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mode_parsing_accepts_labels_and_model_sizes() {
+        assert_eq!("fast".parse::<Mode>().unwrap(), Mode::Fast);
+        assert_eq!("FAST".parse::<Mode>().unwrap(), Mode::Fast);
+        assert_eq!("1.3B".parse::<Mode>().unwrap(), Mode::Fast);
+        assert_eq!("accurate".parse::<Mode>().unwrap(), Mode::Accurate);
+        assert_eq!(" 3.3b ".parse::<Mode>().unwrap(), Mode::Accurate);
+        assert!("medium".parse::<Mode>().is_err());
+    }
+
+    #[test]
+    fn mode_labels_are_stable() {
+        assert_eq!(Mode::Fast.as_str(), "fast");
+        assert_eq!(Mode::Accurate.as_str(), "accurate");
+        assert_eq!(Mode::Fast.label(), "Fast");
+        assert_eq!(Mode::Accurate.model_label(), "NLLB-200 3.3B");
     }
 }

@@ -1,0 +1,79 @@
+name: CI
+
+# Validation only. No model downloads, secrets, signing, artifacts or releases.
+# Linux is built on Ubuntu 22.04 and checked against the GLIBC_2.35 baseline.
+# Windows/macOS jobs compile and test the full workspace and release GUI, but
+# they are not runtime validation; no GUI has been launched there by this
+# project yet.
+
+on:
+  push:
+    branches:
+      - main
+      - "finalization/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux quality gates
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config cmake \
+            libxkbcommon-dev libwayland-dev \
+            libx11-dev libxcursor-dev libxi-dev libxrandr-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libfontconfig1-dev \
+            desktop-file-utils
+      - name: Verify branding assets
+        run: python3 scripts/verify-branding-assets.py
+      - name: Formatting
+        run: cargo fmt --all -- --check
+      - name: Check workspace
+        run: cargo check --workspace
+      - name: Tests (no model required)
+        run: cargo test --workspace
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Release GUI build
+        run: cargo build --release -p fluent-gui
+      - name: Verify GLIBC 2.35 baseline
+        run: ./scripts/check-linux-baseline.sh target/release/fluent 2.35
+      - name: Installer tests
+        run: ./scripts/test-installer.sh
+      - name: Portable archive smoke test
+        run: |
+          ./scripts/package-linux.sh --skip-build
+          (cd dist && sha256sum -c ./*.sha256)
+
+  desktop-build:
+    name: Desktop compile/test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Tests (no model required)
+        run: cargo test --workspace
+      - name: Release GUI build
+        run: cargo build --release -p fluent-gui
+      - name: Stage macOS bundle (resource check)
+        if: runner.os == 'macOS'
+        run: ./scripts/package-macos.sh --skip-build
+      # Compilation and tests only. GUI launch, Metal, signing and
+      # notarization require real platform validation and are not claimed.

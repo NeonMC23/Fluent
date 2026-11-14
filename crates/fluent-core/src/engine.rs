@@ -22,19 +22,14 @@ use crate::{Error, Mode, Result};
 // ---------------------------------------------------------------------------
 
 /// Numerical precision used for the weights.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Precision {
     /// f32 for the 1.3B model on CPU, f16 for the 3.3B model or a GPU.
+    #[default]
     Auto,
     F32,
     F16,
-}
-
-impl Default for Precision {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl Precision {
@@ -48,19 +43,14 @@ impl Precision {
 }
 
 /// Device on which the model runs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum DeviceChoice {
     /// First available GPU, otherwise CPU.
+    #[default]
     Auto,
     Cpu,
     Cuda(usize),
     Metal(usize),
-}
-
-impl Default for DeviceChoice {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl DeviceChoice {
@@ -83,8 +73,9 @@ pub struct EngineConfig {
     pub precision: Precision,
     /// Maximum length of the source sequence (tokens).
     pub max_length: usize,
-    /// Maximum number of generated tokens.
-    pub max_new_tokens: usize,
+    /// Maximum number of generated tokens. `None` derives a length-aware
+    /// budget from the encoded source.
+    pub max_new_tokens: Option<usize>,
     /// Beam search width.
     pub num_beams: usize,
 }
@@ -97,7 +88,7 @@ impl EngineConfig {
             device: DeviceChoice::Auto,
             precision: Precision::Auto,
             max_length: 512,
-            max_new_tokens: 512,
+            max_new_tokens: None,
             num_beams: 4,
         }
     }
@@ -106,10 +97,23 @@ impl EngineConfig {
     pub fn from_project(project: &ProjectConfig, mode: Mode) -> Self {
         let mut config = Self::new(mode, project.model_path(mode).to_path_buf());
         config.max_length = project.max_length;
-        config.max_new_tokens = project.max_length;
+        config.max_new_tokens = project.max_new_tokens;
         config.num_beams = project.num_beams;
         config
     }
+}
+
+/// Length-aware default budget for generated tokens.
+///
+/// A translation is rarely longer than twice its source, so this keeps short
+/// inputs far below the 512-token cap while still leaving room for expansion,
+/// identifiers, and punctuation. The hard cap matches the model's position
+/// table and the previous behaviour.
+pub fn default_generation_budget(source_tokens: usize) -> usize {
+    source_tokens
+        .saturating_mul(2)
+        .saturating_add(16)
+        .clamp(16, 512)
 }
 
 // ---------------------------------------------------------------------------
@@ -286,24 +290,67 @@ impl MemoryEstimate {
 }
 
 /// Estimates the memory needed to load a model.
+///
+/// This is the conservative form: it ignores the CPU Q8 weight path, so it
+/// never underestimates on a GPU or an unusual build. Use
+/// [`estimate_memory_for_choice`] when the target device is known.
 pub fn estimate_memory(model_dir: &Path, precision: Precision) -> Result<MemoryEstimate> {
+    estimate_memory_impl(model_dir, precision, false)
+}
+
+/// Like [`estimate_memory`], but accounts for the CPU Q8 weight path.
+///
+/// Quantized weights are about `9/32` of the f32 footprint, which lets the
+/// 1.3B model run on machines that the unquantized estimate would reject.
+pub fn estimate_memory_for_choice(
+    model_dir: &Path,
+    precision: Precision,
+    device: DeviceChoice,
+) -> Result<MemoryEstimate> {
+    let config = crate::model::nllb::NllbConfig::from_dir(model_dir)?;
+    let precision = resolve_precision(precision, config.d_model);
+    let on_cpu = match device {
+        DeviceChoice::Cpu => true,
+        DeviceChoice::Auto => !has_accelerator(),
+        DeviceChoice::Cuda(_) | DeviceChoice::Metal(_) => false,
+    };
+    estimate_memory_impl(model_dir, precision, on_cpu && precision == Precision::F32)
+}
+
+fn resolve_precision(precision: Precision, d_model: usize) -> Precision {
+    match precision {
+        Precision::Auto if d_model >= 2048 => Precision::F16,
+        Precision::Auto => Precision::F32,
+        other => other,
+    }
+}
+
+fn has_accelerator() -> bool {
+    cfg!(any(feature = "cuda", feature = "metal"))
+}
+
+/// Fraction of the on-disk f32 size used by the in-memory weights.
+fn weight_factor(precision: Precision, quantized: bool) -> f64 {
+    if quantized {
+        // One i8 per value plus one f32 scale per 32-value block.
+        9.0 / 32.0
+    } else if precision == Precision::F16 {
+        0.5
+    } else {
+        1.0
+    }
+}
+
+fn estimate_memory_impl(
+    model_dir: &Path,
+    precision: Precision,
+    quantized: bool,
+) -> Result<MemoryEstimate> {
     let checkpoint = Checkpoint::discover(model_dir)?;
     let on_disk = checkpoint.on_disk_bytes();
     let config = crate::model::nllb::NllbConfig::from_dir(model_dir)?;
-    let precision = match precision {
-        Precision::Auto => {
-            if config.d_model >= 2048 {
-                Precision::F16
-            } else {
-                Precision::F32
-            }
-        }
-        other => other,
-    };
-    let factor = match precision {
-        Precision::F16 => 0.5,
-        _ => 1.0,
-    };
+    let precision = resolve_precision(precision, config.d_model);
+    let factor = weight_factor(precision, quantized);
     let weights_mb = (on_disk as f64 * factor / (1024.0 * 1024.0)).ceil() as u64;
     let overhead_mb = (weights_mb / 10).max(768);
     let needed_mb = weights_mb + overhead_mb;
@@ -389,7 +436,11 @@ impl Engine {
         let device = resolve_device(self.config.device)?;
         let dtype = resolve_dtype(self.config.precision, &device, nllb_config.d_model);
 
-        let estimate = estimate_memory(&self.config.model_dir, self.config.precision)?;
+        let estimate = estimate_memory_impl(
+            &self.config.model_dir,
+            self.config.precision,
+            crate::model::quant::quantization_enabled(&device, dtype),
+        )?;
         if !estimate.fits() {
             return Err(Error::OutOfMemory {
                 needed_mb: estimate.needed_mb,
@@ -541,9 +592,15 @@ impl Engine {
             Some(0.0),
             "Generating translation",
         ));
+        let generation_budget = self
+            .config
+            .max_new_tokens
+            .map(|value| value.clamp(1, 1024))
+            .unwrap_or_else(|| default_generation_budget(source_ids.len()));
         let options = GenerateOptions {
-            max_new_tokens: self.config.max_new_tokens.max(1),
+            max_new_tokens: generation_budget,
             num_beams: self.config.num_beams.max(1),
+            early_stopping: Default::default(),
         };
         let tokens = loaded.model.generate(
             &loaded.tokenizer,
@@ -682,4 +739,114 @@ fn dtype_label(dtype: DType) -> String {
         other => return format!("{other:?}").to_lowercase(),
     }
     .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_model_directory_is_reported_without_starting_a_load() {
+        let dir = std::env::temp_dir().join(format!(
+            "fluent-missing-model-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut engine = Engine::new(EngineConfig::new(Mode::Fast, &dir));
+        let cancel = AtomicBool::new(false);
+        let error = engine
+            .load(&mut |_| {}, &cancel)
+            .expect_err("missing model must fail");
+        match error {
+            Error::ModelNotFound(reported) => assert_eq!(reported, dir),
+            other => panic!("unexpected error: {other}"),
+        }
+        assert!(!engine.is_loaded());
+    }
+
+    #[test]
+    fn available_memory_adds_free_swap() {
+        let info = MemoryInfo {
+            available_mb: Some(8_000),
+            swap_free_mb: Some(2_000),
+            total_mb: Some(16_000),
+        };
+        assert_eq!(info.available_with_swap_mb(), Some(10_000));
+    }
+
+    #[test]
+    fn available_memory_tolerates_partial_information() {
+        let without_swap = MemoryInfo {
+            available_mb: Some(4_000),
+            swap_free_mb: None,
+            total_mb: None,
+        };
+        assert_eq!(without_swap.available_with_swap_mb(), Some(4_000));
+
+        let unknown = MemoryInfo::default();
+        assert_eq!(unknown.available_with_swap_mb(), None);
+    }
+
+    #[test]
+    fn memory_estimate_compares_against_available_memory() {
+        let estimate = MemoryEstimate {
+            weights_mb: 5_000,
+            overhead_mb: 1_000,
+            needed_mb: 6_000,
+            info: MemoryInfo {
+                available_mb: Some(7_000),
+                swap_free_mb: Some(1_000),
+                total_mb: Some(16_000),
+            },
+        };
+        assert!(estimate.fits());
+
+        let too_big = MemoryEstimate {
+            needed_mb: 10_000,
+            ..estimate
+        };
+        assert!(!too_big.fits());
+    }
+
+    #[test]
+    fn generation_budget_scales_with_source_length() {
+        assert_eq!(default_generation_budget(0), 16);
+        assert_eq!(default_generation_budget(1), 18);
+        assert_eq!(default_generation_budget(12), 40);
+        assert_eq!(default_generation_budget(100), 216);
+        assert_eq!(default_generation_budget(400), 512);
+        assert_eq!(default_generation_budget(usize::MAX), 512);
+    }
+
+    #[test]
+    fn quantized_weights_shrink_the_estimated_footprint() {
+        assert!((weight_factor(Precision::F32, true) - 9.0 / 32.0).abs() < 1e-9);
+        assert_eq!(weight_factor(Precision::F32, false), 1.0);
+        assert_eq!(weight_factor(Precision::F16, false), 0.5);
+        // Quantization wins over the requested precision on CPU f32.
+        assert_eq!(weight_factor(Precision::F16, true), 9.0 / 32.0);
+    }
+
+    #[test]
+    fn automatic_precision_follows_the_model_size() {
+        assert_eq!(resolve_precision(Precision::Auto, 1024), Precision::F32);
+        assert_eq!(resolve_precision(Precision::Auto, 2048), Precision::F16);
+        assert_eq!(resolve_precision(Precision::F32, 4096), Precision::F32);
+        assert_eq!(resolve_precision(Precision::F16, 1024), Precision::F16);
+    }
+
+    #[test]
+    fn source_and_generation_limits_are_independent() {
+        let project = ProjectConfig {
+            max_length: 64,
+            max_new_tokens: Some(200),
+            ..ProjectConfig::default()
+        };
+        let config = EngineConfig::from_project(&project, Mode::Fast);
+        assert_eq!(config.max_length, 64);
+        assert_eq!(config.max_new_tokens, Some(200));
+    }
 }

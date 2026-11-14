@@ -75,3 +75,29 @@ fn map_language(lang: Lang, script: Script) -> Option<&'static str> {
         .map(|language| language.code)
         .or_else(|| crate::languages::find_by_iso3(iso3, None).map(|language| language.code))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_french_sentence() {
+        let detection = detect("Bonjour, comment allez-vous aujourd'hui ?").expect("detection");
+        assert_eq!(detection.code, "fra_Latn");
+        assert!(detection.confidence > 0.0);
+    }
+
+    #[test]
+    fn detects_chinese_as_simplified() {
+        let detection = detect("你好，今天天气很好。").expect("detection");
+        assert_eq!(detection.code, "zho_Hans");
+        assert_eq!(detection.iso3, "cmn");
+    }
+
+    #[test]
+    fn very_short_input_is_not_detected() {
+        assert!(detect("").is_none());
+        assert!(detect("hi").is_none());
+        assert!(detect("1 2 3").is_none());
+    }
+}

@@ -71,3 +71,54 @@ pub fn find_by_iso3(iso3: &str, script: Option<&str>) -> Option<&'static Languag
 pub fn is_supported(code: &str) -> bool {
     find_language(code).is_some()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn language_table_is_populated_and_codes_are_unique() {
+        let all = languages();
+        assert!(
+            all.len() >= 200,
+            "expected 200+ languages, got {}",
+            all.len()
+        );
+        assert!(find_language("eng_Latn").is_some());
+        assert!(find_language("fra_Latn").is_some());
+
+        let mut codes: Vec<&str> = all.iter().map(|language| language.code).collect();
+        codes.sort_unstable();
+        let unique = codes.len();
+        codes.dedup();
+        assert_eq!(
+            codes.len(),
+            unique,
+            "duplicate language codes in languages.tsv"
+        );
+    }
+
+    #[test]
+    fn popular_languages_are_a_subset_of_all_languages() {
+        let popular: Vec<&str> = popular_languages().map(|language| language.code).collect();
+        assert!(!popular.is_empty());
+        for code in popular {
+            assert!(find_language(code).is_some());
+        }
+    }
+
+    #[test]
+    fn language_search_includes_name_native_code_and_iso() {
+        let english = find_language("eng_Latn").expect("English");
+        let haystack = english.search_haystack();
+        assert!(haystack.contains("english"));
+        assert!(haystack.contains("eng_latn"));
+        assert!(haystack.contains("en"));
+    }
+
+    #[test]
+    fn unknown_language_is_not_supported() {
+        assert!(!is_supported("xxx_Yyyy"));
+        assert!(find_language("xxx_Yyyy").is_none());
+    }
+}

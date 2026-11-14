@@ -15,6 +15,9 @@ pub struct ProjectConfig {
     pub fast_model: PathBuf,
     pub accurate_model: PathBuf,
     pub max_length: usize,
+    /// Optional explicit cap on generated tokens. `None` selects a
+    /// length-aware budget derived from the encoded source.
+    pub max_new_tokens: Option<usize>,
     pub num_beams: usize,
 }
 
@@ -31,6 +34,7 @@ impl Default for ProjectConfig {
             default_mode: Mode::Fast,
             theme: "system".to_string(),
             max_length: 512,
+            max_new_tokens: None,
             num_beams: 4,
         }
     }
@@ -55,12 +59,21 @@ struct RawModels {
 #[derive(Debug, Deserialize, Default)]
 struct RawGeneration {
     max_length: Option<usize>,
+    max_new_tokens: Option<usize>,
     num_beams: Option<usize>,
 }
 
 impl ProjectConfig {
     /// Loads `config.json`, searching in order:
-    /// `FLUENT_CONFIG`, the executable directory, its parent, the current directory.
+    /// `FLUENT_CONFIG`, the executable directory, its parent, the platform
+    /// configuration directory, then the current directory.
+    ///
+    /// The platform directory is the same one the GUI uses for
+    /// `settings.json` (`~/.config/fluent` on Linux,
+    /// `~/Library/Application Support/io.fluent.Fluent` on macOS, and
+    /// `%APPDATA%\fluent\Fluent\config` on Windows). Keeping the installed
+    /// configuration there lets application updates replace the program files
+    /// without touching user-owned configuration.
     pub fn load() -> Self {
         for candidate in config_candidates() {
             if candidate.is_file() {
@@ -118,6 +131,9 @@ impl ProjectConfig {
             if let Some(max_length) = generation.max_length {
                 config.max_length = max_length.clamp(16, 1024);
             }
+            if let Some(max_new_tokens) = generation.max_new_tokens {
+                config.max_new_tokens = Some(max_new_tokens.clamp(16, 1024));
+            }
             if let Some(num_beams) = generation.num_beams {
                 config.num_beams = num_beams.clamp(1, 8);
             }
@@ -172,6 +188,9 @@ fn config_candidates() -> Vec<PathBuf> {
             }
         }
     }
+    if let Some(dirs) = directories::ProjectDirs::from("io", "fluent", "Fluent") {
+        candidates.push(dirs.config_dir().join("config.json"));
+    }
     if let Ok(cwd) = std::env::current_dir() {
         candidates.push(cwd.join("config.json"));
     }
@@ -184,5 +203,106 @@ fn resolve_model_path(base_dir: &Path, value: &str) -> PathBuf {
         path
     } else {
         base_dir.join(path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let unique = format!(
+            "fluent-config-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let dir = std::env::temp_dir().join(unique);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn candidates_include_the_platform_config_directory() {
+        // The installer writes config.json to the platform configuration
+        // directory so that application updates do not touch user-owned files.
+        let expected = directories::ProjectDirs::from("io", "fluent", "Fluent")
+            .expect("home directory")
+            .config_dir()
+            .join("config.json");
+        assert!(
+            config_candidates().contains(&expected),
+            "platform config candidate missing: {}",
+            expected.display()
+        );
+    }
+
+    #[test]
+    fn relative_paths_resolve_against_the_config_directory() {
+        let dir = temp_dir("relative");
+        fs::create_dir_all(dir.join("models/nllb-200-1.3b")).unwrap();
+        fs::create_dir_all(dir.join("models/nllb-200-3.3b")).unwrap();
+        fs::write(
+            dir.join("config.json"),
+            r#"{
+                "default_source_language": "auto",
+                "default_target_language": "fra_Latn",
+                "models": {"fast": "models/nllb-200-1.3b", "accurate": "models/nllb-200-3.3b"},
+                "generation": {"max_length": 5000, "max_new_tokens": 5000, "num_beams": 42}
+            }"#,
+        )
+        .unwrap();
+
+        let config = ProjectConfig::load_from(&dir.join("config.json")).unwrap();
+        assert_eq!(config.base_dir, dir);
+        assert_eq!(config.fast_model, dir.join("models/nllb-200-1.3b"));
+        assert_eq!(config.accurate_model, dir.join("models/nllb-200-3.3b"));
+        assert_eq!(config.default_target_language, "fra_Latn");
+        // Out-of-range values are clamped.
+        assert_eq!(config.max_length, 1024);
+        assert_eq!(config.max_new_tokens, Some(1024));
+        assert_eq!(config.num_beams, 8);
+
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn missing_model_directory_falls_back_to_the_conventional_name() {
+        let dir = temp_dir("fallback");
+        fs::create_dir_all(dir.join("models/nllb-200-1.3b")).unwrap();
+        fs::create_dir_all(dir.join("models/nllb-200-3.3b")).unwrap();
+        fs::write(
+            dir.join("config.json"),
+            r#"{"models": {"fast": "elsewhere", "accurate": "elsewhere-too"}}"#,
+        )
+        .unwrap();
+
+        let config = ProjectConfig::load_from(&dir.join("config.json")).unwrap();
+        assert_eq!(config.fast_model, dir.join("models/nllb-200-1.3b"));
+        assert_eq!(config.accurate_model, dir.join("models/nllb-200-3.3b"));
+        assert_eq!(config.max_new_tokens, None);
+
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn invalid_generation_values_are_ignored() {
+        let dir = temp_dir("generation");
+        fs::write(
+            dir.join("config.json"),
+            r#"{"default_mode": "unknown", "generation": {"max_length": 1, "max_new_tokens": 1, "num_beams": 0}}"#,
+        )
+        .unwrap();
+
+        let config = ProjectConfig::load_from(&dir.join("config.json")).unwrap();
+        assert_eq!(config.default_mode, Mode::Fast);
+        assert_eq!(config.max_length, 16);
+        assert_eq!(config.max_new_tokens, Some(16));
+        assert_eq!(config.num_beams, 1);
+
+        fs::remove_dir_all(dir).ok();
     }
 }
