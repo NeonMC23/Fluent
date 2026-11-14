@@ -143,8 +143,8 @@ cd fluent-*-linux-*/
 ```
 
 The archive contains only the executable, `LICENSE` and a runtime README. It
-does not include models or tokenizer assets, and the current build requires
-glibc 2.43 or newer. See [docs/LINUX.md](docs/LINUX.md) for details.
+does not include models or tokenizer assets. The canonical build targets
+Ubuntu 22.04 / glibc 2.35. See [docs/LINUX.md](docs/LINUX.md) for details.
 
 ### Uninstall
 
@@ -374,6 +374,8 @@ the unresolved tokenizer-redistribution question.
 ## 📦 Distribution Documentation
 
 - [Distribution audit and architecture](docs/DISTRIBUTION_AUDIT.md)
+- [Platform support matrix](docs/PLATFORM_SUPPORT.md)
+- [Release integrity and historical assets](docs/RELEASE_INTEGRITY.md)
 - [Linux installation](docs/LINUX.md)
 - [Windows build guide](docs/WINDOWS.md)
 - [macOS build guide](docs/MACOS.md)

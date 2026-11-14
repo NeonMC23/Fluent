@@ -66,6 +66,13 @@ under `~/Library/Application Support/io.fluent.Fluent/app`, but **it has not
 been tested**. Manual `cargo build` plus a config file is the supported path
 for now.
 
+## CI and validation status
+
+The CI workflow defines a `macos-latest` job that runs
+`cargo test --workspace` and a release GUI build. It has **not executed on
+GitHub**, and no macOS GUI has been launched. Compilation is not runtime
+validation; Metal, universal binaries and bundles remain untested.
+
 ## Packaging, signing and notarization
 
 There is no `.app` bundle, `.icns` icon, universal binary, code signature,

@@ -75,10 +75,17 @@ A minimal configuration with absolute paths:
 
 Use doubled backslashes in JSON. Models are not downloaded or bundled.
 
+## CI and validation status
+
+The CI workflow defines a `windows-latest` job that runs
+`cargo test --workspace` and a release GUI build. It has **not executed on
+GitHub**, and no Windows GUI has been launched by this project. Compilation is
+not runtime validation.
+
 ## What is missing
 
 - No `.exe` installer, Start Menu shortcut, or uninstaller is provided.
-- No Windows CI/runtime validation has been performed.
+- No Windows runtime validation has been performed.
 - The state of the MSVC runtime on end-user machines has not been audited.
 - CUDA has not been built or run on Windows in this project.
 - The Windows `install.sh` branch of the old installer was untested and has

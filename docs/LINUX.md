@@ -135,24 +135,35 @@ sha256sum -c fluent-<version>-linux-<arch>.tar.gz.sha256
 A checksum proves integrity relative to the channel that supplied it; it is not
 a signature.
 
-### glibc compatibility boundary
+### glibc compatibility baseline
 
-The archive is built on the current host, whose glibc is **2.43**. Its strongest
-symbol requirement is `GLIBC_2.43` (from `atan2f`); older libraries such as
-Ubuntu 24.04's glibc 2.39 **cannot run this exact binary**. To support older
-distributions, rebuild on the oldest glibc you intend to support (for example a
-Debian/Ubuntu container) and rerun the compatibility checks:
+The canonical Cycle 8 archive is built in an **Ubuntu 22.04** container and its
+strongest symbol requirement is **`GLIBC_2.35`**. The gate is:
 
 ```bash
-./scripts/package-linux.sh
-objdump -T target/release/fluent | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1
-ldd target/release/fluent
+./scripts/check-linux-baseline.sh target/release/fluent 2.35
 ```
 
-The binary is a dynamically linked x86-64 PIE. X11/Wayland, OpenGL and font
-libraries are loaded at runtime by `winit`/`glutin`; they do not all appear in
-`ldd`, so the graphical session still needs the development/runtime packages
-listed above. There is no RPATH/RUNPATH pointing into the build tree.
+The binary was also launched successfully inside the Ubuntu 22.04 container
+under Wayland (software GL) with no model installed: it stayed up for the
+6-second timeout and emitted no errors. This is a real runtime check on the
+glibc 2.35 baseline, not only a compile check.
+
+The previous host-built archive (glibc 2.43) is preserved locally under
+`dist/legacy-glibc243/`; it is not the canonical artifact and should not be
+distributed as the compatible build. The current host can also build a binary,
+but it will inherit the host's glibc; use the Ubuntu 22.04 procedure for
+releases.
+
+The binary is a dynamically linked x86-64 PIE with no GLIBCXX/CXXABI
+requirements. X11/Wayland, OpenGL and font libraries are loaded at runtime by
+`winit`/`glutin`; they do not all appear in `ldd`, so the graphical session
+still needs the runtime packages listed above. There is no RPATH/RUNPATH
+pointing into the build tree.
+
+The Ubuntu build is currently a local container procedure, not an automated
+release pipeline. CI now runs on `ubuntu-22.04` and enforces the same baseline
+check, but GitHub Actions has not executed yet.
 
 CPU dispatch is unchanged: the binary contains AVX2/FMA kernels selected by
 runtime detection, with a scalar fallback. It is not compiled with
@@ -239,9 +250,14 @@ tests touched the real user environment.
   binary, `--no-desktop`, `--skip-models` and placeholder-model checks.
 - `scripts/package-linux.sh`: archive created, contents inspected, SHA-256
   verified, extraction and GUI launch tested from a directory containing
-  spaces, and the archive hash reproduced with `--skip-build`. No model or
-  tokenizer asset was present. Runtime dependency/glibc inspection performed
-  with `file`, `readelf`, `ldd` and `objdump`.
+  spaces. No model or tokenizer asset was present. Runtime dependency/glibc
+  inspection performed with `file`, `readelf`, `ldd` and `objdump`.
+- Ubuntu 22.04 container build: complete GUI built against glibc 2.35; maximum
+  required symbol `GLIBC_2.35`; GUI launched under Wayland in the container.
+  `scripts/check-linux-baseline.sh` passes for that binary and fails for the
+  old glibc 2.43 host build, as intended.
+- Portable archive rebuilt from the Ubuntu binary; content and checksum
+  verified, extraction into a path with spaces, GUI launch on the host.
 
 Not validated: other Linux distributions, non-glibc systems, ARM Linux, distro
 packaging, AppImage/Flatpak, and desktop environments other than the KDE/Wayland

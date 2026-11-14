@@ -1,8 +1,9 @@
 # Distribution Audit — Cycles 6–7
 
-Status: **Linux foundation implemented and validated; NLLB assets removed from
-HEAD; Windows and macOS unvalidated; public Git-history release still blocked by
-the NLLB assets retained in history.**
+Status: **Linux source and portable archive validated against a glibc 2.35
+baseline; NLLB assets removed from HEAD; Windows and macOS CI definitions exist
+but have not run; public Git-history release still blocked by assets retained in
+history.**
 
 This document records what was verified, what changed in Cycle 6, and what
 remains unknown. It is intentionally conservative: source code compiling on
@@ -101,12 +102,12 @@ application read user-owned configuration from `~/.config/fluent`.
 
 | Area | Linux | Windows | macOS |
 |---|---|---|---|
-| Source build | Yes — `cargo build --release -p fluent-gui` | Not available (no MSVC/target) | Not available (no target) |
+| Source build | Yes — host and Ubuntu 22.04 container (`cargo build --release -p fluent-gui`) | CI job defined; not executed | CI job defined; not executed |
 | Unit/workspace tests | Yes | Not run | Not run |
-| GUI launch | Yes (Wayland, installed payload) | Not run | Not run |
+| GUI launch | Yes — installed payload on host and Ubuntu 22.04 container under Wayland | Not run | Not run |
 | Installer | Yes (temp HOMEs, spaces, uninstall) | Not provided | Best-effort script; **untested** |
 | Desktop entry | Yes (`desktop-file-validate`) | N/A | N/A |
-| Portable archive build | Yes (generated, checksum verified, extracted and launched) | N/A | N/A |
+| Portable archive build | Yes — glibc 2.35 Ubuntu build, checksum verified, extracted and launched; baseline gate passes | N/A | N/A |
 | Models/config separation | Yes | Documented only | Documented only |
 | CUDA | Feature compiles? Not built this cycle | Not run | N/A |
 | Metal | N/A | N/A | Not run |
@@ -130,9 +131,10 @@ installing a new toolchain; that was out of scope.
   This is validated and does not require root.
 - **Implemented:** a portable application-only `tar.gz` via
   `scripts/package-linux.sh` (binary, `LICENSE`, runtime README; no models or
-  configuration). It has deterministic tar metadata, path remapping, a SHA-256
-  file and a validated extraction/launch test. The current host build requires
-  glibc 2.43; older distributions need a rebuild on an older baseline.
+  configuration). The canonical build is produced in Ubuntu 22.04 and requires
+  at most `GLIBC_2.35`, enforced by `scripts/check-linux-baseline.sh`. It has
+  deterministic tar metadata, path remapping, a SHA-256 file, and validated
+  extraction/launch plus Ubuntu-container GUI startup.
 - **AppImage:** deferred. Requires `linuxdeploy`/`appimagetool`, additional
   validation, and a decision on how models and config are supplied.
 - **Flatpak:** deferred. Requires a manifest, runtime selection, portal
@@ -151,16 +153,12 @@ installing a new toolchain; that was out of scope.
    universal binary, codesigning, or notarization.
 4. **Official icon/logo** — no brand asset exists; the `--icon` path is ready
    but intentionally unused.
-5. **glibc portability** — the archive built on this host requires glibc 2.43
-   (strongest symbol is `atan2f`), so it will not run on Ubuntu 24.04 (2.39) or
-   older. A release build on an older baseline or container is required for
-   broader Linux support.
-6. **Model acquisition** — no downloader; see `MODEL_PROVENANCE.md` for the
+5. **Model acquisition** — no downloader; see `MODEL_PROVENANCE.md` for the
    required consent/checksum workflow.
-7. **Release signing/checksums** — the archive has a SHA-256 file, but no
+6. **Release signing/checksums** — the archive has a SHA-256 file, but no
    signature or trusted release channel yet.
-8. **CI execution** — a workflow is added, but it cannot run locally; only
-   syntax was validated here.
+7. **CI execution** — Linux/Windows/macOS jobs are defined but have not run on
+   GitHub; only YAML syntax and local commands were validated here.
 
 ## 7. Unverified assumptions
 
@@ -175,5 +173,6 @@ installing a new toolchain; that was out of scope.
   reviewed by counsel; the files are now out of the working tree regardless.
 - The packaged source archive at HEAD is free of NLLB-derived assets; the Git
   history is not.
-- The portable archive only runs on glibc 2.43 or newer until it is rebuilt on
-  an older baseline.
+- The portable archive targets glibc 2.35 or newer; older distributions still
+  need a different baseline. Linux distributions other than the build/runtime
+  environments remain untested.

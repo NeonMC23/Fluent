@@ -3,6 +3,26 @@
 No official Fluent logo exists in the repository. This cycle deliberately does
 **not** invent one or add a placeholder that could be mistaken for the brand.
 
+## Cycle 9 confirmed inputs
+
+The project owner has confirmed two brand assets exist in the original local
+project, outside this isolated repository:
+
+| Asset | Inspected metadata | Intended use |
+|---|---|---|
+| `src/logo/logo.png` | PNG, 1024×1024, 8-bit RGBA | Primary icon master; window icon; Linux/Windows/macOS icon source |
+| `src/logo/banner.png` | PNG, 1536×1024, 8-bit RGBA | README/social banner, not an application icon |
+
+They were **not copied** into this repository and no branding was changed in
+Cycle 8. A future cycle must copy them with explicit authorization, add them
+under a tracked `src/logo/` or `assets/branding/` directory, and record their
+provenance (they are project-owned assets, unlike the NLLB model files).
+
+A 1024×1024 PNG is sufficient to generate the Linux 256/512 PNGs, the Windows
+multi-size ICO and the macOS ICNS. An SVG master would scale better for future
+displays but does not exist. The banner is not suitable as an icon because it
+is not square.
+
 ## Current state
 
 | Asset | Status |
