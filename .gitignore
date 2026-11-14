@@ -1,8 +1,10 @@
 # Rust build output
 /target/
 
-# Local NLLB-200 model weights (multi-gigabyte, never commit)
-/models/
+# Local NLLB-200 model assets (multi-gigabyte, never commit). The README
+# explains the required user-supplied layout and is intentionally tracked.
+/models/*
+!/models/README.md
 *.gguf
 *.safetensors
 *.bin

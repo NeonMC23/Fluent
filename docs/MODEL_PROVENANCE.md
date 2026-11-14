@@ -1,102 +1,117 @@
-# Model Provenance and Licensing
+# Model Provenance and Licensing — Cycle 7 Audit
 
-This document records the known provenance of every asset shipped with Fluent
-and the restrictions that apply to distribution. It is a release-blocking
-document: **Fluent source code is MIT-licensed, but the NLLB-200 assets are
-not.**
+This document records the evidence available for every NLLB-derived asset, what
+was removed from the working tree, and what remains unresolved. It is an
+engineering audit, not legal advice.
 
-No model weights were downloaded, copied, packaged, or committed during
-Cycle 6. The real 1.3B weights used for validation remain at their original
-read-only location outside the repository.
+No model weights were downloaded, copied, packaged, or committed during Cycle 7.
+The real 1.3B weights used for validation remained at their original read-only
+location outside the repository.
 
-## 1. Asset table
+## 1. What was committed at the Cycle 6 baseline
 
-| Asset | Known source | Known license | Distribution status |
-|---|---|---|---|
-| Rust source (`crates/`, `install.sh`, docs) | This repository | MIT (`LICENSE`) | Redistributable under MIT |
-| NLLB-200 1.3B weights | Meta AI, `facebook/nllb-200-1.3B` (Hugging Face) | **CC-BY-NC-4.0** (model card: `license: "cc-by-nc-4.0"`, “License: CC-BY-NC”) | **Not redistributed.** 1-byte placeholder only; user supplies the real file |
-| NLLB-200 3.3B weights | Meta AI, `facebook/nllb-200-3.3B` (Hugging Face) | **CC-BY-NC-4.0** | **Not redistributed.** 1-byte placeholders only |
-| Tokenizer: `tokenizer.json`, `sentencepiece.bpe.model`, `special_tokens_map.json`, `tokenizer_config.json` | NLLB-200 release (the model card states “SentencePiece model is released along with NLLB-200”) | **Believed CC-BY-NC-4.0**, inherited from the NLLB release; not independently reviewed | **Currently committed under `models/`.** Public redistribution requires legal confirmation or removal with a compatible replacement |
-| Model `config.json`, `generation_config.json`, `pytorch_model.bin.index.json` | NLLB-200 release | Believed CC-BY-NC-4.0 | Committed with the tokenizer; same blocker |
-| NLLB model cards (`models/*/README.md`) | NLLB-200 release | Believed CC-BY-NC-4.0 (contains the license statement) | Committed; same blocker |
-| Screenshots (`src/image1.png`, `src/image2.png`) | This project | MIT with the source (project asset) | Redistributable |
-| `candle-core`, `candle-nn` | Candle project | MIT OR Apache-2.0 | Redistributable per crate license |
-| `eframe`, `egui` | egui project | MIT OR Apache-2.0 | Redistributable per crate license |
-| `serde`, `serde_json`, `thiserror`, `rayon`, `directories` | crates.io | MIT OR Apache-2.0 | Redistributable per crate license |
-| `tokenizers` | Hugging Face | Apache-2.0 | Redistributable per crate license |
-| `whatlang` | crates.io | MIT | Redistributable per crate license |
-| CUDA toolkit / NVIDIA runtime (optional feature) | NVIDIA | NVIDIA license | Not redistributed; user installs it |
-| Metal (optional feature) | Apple SDK / OS | Apple SDK terms | Not redistributed; built by the user on macOS |
+`git ls-files models` listed:
 
-The table covers direct dependencies only. Transitive crates keep their own
-licenses; a full `cargo-about`/`cargo-deny` audit is a packaging task.
+| Group | Files |
+|---|---|
+| NLLB 1.3B / 3.3B tokenizer | `tokenizer.json` (~17 MB each), `sentencepiece.bpe.model` (~4.9 MB each), `special_tokens_map.json`, `tokenizer_config.json` |
+| NLLB model configuration | `config.json`, `generation_config.json` (1.3B), `pytorch_model.bin.index.json` (3.3B) |
+| NLLB model cards / metadata | `README.md`, `gitattributes` |
+| Weight placeholders | 1-byte `pytorch_model*.bin` files (not weights) |
 
-## 2. Consequences
+Git history shows the files were uploaded in commits dated 2026-10-23
+(`59e7874`, `04fd9ac`, and related “Add files via upload” commits), with no
+per-file license notice.
 
-- **Fluent cannot ship NLLB weights in an installer or archive.** The license is
-  non-commercial and requires attribution; bundling would also make installers
-  multi-gigabyte.
-- **The non-commercial restriction applies to the model assets, not the MIT
-  source.** Using Fluent with locally supplied NLLB weights for research or
-  other non-commercial purposes is consistent with the model card; commercial
-  use requires a separate license from Meta.
-- **The committed tokenizer files are the unresolved part.** They are small
-  enough to be committed, but they originate from the NLLB release. Until the
-  license application is confirmed, publishing the repository or a source
-  archive may redistribute CC-BY-NC material. Options for a future cycle:
-  1. obtain written confirmation that the tokenizer files are covered by the
-     repository's MIT license (unlikely), or
-  2. remove the tokenizer files from the repository and have the installer
-     validate/copy them from a user-supplied model directory, or
-  3. keep the repository private until the model-asset question is resolved.
-  Do not remove the tokenizer files without implementing and testing the
-  user-supplied path; the application must keep working.
-- **The model card states the model is for research** and is not released for
-  production deployment. That is a product-risk statement independent of the
-  license.
+## 2. Evidence table
 
-## 3. Model acquisition design (not implemented)
+| Asset | Source | License evidence | Confidence | Repository status after Cycle 7 | Distribution implication |
+|---|---|---|---|---|---|
+| Fluent Rust source | This repository | Root `LICENSE` is MIT | Confirmed by file | Present | MIT distribution permitted |
+| NLLB-200 1.3B weights | Meta AI, `facebook/nllb-200-1.3B` | Model card: `license: "cc-by-nc-4.0"`, “License: CC-BY-NC” | High | **Never committed**; user-supplied | Non-commercial restriction; Fluent does not redistribute or bundle them |
+| NLLB-200 3.3B weights | Meta AI, `facebook/nllb-200-3.3B` | Same model-card license | High | **Never committed**; user-supplied | Non-commercial restriction |
+| `config.json`, `generation_config.json`, `pytorch_model.bin.index.json` | NLLB-200 release on Hugging Face | No separate license; model card is the only statement. Propagation to individual JSON files is an assumption | Medium | **Removed in Cycle 7** | No longer in the working tree; history still contains them |
+| `tokenizer.json` | NLLB-200 release on Hugging Face | Model card states the SentencePiece model is released with NLLB-200; license line is CC-BY-NC-4.0. No per-file notice | Medium; not independently reviewed | **Removed in Cycle 7** | Same as above |
+| `sentencepiece.bpe.model`, `special_tokens_map.json`, `tokenizer_config.json` | NLLB-200 release | Same assumption | Medium | **Removed in Cycle 7** | Same |
+| NLLB model cards (`README.md`) and `gitattributes` | NLLB-200 release | Cards carry the CC-BY-NC-4.0 metadata | Medium | **Removed in Cycle 7** | Same |
+| Weight placeholder files (1 byte) | Created for this repository | Inert placeholder, no model content | High | **Removed in Cycle 7** | None |
+| Screenshots (`src/image1.png`, `src/image2.png`) | This project | MIT with the source | High | Present | Redistributable |
+| Runtime crates | crates.io / projects | See table below | High | Not bundled | Per-crate licenses apply |
+| CUDA toolkit / Metal | NVIDIA / Apple | Vendor terms | High | Not redistributed | Users install/build their own |
 
-A future downloader is only safe when all of the following are true:
+The tokenizer/model-file license conclusion is **not** a legal determination.
+The model card is evidence, not a per-file grant. Public redistribution of the
+repository or a source archive should be reviewed before release.
 
-1. The official source URL and expected file list are documented.
-2. The license text is displayed **before** any download.
-3. The user explicitly accepts the license and the network access.
-4. A trusted checksum manifest (SHA-256) is published separately from the
-   download; TLS alone is not treated as integrity.
-5. Downloads resume safely and are written to a temporary directory.
-6. The complete file set and directory layout are validated before the model is
-   made visible to the engine.
-7. Nothing downloaded is executed.
-8. An existing working model is never overwritten without explicit consent.
-9. Models are stored in the model directory, never inside the application
-   payload.
-10. The UI explains that translation itself remains offline after acquisition.
+## 3. What Cycle 7 changed
 
-**Status: not implemented.** The source, file list, and checksum manifest are
-not established to the standard above, so adding a downloader would create an
-unsafe or legally ambiguous workflow. Users must continue to supply model files
-manually.
+- The entire contents of `models/nllb-200-1.3b/` and `models/nllb-200-3.3b/`
+  were removed from the working tree (43 MB of NLLB assets and placeholders).
+- `models/README.md` (original text, MIT) now explains the user-supplied layout.
+- `.gitignore` ignores `/models/*` except that README, so future model files
+  cannot be committed accidentally.
+- The engine was **not** changed: it already loaded `config.json`,
+  `tokenizer.json`, and a checkpoint from the user-selected model directory.
+  A unit test now pins the actionable error for a missing `tokenizer.json`.
+- No tokenizer asset was replaced with a fake placeholder; the user supplies the
+  real files.
 
-## 4. What the installer does today
+### Important limitation: Git history
 
-- Looks for `nllb-200-1.3b/` and `nllb-200-3.3b/` under `--models-src`
-  (default: the repository's `models/` directory) and under a legacy
-  `~/.fluent/models/`.
-- Rejects directories that contain only placeholder or incomplete files: a
-  checkpoint larger than 1 MB (or a sharded checkpoint with an index) is
-  required.
-- Copies or hard-links the files into the user model directory; it never
-  downloads, modifies, or deletes the source.
-- Leaves model directories untouched on reinstall and uninstall.
+Removing files from HEAD does **not** remove them from earlier commits. A clone
+of the full repository history still downloads the NLLB assets. Resolving that
+requires a deliberate history rewrite for a release repository, or distributing
+a source archive/tarball produced from the current tree rather than the full
+history. History rewriting was not performed in this cycle. This remains a
+release blocker for publishing the Git history publicly.
 
-## 5. Downloads and copies during Cycle 6
+## 4. Why removal is technically safe
+
+- `NllbTokenizer::from_dir` reads only `<model-dir>/tokenizer.json`; the
+  SentencePiece file and tokenizer metadata are not read.
+- `NllbConfig::from_dir` reads `<model-dir>/config.json`.
+- `Checkpoint::discover` reads a single checkpoint or index + shards from
+  `<model-dir>`.
+- The installer copies a complete user-selected model directory.
+- Workspace tests and benchmarks use an explicit model path or no model at all;
+  none require the committed assets.
+- Missing assets produce `ModelNotFound`, `MissingModelFile`,
+  `Error::Config`, or `Tokenizer` errors with the path and a hint.
+- The real 1.3B checkpoint continues to be used read-only for reliability and
+  benchmark smoke tests; it is unaffected by the repository cleanup.
+
+## 5. Runtime dependency licenses
+
+| Dependency | License |
+|---|---|
+| `candle-core`, `candle-nn` | MIT OR Apache-2.0 |
+| `eframe`, `egui` | MIT OR Apache-2.0 |
+| `serde`, `serde_json`, `thiserror`, `rayon`, `directories` | MIT OR Apache-2.0 |
+| `tokenizers` | Apache-2.0 |
+| `whatlang` | MIT |
+
+Transitive dependencies keep their own licenses; a full `cargo-deny` /
+`cargo-about` audit is still a packaging task.
+
+## 6. Consequences
+
+- **Fluent source at HEAD no longer redistributes NLLB tokenizer or model
+  assets.** This is a major improvement over Cycle 6.
+- **Git history still contains them.** Public repository publication requires
+  a history decision (rewrite or archive-only release), which is outside this
+  cycle’s authorization.
+- **The weights remain CC-BY-NC-4.0 and are never bundled.** Users obtain them
+  separately and must comply with the non-commercial terms. Commercial use
+  requires a separate license from Meta.
+- **No downloader exists.** The safe acquisition contract is documented in
+  [MODEL_PACKAGE.md](MODEL_PACKAGE.md); it is not implemented.
+
+## 7. Downloads and copies during Cycle 7
 
 - Model weights downloaded: **NO**
 - Model weights copied into the repository: **NO**
-- Model weights committed: **NO**
 - Model weights packaged: **NO**
-- Tokenizer assets added or modified: **NO**
-- Real weights used: **read-only**, at
-  `/home/neon/Documents/CODE LOCAL/Fluent/models/nllb-200-1.3b`, for existing
-  reliability and benchmark checks only.
+- Tokenizer assets added: **NO**
+- NLLB-derived assets removed from HEAD: **YES** (43 MB)
+- Real weights used: **read-only**, external path, reliability/benchmark smoke
+  tests only
