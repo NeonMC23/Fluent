@@ -187,10 +187,12 @@ version. Test builds are produced as **GitHub Actions workflow artifacts**:
    `fluent-macos`, or the combined `fluent-release-candidate` artifact
    from the run summary. They expire after 14 days.
 
-These are not release assets. The latest successful run is
+These are not release assets. Successful runs include
 [43605074905](https://github.com/NeonMC23/Fluent/actions/runs/43605074905)
-(commit `ae1dfcb`): Linux, Windows and macOS builds plus the aggregate release
-candidate all passed. The Linux artifact is an application-only tar.gz;
+(code commit `ae1dfcb`) and
+[43606018556](https://github.com/NeonMC23/Fluent/actions/runs/43606018556)
+(follow-up): Linux, Windows, macOS and the aggregate release candidate all
+passed. The Linux artifact is an application-only tar.gz;
 Windows is a portable ZIP; macOS is an `.app` ZIP whose filename records the
 runner architecture (the current `macos-latest` matrix produces arm64). Models
 are never included. Verify checksums and, when present, Minisign signatures using

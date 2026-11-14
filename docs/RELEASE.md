@@ -60,10 +60,12 @@ release explicitly.
 
 The workflow has run successfully on GitHub:
 
-- **Run:** [43605074905](https://github.com/NeonMC23/Fluent/actions/runs/43605074905)
-- **Commit:** `ae1dfcb9bb45c35c6ef0c833edeac3c665a3c26b`
-- **Result:** all four jobs succeeded — Linux, Windows, macOS and Release
-  integrity.
+- **Runs:** [43605074905](https://github.com/NeonMC23/Fluent/actions/runs/43605074905)
+  on code commit `ae1dfcb9…`, and the documentation follow-up
+  [43606018556](https://github.com/NeonMC23/Fluent/actions/runs/43606018556)
+  on `b104b398…`.
+- **Result:** all four jobs succeeded in both runs — Linux, Windows, macOS and
+  Release integrity.
 - **Artifacts (14-day retention):** `fluent-linux-x86_64` (7,894,473 B),
   `fluent-windows-x86_64` (5,670,791 B), `fluent-macos` (6,581,518 B), and
   `fluent-release-candidate` (20,147,653 B).
@@ -228,7 +230,8 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - [ ] Model/package/licensing notices current.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [ ] README, CHANGELOG and VERSIONING current.
-- [x] GitHub Actions run 43605074905 completed successfully for all four jobs.
+- [x] GitHub Actions runs 43605074905 and 43606018556 completed successfully
+  for all four jobs.
 - [ ] Artifact bytes downloaded and inspected by the owner (GitHub auth needed).
 - [ ] Release published/tagged only after explicit owner authorization.
 

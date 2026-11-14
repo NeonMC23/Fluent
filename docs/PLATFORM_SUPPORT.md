@@ -12,8 +12,9 @@ CI definitions, CI execution and actual GUI runtime validation.
 | Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP) | **Yes** (run 43605074905) | **No** | Portable ZIP; no installer |
 | macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP) | **Yes** (run 43605074905) | **No** | `.app` ZIP; unsigned; Intel not produced |
 
-The latest successful GitHub run is `43605074905` on commit `ae1dfcb`.
-Compilation/build success is still not Windows or macOS runtime validation.
+Successful GitHub runs include `43605074905` (code commit `ae1dfcb`) and the
+documentation follow-up `43606018556`. Compilation/build success is still not
+Windows or macOS runtime validation.
 
 ## Linux
 
