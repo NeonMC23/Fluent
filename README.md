@@ -33,18 +33,19 @@ Translate across **190+ languages and dialects** with a clean desktop interface,
 | 🎨 **Customizable appearance** | Light, dark, and system themes, plus accent colors. |
 | 🚀 **Optional GPU acceleration** | CUDA on supported NVIDIA systems or Metal on Apple Silicon. |
 | 🔒 **Local-first privacy** | Translation inference runs on your device, without a cloud translation API. |
-| 🧩 **Self-contained installation** | Install the executable, configuration, and model directories under your chosen installation folder. |
+| 🧩 **Clean per-user installation** | The application, configuration, and models live in separate, predictable locations. Uninstall never deletes your models or settings. |
 
 ## ▸ Getting Started
 
 ### Requirements
 
-- Rust 1.85 or newer and Cargo.
-- A C toolchain for native dependencies.
+- Rust 1.85 or newer and Cargo, plus `bash` for the installer.
+- A C/C++ toolchain, `pkg-config` and `cmake` for native dependencies.
 - Sufficient disk space and memory for the model you intend to use.
-- On Linux, the required X11 or Wayland development libraries and an OpenGL driver when building from source.
+- On Linux, X11 or Wayland development libraries and an OpenGL 3.3-capable driver when building from source.
+- On Windows and macOS, see the platform guides linked below. Linux is the validated target; Windows and macOS have not been runtime-tested.
 
-The installer builds the desktop application, but **does not download model weights**. You must provide the supported model files separately.
+The installer builds the desktop application, but **does not download model weights**. You must provide the supported model files separately. See [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md) for the NLLB license terms.
 
 ### 1. Clone the repository
 
@@ -60,9 +61,21 @@ chmod +x install.sh
 ./install.sh
 ```
 
-By default, Fluent installs under `~/.fluent`.
+On Linux the default layout separates each kind of file:
 
-The installer builds the GUI in release mode, installs the executable, creates the model directories, and copies or hard-links available model files from the repository's `models/` directory.
+```text
+~/.local/lib/fluent/fluent                 application
+~/.local/bin/fluent                        launcher
+~/.config/fluent/config.json               configuration (user-owned)
+~/.config/fluent/settings.json             preferences
+~/.local/share/fluent/models/              models (user-owned)
+~/.local/share/applications/io.fluent.Fluent.desktop
+```
+
+`XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME` are respected. The
+installer requires no root privileges, is safe to run again, preserves existing
+configuration and models, and never deletes user data. See
+[docs/LINUX.md](docs/LINUX.md) for the full Linux guide.
 
 ### 3. Add the models
 
@@ -73,52 +86,72 @@ Fluent supports two translation engines:
 | ⚡ **Fast** | `facebook/nllb-200-1.3B` | 5.2 GB | Lower-memory systems |
 | 🎯 **Accurate** | `facebook/nllb-200-3.3B` | 17.5 GB | Systems with more memory or GPU resources |
 
-> **Model license:** Meta releases the NLLB-200 model weights under
+> **Model license:** Meta releases the NLLB-200 weights under
 > **CC BY-NC 4.0 (non-commercial)**. Fluent's MIT license covers the
 > application code only. Fluent does not bundle or redistribute model
-> weights; download them from Hugging Face and comply with the model
-> license. Check the license before using Fluent for commercial work.
+> weights. Check the license before using Fluent for commercial work. See
+> [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md), including the
+> unresolved tokenizer-asset question.
 
 Place each model's files in the corresponding directory:
 
 ```text
-~/.fluent/
-├── bin/
-│   └── fluent
-├── config.json
-└── models/
-    ├── nllb-200-1.3b/
-    └── nllb-200-3.3b/
+~/.local/share/fluent/models/
+├── nllb-200-1.3b/
+└── nllb-200-3.3b/
 ```
 
-Each model directory must contain the required model configuration, tokenizer, and supported checkpoint files. Sharded checkpoints are supported.
+Each model directory must contain the required model configuration, tokenizer,
+and supported checkpoint files. Sharded checkpoints are supported. The
+installer validates that a real checkpoint exists and refuses to install
+placeholder-only directories.
 
-If the installer did not find models in the repository, place them in the installed `models/` directory after installation.
+Alternatively, point the installer at an existing model source:
+
+```bash
+./install.sh --models-src /path/to/models
+```
+
+A legacy `~/.fluent/models` directory is detected automatically and used as a
+read-only source. The old directory is never modified or deleted.
 
 ### 4. Launch Fluent
 
 ```bash
-~/.fluent/bin/fluent
+~/.local/bin/fluent
 ```
 
-The models are loaded on demand when you perform your first translation.
+Or launch **Fluent** from the desktop application menu. The models are loaded
+on demand when you perform your first translation. The GUI starts even when no
+model is installed and shows an actionable error on the first translation.
+
+### Uninstall
+
+```bash
+./uninstall.sh
+```
+
+This removes the application, launcher, desktop entry and installer-provided
+icon. It always preserves `config.json`, `settings.json` and the model
+directory. See [docs/LINUX.md](docs/LINUX.md) for migration from the old
+`~/.fluent` layout.
 
 ### Installer options
 
 | Option | Purpose |
 | --- | --- |
 | `--cuda` | Build with NVIDIA CUDA support; requires the CUDA toolkit and `nvcc`. |
-| `--metal` | Build with Metal support for Apple Silicon. |
+| `--metal` | Build with Metal support (macOS only). |
+| `--binary FILE` | Install a prebuilt executable instead of building. |
 | `--skip-build` | Reuse an existing `target/release/fluent` binary. |
-| `--skip-models` | Create empty model directories without installing models. |
-| `--install-dir DIR` | Choose a custom installation directory. |
-
-You can also override the model source and installation location:
-
-```bash
-FLUENT_MODELS_SRC=/path/to/models ./install.sh
-FLUENT_INSTALL_DIR=/path/to/install ./install.sh
-```
+| `--models-src DIR` | Model source containing `nllb-200-1.3b/` and `nllb-200-3.3b/`. |
+| `--skip-models` | Create empty model directories only. |
+| `--icon FILE` | Install an SVG icon and reference it from the desktop entry. |
+| `--no-desktop` | Skip desktop integration. |
+| `--reset-config` | Regenerate `config.json` (otherwise preserved). |
+| `--uninstall` | Same as `uninstall.sh`; preserves configuration and models. |
+| `--app-dir`, `--bin-dir`, `--config-dir`, `--models-dir` | Override individual locations. |
+| `--install-dir DIR` | Legacy alias for `--app-dir`. |
 
 ## ⌁ Using Fluent
 
@@ -137,18 +170,18 @@ Fluent stores application settings separately from the model files.
 | Platform | Settings location |
 | --- | --- |
 | Linux | `~/.config/fluent/settings.json` |
-| Windows | `%APPDATA%\fluent\Fluent\settings.json` |
+| Windows | `%APPDATA%\fluent\Fluent\config\settings.json` |
 | macOS | `~/Library/Application Support/io.fluent.Fluent/settings.json` |
 
-The root `config.json` defines model paths and generation defaults. For an installed copy, the application uses the configuration associated with its installation directory.
+For an installed copy, `config.json` lives in the platform configuration directory and is user-owned: the installer writes it once and leaves it untouched on later runs (`--reset-config` regenerates it). The root `config.json` is the development default used when running from the source tree.
 
 Example:
 
 ```json
 {
   "models": {
-    "fast": "models/nllb-200-1.3b",
-    "accurate": "models/nllb-200-3.3b"
+    "fast": "/home/you/.local/share/fluent/models/nllb-200-1.3b",
+    "accurate": "/home/you/.local/share/fluent/models/nllb-200-3.3b"
   },
   "generation": {
     "max_length": 512,
@@ -156,6 +189,9 @@ Example:
   }
 }
 ```
+
+The application searches `FLUENT_CONFIG`, the executable directory and its
+parent, the platform configuration directory, then the current directory.
 
 `max_length` is the maximum number of **source** tokens; longer input is truncated explicitly and flagged in the interface. The number of **generated** tokens is derived from the encoded input (`min(512, source_tokens * 2 + 16)`) so short sentences finish quickly. An optional `"max_new_tokens"` entry overrides that automatic budget.
 
@@ -214,10 +250,13 @@ See [PERFORMANCE.md](PERFORMANCE.md) for the measured environment, baseline and 
 Install the required system packages:
 
 ```bash
-sudo dnf install gcc gcc-c++ make cmake \
+sudo dnf install gcc gcc-c++ make cmake pkgconf-pkg-config \
     libxkbcommon-devel wayland-devel mesa-libGL-devel \
-    fontconfig-devel
+    fontconfig-devel libX11-devel libXcursor-devel libXi-devel libXrandr-devel
 ```
+
+The complete Linux installation, validation and migration guide is
+[docs/LINUX.md](docs/LINUX.md).
 
 Build and run:
 
@@ -228,21 +267,15 @@ cargo build --release -p fluent-gui
 
 ### Windows
 
-Install Rust and the MSVC C++ build tools, then run:
-
-```powershell
-cargo build --release -p fluent-gui
-.\target\release\fluent.exe
-```
+Windows is not validated in this cycle and no Windows installer is provided.
+See [docs/WINDOWS.md](docs/WINDOWS.md) for prerequisites, the MSVC build
+command, and configuration/model paths.
 
 ### macOS
 
-Install Xcode Command Line Tools and Rust:
-
-```bash
-cargo build --release -p fluent-gui
-./target/release/fluent
-```
+macOS is not validated in this cycle. See [docs/MACOS.md](docs/MACOS.md) for
+the CPU-only and Metal build commands, Apple Silicon limitations, and the
+bundle/signing work that remains.
 
 ### CLI example
 
@@ -311,7 +344,20 @@ For substantial changes, open an issue to discuss the approach before submitting
 
 ## 📄 License
 
-Fluent is distributed under the [MIT License](LICENSE).
+Fluent's source code is distributed under the [MIT License](LICENSE). The
+NLLB-200 model and tokenizer assets are **not** MIT-licensed: they are
+CC-BY-NC-4.0 and are not bundled with Fluent. See
+[docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md) for the asset table and
+the unresolved tokenizer-redistribution question.
+
+## 📦 Distribution Documentation
+
+- [Distribution audit and architecture](docs/DISTRIBUTION_AUDIT.md)
+- [Linux installation](docs/LINUX.md)
+- [Windows build guide](docs/WINDOWS.md)
+- [macOS build guide](docs/MACOS.md)
+- [Model provenance and licensing](docs/MODEL_PROVENANCE.md)
+- [Icon and branding requirements](docs/ASSETS.md)
 
 ---
 

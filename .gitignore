@@ -21,3 +21,9 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+
+# Distribution artifacts (never commit generated packages)
+/dist/
+*.AppImage
+*.deb
+*.rpm
