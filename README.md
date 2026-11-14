@@ -176,6 +176,22 @@ directory. See [docs/LINUX.md](docs/LINUX.md) for migration from the old
 | `--app-dir`, `--bin-dir`, `--config-dir`, `--models-dir` | Override individual locations. |
 | `--install-dir DIR` | Legacy alias for `--app-dir`. |
 
+## ⬇️ Downloads and CI artifacts
+
+There is no public GitHub Release for the unreleased `0.2.0` development
+version. Test builds are produced as **GitHub Actions workflow artifacts**:
+
+1. Open <https://github.com/NeonMC23/Fluent/actions>.
+2. Choose **CI and build artifacts** and a successful run.
+3. Download `fluent-linux-x86_64`, `fluent-windows-x86_64`,
+   `fluent-macos-arm64`, or the combined `fluent-release-candidate` artifact
+   from the run summary. They expire after 14 days.
+
+These are not release assets. The Linux artifact is an application-only
+tar.gz; Windows is a portable ZIP; macOS is an arm64 `.app` ZIP. Models are
+never included. Verify checksums and, when present, Minisign signatures using
+[docs/RELEASE.md](docs/RELEASE.md).
+
 ## ⌁ Using Fluent
 
 1. Select a source language or leave automatic detection enabled.
@@ -384,7 +400,8 @@ the unresolved tokenizer-redistribution question.
 - [Model package specification](docs/MODEL_PACKAGE.md)
 - [Model provenance and licensing](docs/MODEL_PROVENANCE.md)
 - [Branding assets and icon integration](docs/ASSETS.md)
-- [Versioning and releases](docs/VERSIONING.md)
+- [Versioning](docs/VERSIONING.md)
+- [Builds, CI artifacts, signing and release verification](docs/RELEASE.md)
 
 ---
 

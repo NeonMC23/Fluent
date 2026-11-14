@@ -140,7 +140,7 @@ installing a new toolchain; that was out of scope.
   validation, and a decision on how models and config are supplied.
 - **Flatpak:** deferred. Requires a manifest, runtime selection, portal
   permissions, and a model-storage strategy outside the sandbox.
-- No artifact was uploaded or published. The local archive was generated, checksummed, extracted and launched for validation; it remains untracked under `dist/`.
+- No artifact was uploaded to a GitHub Release. Workflow artifact upload is defined but unexecuted; the local archive remains untracked under `dist/`.
 
 ## 6. Remaining blockers
 

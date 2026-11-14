@@ -66,12 +66,21 @@ under `~/Library/Application Support/io.fluent.Fluent/app`, but **it has not
 been tested**. Manual `cargo build` plus a config file is the supported path
 for now.
 
-## CI and validation status
+## CI, application ZIP and validation status
 
-The CI workflow defines a `macos-latest` job that runs
-`cargo test --workspace` and a release GUI build. It has **not executed on
-GitHub**, and no macOS GUI has been launched. Compilation is not runtime
-validation; Metal, universal binaries and bundles remain untested.
+The CI workflow defines a native `macos-14` (arm64) job that runs
+`cargo test --workspace`, a release GUI build, `scripts/package-macos.sh` and
+`scripts/package-macos-archive.py`. It uploads an unsigned
+`Fluent-<version>-macos-arm64.zip` workflow artifact (14-day retention). It has
+**not executed on GitHub**, and no macOS GUI has been launched. Compilation is
+not runtime validation; Metal, Intel macOS, universal binaries and
+notarization remain untested.
+
+The ZIP contains the staged `Fluent.app` bundle (Info.plist, executable,
+Fluent.icns, PkgInfo). Models and user configuration are excluded. Intel
+macOS is not produced by the current matrix.
+
+## Packaging, signing and notarization
 
 ## Application icon and bundle staging
 
@@ -92,8 +101,10 @@ usable executable. No macOS build or launch has been performed.
 
 ## Packaging, signing and notarization
 
-There is no `.app` bundle, `.icns` icon, universal binary, code signature,
-hardened-runtime entitlement, or notarization workflow. A future bundle needs:
+The `.app` bundle and `.icns` are produced by the staging script; there is no
+universal binary, code signature, hardened-runtime entitlement, or
+notarization workflow. The ZIP is unsigned; Gatekeeper friction may apply. A
+future distribution needs:
 
 - an `Info.plist` with the `io.fluent.Fluent` bundle identifier;
 - a `.icns` icon derived from the official brand asset (none exists yet);

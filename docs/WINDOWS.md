@@ -85,17 +85,25 @@ A minimal configuration with absolute paths:
 
 Use doubled backslashes in JSON. Models are not downloaded or bundled.
 
-## CI and validation status
+## CI, portable ZIP and validation status
 
-The CI workflow defines a `windows-latest` job that runs
-`cargo test --workspace` and a release GUI build. It has **not executed on
-GitHub**, and no Windows GUI has been launched by this project. Compilation is
-not runtime validation.
+The CI workflow defines a native `windows-latest` job that runs
+`cargo test --workspace`, a release GUI build with the embedded icon/resource,
+and `scripts/package-windows.py`. It uploads the
+`fluent-<version>-windows-x86_64.zip` workflow artifact (14-day retention).
+It has **not executed on GitHub**, and no Windows GUI has been launched by this
+project. Compilation is not runtime validation.
+
+The ZIP contains `fluent.exe`, `LICENSE` and `README.txt`; models and user
+configuration are excluded. There is no authenticated installer or Start Menu
+integration.
 
 ## What is missing
 
 - No `.exe` installer, Start Menu shortcut, or uninstaller is provided.
 - No Windows runtime validation has been performed.
+- The ZIP is unsigned (Authenticode is not configured). SmartScreen reputation
+  is not claimed.
 - The state of the MSVC runtime on end-user machines has not been audited.
 - CUDA has not been built or run on Windows in this project.
 - The Windows `install.sh` branch of the old installer was untested and has

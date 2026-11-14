@@ -7,10 +7,10 @@ CI definitions, CI execution and actual GUI runtime validation.
 
 | Platform | Local build | CI job defined | CI executed | GUI runtime validated | Distribution artifact |
 |---|---|---|---|---|---|
-| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`) | **No** | **Yes** (Nobara host + Ubuntu 22.04 container) | Portable tar.gz |
+| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum) | **No** | **Yes** (Nobara host + Ubuntu 22.04 container) | Portable tar.gz |
 | Linux AArch64 | No | No | No | No | No |
-| Windows x86-64 | No toolchain | Yes (compile/test + release GUI, icon resource) | **No** | **No** | No installer |
-| macOS Apple Silicon / Intel | No toolchain | Yes (compile/test + release GUI + bundle staging) | **No** | **No** | Staged `.app`; no signing |
+| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP) | **No** | **No** | Portable ZIP; no installer |
+| macOS arm64 (Apple Silicon) | No toolchain | Yes (tests, release GUI, `.app` ZIP) | **No** | **No** | arm64 `.app` ZIP; unsigned |
 
 “CI job defined” means the workflow contains the job; it does not mean it has
 run or passed. No GitHub Actions run occurred in this cycle.
@@ -56,7 +56,7 @@ run or passed. No GitHub Actions run occurred in this cycle.
   `macos-latest`.
 - No macOS GUI has been launched, no `.app`/`.icns`/`Info.plist` exists, and
   Metal, universal binaries, signing and notarization are unvalidated.
-- The CI job is compile/test only; it is not runtime validation.
+- The macOS CI job compiles, tests and stages a ZIP, but is not runtime validation.
 - See [MACOS.md](MACOS.md) for the CPU-only/Metal build commands and remaining
   bundle work.
 
