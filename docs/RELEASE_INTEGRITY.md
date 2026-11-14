@@ -93,22 +93,23 @@ git reflog expire --expire=now --all
 git gc --prune=now
 ```
 
-Verification performed on the candidate:
+The procedure was executed on a Cycle 7 candidate during the audit and then
+regenerated from the final Cycle 8 HEAD after the last code commit. The exact
+candidate HEAD and tree hash are recorded in the Cycle 8 engineering report.
+For each run, verification confirmed:
 
-- Current `finalization/cycle-7` tree hash is **identical** to the real
-  `7f85db6` tree (`bb47664f…`), so no source file changed.
-- Commit count is preserved (41 reachable commits at the time of the audit).
-- `git rev-list --objects --all` contains **no** `models/nllb-200-*` path.
-- Both tags were rewritten by `--tag-name-filter cat` and contain zero model
-  files.
-- `git fsck --full` is clean.
-- Candidate pack size is ~405 KiB versus ~8.8 MB for the original repository.
+- the candidate tree is **identical** to the source HEAD tree;
+- the reachable commit count is preserved;
+- `git rev-list --objects --all` contains **no** `models/nllb-200-*` path;
+- both tags were rewritten by `--tag-name-filter cat` and contain zero model
+  files;
+- `git fsck --full` is clean;
+- the candidate pack is ~0.4 MiB versus ~8.8 MB for the original repository;
 - `main` differs from the original only by the 20 removed asset paths.
 
 The candidate is **not** the working repository, was not pushed, and did not
-alter any real ref. A final candidate should be regenerated from the Cycle 8
-HEAD before any release process, then reviewed and authorized by the project
-owner and legal counsel.
+alter any real ref. It is a candidate only; publication still requires owner
+and legal authorization.
 
 ## 4. Source snapshot
 
@@ -129,8 +130,9 @@ Properties:
 - adjacent SHA-256 file;
 - not published or uploaded.
 
-The snapshot is in `dist/` (ignored, local only). Its current checksum is
-recorded in the Cycle 8 report and can be regenerated from the final HEAD.
+The snapshot is in `dist/` (ignored, local only). It was regenerated from the
+final Cycle 8 HEAD after the last code commit; its exact checksum is recorded
+in the Cycle 8 engineering report.
 
 ## 5. What remains true
 
