@@ -11,6 +11,7 @@ import argparse
 import datetime
 import hashlib
 import json
+import re
 from pathlib import Path
 
 
@@ -46,6 +47,17 @@ def main() -> None:
     parser.add_argument("--run-id", default="")
     parser.add_argument("--workflow", default="")
     parser.add_argument("--glibc-baseline", default="2.35")
+    parser.add_argument(
+        "--public-key",
+        type=Path,
+        default=None,
+        help="Minisign public key used to verify the detached signatures.",
+    )
+    parser.add_argument(
+        "--signatures-verified",
+        action="store_true",
+        help="Set only after every detached signature was independently verified.",
+    )
     args = parser.parse_args()
 
     directory = Path(args.dir)
@@ -87,6 +99,24 @@ def main() -> None:
 
     signed = sum(1 for artifact in artifacts if artifact["signed"])
     status = "signed" if signed == len(artifacts) else "unsigned" if signed == 0 else "partial"
+    signatures_verified = bool(args.signatures_verified and signed == len(artifacts))
+    for artifact in artifacts:
+        artifact["signature_verified"] = bool(
+            signatures_verified and artifact["signed"]
+        )
+
+    public_key = {}
+    if args.public_key is not None and args.public_key.is_file():
+        text = args.public_key.read_text(encoding="utf-8")
+        identifier = re.search(r"minisign public key:\s*([0-9A-Fa-f]+)", text)
+        public_key = {
+            "public_key_file": str(args.public_key),
+            "public_key_sha256": sha256(args.public_key),
+            "public_key_id": identifier.group(1) if identifier else None,
+        }
+    elif args.public_key is not None:
+        raise SystemExit(f"public key not found: {args.public_key}")
+
     manifest = {
         "application": "Fluent",
         "version": args.version,
@@ -95,8 +125,13 @@ def main() -> None:
         "workflow_run": args.run_id or None,
         "workflow": args.workflow or None,
         "generated_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "signing": {"minisign_status": status, "signed_artifacts": signed,
-                    "total_artifacts": len(artifacts)},
+        "signing": {
+            "minisign_status": status,
+            "signed_artifacts": signed,
+            "total_artifacts": len(artifacts),
+            "signatures_verified": signatures_verified,
+            **public_key,
+        },
         "artifacts": artifacts,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
