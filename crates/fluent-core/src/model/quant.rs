@@ -96,6 +96,12 @@ impl QuantizedMatrix {
 
     /// Computes `x @ weightᵀ` for an f32 CPU tensor.
     pub fn matmul(&self, x: &Tensor) -> Result<Tensor> {
+        self.matmul_with(x, Prefill::Tiled, !simd_disabled())
+    }
+
+    /// Test/reference entry point. `simd == false` forces the scalar kernels
+    /// even on a machine that supports AVX2.
+    fn matmul_with(&self, x: &Tensor, prefill: Prefill, simd: bool) -> Result<Tensor> {
         let dims = x.dims().to_vec();
         let cols = self.cols;
         let Some(&last) = dims.last() else {
@@ -155,20 +161,56 @@ impl QuantizedMatrix {
         let chunks = self.rows.div_ceil(chunk);
 
         #[cfg(target_arch = "x86_64")]
-        let avx2 =
-            !simd_disabled() && is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma");
+        let avx2 = simd && is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma");
         #[cfg(not(target_arch = "x86_64"))]
-        let avx2 = false;
+        let avx2 = {
+            let _ = simd;
+            false
+        };
 
-        let (small, large) = select_kernels(avx2);
-        let kernel = if m <= 8 { small } else { large };
-        (0..chunks).into_par_iter().for_each(|index| {
-            let from = index * chunk;
-            let to = ((index + 1) * chunk).min(self.rows);
-            // SAFETY: the chunks write disjoint, in-bounds output ranges and all
-            // input pointers stay valid for the duration of the loop.
-            unsafe { kernel(&args, from, to) };
-        });
+        if m <= 8 {
+            let kernel = select_small(avx2);
+            (0..chunks).into_par_iter().for_each(|index| {
+                let from = index * chunk;
+                let to = ((index + 1) * chunk).min(self.rows);
+                // SAFETY: chunks write disjoint, in-bounds output ranges and
+                // all input pointers stay valid for the duration of the loop.
+                unsafe { kernel(&args, from, to) };
+            });
+        } else if prefill == Prefill::Legacy {
+            let kernel = select_large_legacy(avx2);
+            (0..chunks).into_par_iter().for_each(|index| {
+                let from = index * chunk;
+                let to = ((index + 1) * chunk).min(self.rows);
+                // SAFETY: as above.
+                unsafe { kernel(&args, 0, m, from, to) };
+            });
+        } else {
+            let tile = PREFILL_TILE;
+            let full_tiles = m / tile;
+            let tail = m - full_tiles * tile;
+            let task_count = (full_tiles + usize::from(tail > 0)) * chunks;
+            // Parallelize over `(input tile, output chunk)` so each task walks
+            // a contiguous output range while its activation tile stays hot in
+            // L1. Every task writes a disjoint `(input, output)` rectangle.
+            (0..task_count).into_par_iter().for_each(|task| {
+                let tile_index = task / chunks;
+                let chunk_index = task % chunks;
+                let from = chunk_index * chunk;
+                let to = ((chunk_index + 1) * chunk).min(self.rows);
+                if tile_index < full_tiles {
+                    let start = tile_index * tile;
+                    run_tile(&args, avx2, start, from, to);
+                } else {
+                    // Partial final tile: at most `tile - 1` inputs, processed
+                    // by the row-at-a-time kernel so no input is skipped.
+                    let start = full_tiles * tile;
+                    let kernel = select_large_legacy(avx2);
+                    // SAFETY: as above.
+                    unsafe { kernel(&args, start, tail, from, to) };
+                }
+            });
+        }
 
         let mut out_dims = dims[..dims.len() - 1].to_vec();
         out_dims.push(self.rows);
@@ -269,17 +311,55 @@ struct MatmulArgs {
 unsafe impl Send for MatmulArgs {}
 unsafe impl Sync for MatmulArgs {}
 
-type Kernel = unsafe fn(&MatmulArgs, usize, usize);
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Prefill {
+    Tiled,
+    /// Row-at-a-time kernel, retained only as the reference used by the
+    /// exactness tests.
+    #[cfg_attr(not(test), allow(dead_code))]
+    Legacy,
+}
 
-fn select_kernels(simd: bool) -> (Kernel, Kernel) {
+type SmallKernel = unsafe fn(&MatmulArgs, usize, usize);
+type LargeKernel = unsafe fn(&MatmulArgs, usize, usize, usize, usize);
+
+/// Number of input rows processed together while weights stream past.
+///
+/// Eight keeps the activation tile at 8 × 1024 × 4 B = 32 KiB, which fits in
+/// L1 alongside the weight row, and leaves enough ymm registers for eight f32
+/// accumulators plus the widened weight block.
+const PREFILL_TILE: usize = 8;
+// The AVX2 tile kernel uses eight explicit accumulator registers.
+const _: () = assert!(PREFILL_TILE == 8);
+
+fn select_small(simd: bool) -> SmallKernel {
     #[cfg(target_arch = "x86_64")]
     {
         if simd {
-            return (run_small_avx2, run_large_avx2);
+            return run_small_avx2;
         }
     }
     let _ = simd;
-    (run_small_scalar, run_large_scalar)
+    run_small_scalar
+}
+
+fn select_large_legacy(simd: bool) -> LargeKernel {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if simd {
+            return run_large_avx2;
+        }
+    }
+    let _ = simd;
+    run_large_scalar
+}
+
+fn run_tile(a: &MatmulArgs, simd: bool, input_start: usize, from: usize, to: usize) {
+    match simd {
+        #[cfg(target_arch = "x86_64")]
+        true => unsafe { run_tile_avx2(a, input_start, from, to) },
+        _ => unsafe { run_tile_scalar::<PREFILL_TILE>(a, input_start, from, to) },
+    }
 }
 
 /// Scalar kernel for the decoding case (at most eight rows per call).
@@ -313,14 +393,20 @@ unsafe fn run_small_scalar(a: &MatmulArgs, from: usize, to: usize) {
     }
 }
 
-/// Scalar kernel for prefill (many input rows).
-unsafe fn run_large_scalar(a: &MatmulArgs, from: usize, to: usize) {
+/// Scalar kernel for prefill (row-at-a-time reference path).
+unsafe fn run_large_scalar(
+    a: &MatmulArgs,
+    input_start: usize,
+    input_count: usize,
+    from: usize,
+    to: usize,
+) {
     let nb = a.blocks_per_row;
     let cols = a.cols;
     for row in from..to {
         let wrow = a.qs.add(row * nb) as *const i8;
         let srow = a.scales.add(row * nb);
-        for input in 0..a.m {
+        for input in input_start..input_start + input_count {
             let act = a.aq.add(input * cols);
             let drow = a.ad.add(input * nb);
             let mut acc = 0f32;
@@ -334,6 +420,40 @@ unsafe fn run_large_scalar(a: &MatmulArgs, from: usize, to: usize) {
                 acc += *srow.add(block) * *drow.add(block) * sum as f32;
             }
             *a.dst.add(input * a.rows + row) = acc;
+        }
+    }
+}
+
+/// Scalar tiled prefill: `T` input rows share each weight-block traversal.
+///
+/// The per-input arithmetic is identical to [`run_large_scalar`], including the
+/// order of the scale multiplications, so results are bit-identical.
+unsafe fn run_tile_scalar<const T: usize>(
+    a: &MatmulArgs,
+    input_start: usize,
+    from: usize,
+    to: usize,
+) {
+    let nb = a.blocks_per_row;
+    let cols = a.cols;
+    for row in from..to {
+        let wrow = a.qs.add(row * nb) as *const i8;
+        let srow = a.scales.add(row * nb);
+        let mut acc = [0f32; T];
+        for block in 0..nb {
+            let ws = *srow.add(block);
+            let w = wrow.add(block * BLOCK);
+            for (slot, input) in acc.iter_mut().zip(0..T) {
+                let act = a.aq.add((input_start + input) * cols + block * BLOCK);
+                let mut sum = 0i32;
+                for index in 0..BLOCK {
+                    sum += (*w.add(index) as i32) * (*act.add(index) as i32);
+                }
+                *slot += ws * *a.ad.add((input_start + input) * nb + block) * sum as f32;
+            }
+        }
+        for (input, &value) in acc.iter().enumerate() {
+            *a.dst.add((input_start + input) * a.rows + row) = value;
         }
     }
 }
@@ -372,9 +492,16 @@ unsafe fn run_small_avx2(a: &MatmulArgs, from: usize, to: usize) {
     }
 }
 
+/// Row-at-a-time AVX2 prefill kernel (reference path for A/B and partial tiles).
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2,fma")]
-unsafe fn run_large_avx2(a: &MatmulArgs, from: usize, to: usize) {
+unsafe fn run_large_avx2(
+    a: &MatmulArgs,
+    input_start: usize,
+    input_count: usize,
+    from: usize,
+    to: usize,
+) {
     use std::arch::x86_64::*;
 
     let nb = a.blocks_per_row;
@@ -382,7 +509,7 @@ unsafe fn run_large_avx2(a: &MatmulArgs, from: usize, to: usize) {
     for row in from..to {
         let wrow = a.qs.add(row * nb) as *const i8;
         let srow = a.scales.add(row * nb);
-        for input in 0..a.m {
+        for input in input_start..input_start + input_count {
             let act = a.aq.add(input * cols);
             let drow = a.ad.add(input * nb);
             let mut acc = _mm256_setzero_ps();
@@ -400,6 +527,73 @@ unsafe fn run_large_avx2(a: &MatmulArgs, from: usize, to: usize) {
             }
             *a.dst.add(input * a.rows + row) = hsum_ps(acc);
         }
+    }
+}
+
+/// Widens one Q8 block and accumulates its scaled integer dot product.
+///
+/// Kept as a macro so the tile size is a compile-time constant and every
+/// accumulator stays in a ymm register. The arithmetic is exactly the same as
+/// [`run_large_avx2`]: `madd_epi16` pairs, one `i32 -> f32` conversion, one
+/// fused multiply-add per block, horizontal sum at the end.
+#[cfg(target_arch = "x86_64")]
+macro_rules! tile_step {
+    ($slot:ident, $input:expr, $w_lo:expr, $w_hi:expr, $ws:expr, $a:expr, $nb:expr, $cols:expr, $block:expr) => {{
+        use std::arch::x86_64::*;
+        let av =
+            _mm256_loadu_si256($a.aq.add(($input) * $cols + ($block) * BLOCK) as *const __m256i);
+        let a_lo = _mm256_cvtepi8_epi16(_mm256_castsi256_si128(av));
+        let a_hi = _mm256_cvtepi8_epi16(_mm256_extracti128_si256::<1>(av));
+        let products = _mm256_add_epi32(
+            _mm256_madd_epi16($w_lo, a_lo),
+            _mm256_madd_epi16($w_hi, a_hi),
+        );
+        let d = $ws * *$a.ad.add(($input) * $nb + ($block));
+        $slot = _mm256_fmadd_ps(_mm256_cvtepi32_ps(products), _mm256_set1_ps(d), $slot);
+    }};
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+unsafe fn run_tile_avx2(a: &MatmulArgs, input_start: usize, from: usize, to: usize) {
+    use std::arch::x86_64::*;
+
+    let nb = a.blocks_per_row;
+    let cols = a.cols;
+    let base = input_start;
+    for row in from..to {
+        let wrow = a.qs.add(row * nb) as *const i8;
+        let srow = a.scales.add(row * nb);
+        let mut acc0 = _mm256_setzero_ps();
+        let mut acc1 = _mm256_setzero_ps();
+        let mut acc2 = _mm256_setzero_ps();
+        let mut acc3 = _mm256_setzero_ps();
+        let mut acc4 = _mm256_setzero_ps();
+        let mut acc5 = _mm256_setzero_ps();
+        let mut acc6 = _mm256_setzero_ps();
+        let mut acc7 = _mm256_setzero_ps();
+        for block in 0..nb {
+            let ws = *srow.add(block);
+            let wv = _mm256_loadu_si256(wrow.add(block * BLOCK) as *const __m256i);
+            let w_lo = _mm256_cvtepi8_epi16(_mm256_castsi256_si128(wv));
+            let w_hi = _mm256_cvtepi8_epi16(_mm256_extracti128_si256::<1>(wv));
+            tile_step!(acc0, base, w_lo, w_hi, ws, a, nb, cols, block);
+            tile_step!(acc1, base + 1, w_lo, w_hi, ws, a, nb, cols, block);
+            tile_step!(acc2, base + 2, w_lo, w_hi, ws, a, nb, cols, block);
+            tile_step!(acc3, base + 3, w_lo, w_hi, ws, a, nb, cols, block);
+            tile_step!(acc4, base + 4, w_lo, w_hi, ws, a, nb, cols, block);
+            tile_step!(acc5, base + 5, w_lo, w_hi, ws, a, nb, cols, block);
+            tile_step!(acc6, base + 6, w_lo, w_hi, ws, a, nb, cols, block);
+            tile_step!(acc7, base + 7, w_lo, w_hi, ws, a, nb, cols, block);
+        }
+        *a.dst.add(base * a.rows + row) = hsum_ps(acc0);
+        *a.dst.add((base + 1) * a.rows + row) = hsum_ps(acc1);
+        *a.dst.add((base + 2) * a.rows + row) = hsum_ps(acc2);
+        *a.dst.add((base + 3) * a.rows + row) = hsum_ps(acc3);
+        *a.dst.add((base + 4) * a.rows + row) = hsum_ps(acc4);
+        *a.dst.add((base + 5) * a.rows + row) = hsum_ps(acc5);
+        *a.dst.add((base + 6) * a.rows + row) = hsum_ps(acc6);
+        *a.dst.add((base + 7) * a.rows + row) = hsum_ps(acc7);
     }
 }
 
@@ -610,6 +804,91 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn pseudo_random(count: usize, seed: u32) -> Vec<f32> {
+        let mut state = seed;
+        (0..count)
+            .map(|_| {
+                state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+                (state >> 8) as f32 / 8_388_608.0 - 1.0
+            })
+            .collect()
+    }
+
+    fn bits(matrix: &QuantizedMatrix, x: &Tensor, prefill: Prefill, simd: bool) -> Vec<u32> {
+        matrix
+            .matmul_with(x, prefill, simd)
+            .unwrap()
+            .flatten_all()
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap()
+            .into_iter()
+            .map(f32::to_bits)
+            .collect()
+    }
+
+    #[test]
+    fn tiled_prefill_is_bit_identical_to_the_reference_kernel() {
+        // One block, three blocks and four blocks; several output-row counts
+        // so the rayons chunks and the partial final input tile are exercised.
+        for (rows, cols) in [(5usize, 64usize), (37, 64), (23, 96), (41, 128)] {
+            let weights = pseudo_random(rows * cols, 7);
+            let quantized = matrix(rows, cols, weights);
+            for m in [1usize, 3, 7, 8, 9, 15, 16, 17, 23, 31, 32, 33, 67] {
+                let x =
+                    Tensor::from_vec(pseudo_random(m * cols, 11), (m, cols), &Device::Cpu).unwrap();
+                for simd in [false, true] {
+                    let reference = bits(&quantized, &x, Prefill::Legacy, simd);
+                    let tiled = bits(&quantized, &x, Prefill::Tiled, simd);
+                    assert_eq!(
+                        reference, tiled,
+                        "rows={rows} cols={cols} m={m} simd={simd}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tiled_prefill_handles_extreme_magnitudes_bit_identically() {
+        let (rows, cols) = (9usize, 64usize);
+        let extreme = [0.0f32, 1e-30, -1e-30, 1.0, -1.0, 1e30, -1e30, 127.0, -127.0];
+        let weights: Vec<f32> = (0..rows * cols)
+            .map(|index| extreme[(index * 7 + 3) % extreme.len()])
+            .collect();
+        let quantized = matrix(rows, cols, weights);
+        for m in [1usize, 8, 9, 17] {
+            let input: Vec<f32> = (0..m * cols)
+                .map(|index| extreme[(index * 5 + 1) % extreme.len()])
+                .collect();
+            let x = Tensor::from_vec(input, (m, cols), &Device::Cpu).unwrap();
+            for simd in [false, true] {
+                let reference = bits(&quantized, &x, Prefill::Legacy, simd);
+                let tiled = bits(&quantized, &x, Prefill::Tiled, simd);
+                // Scales can overflow f32 for absurd inputs; that is the
+                // existing f32 behaviour and both kernels must agree on it,
+                // including infinities and NaNs.
+                assert_eq!(reference, tiled, "m={m} simd={simd}");
+            }
+        }
+    }
+
+    #[test]
+    fn integer_dot_products_fit_in_i32_for_supported_dimensions() {
+        // Each Q8 value is in [-127, 127], so a full block of 32 products is
+        // bounded by 32 * 127 * 127 = 516,128, well inside i32. The kernel
+        // accumulates *scaled* block results in f32, so no cross-block integer
+        // accumulator exists to overflow.
+        let block_max = BLOCK as i64 * 127 * 127;
+        assert_eq!(block_max, 516_128);
+        // Even a single integer accumulator over every block of an 8192-wide
+        // row would need 8192 * 127 * 127 = 132,128,768 < i32::MAX.
+        assert!(8192i64 * 127 * 127 <= i32::MAX as i64);
+        // The maximum amplitude used by the model is far below this: the
+        // kernel never mixes more than one block before applying an f32 scale.
+        assert!(block_max <= i32::MAX as i64);
     }
 
     #[test]
