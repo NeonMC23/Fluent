@@ -197,8 +197,18 @@ and the final path-remapping build
 passed. The Linux artifact is an application-only tar.gz;
 Windows is a portable ZIP; macOS is an `.app` ZIP whose filename records the
 runner architecture (the current `macos-latest` matrix produces arm64). Models
-are never included. Verify checksums and, when present, Minisign signatures using
-[docs/RELEASE.md](docs/RELEASE.md).
+are never included. Every build supports:
+
+```bash
+fluent --version          # version, OS and architecture
+fluent --self-test        # icon, config, language and model checks
+fluent --smoke-test-gui   # open a window, paint once and exit
+```
+
+The Minisign public key is committed at `docs/keys/minisign.pub` (key ID
+`B504F2189BB21013`). CI artifacts are currently **unsigned** until the
+`MINISIGN_SECRET_KEY` Actions secret is configured. Verify checksums and, when
+present, signatures with [docs/RELEASE.md](docs/RELEASE.md).
 
 ## ⌁ Using Fluent
 

@@ -13,17 +13,25 @@ Workflow: `.github/workflows/ci.yml` — **CI and build artifacts**.
 
 - **Linux** (`ubuntu-22.04`, x86-64): formatting, check, tests, Clippy,
   release GUI build, `GLIBC_2.35` gate, installer regression tests, portable
-  tar.gz. Uploads `fluent-linux-x86_64`.
+  tar.gz. Extracts the archive and runs `--version`, `--self-test` and a real
+  `--smoke-test-gui` window under Xvfb. Uploads `fluent-linux-x86_64`.
 - **Windows** (`windows-latest`, x86-64): workspace tests, release GUI build
-  with embedded ICO/metadata, portable ZIP. Uploads
+  with embedded ICO/metadata, portable ZIP. Extracts the ZIP and runs
+  `--version`, `--self-test` and `--smoke-test-gui`. Uploads
   `fluent-windows-x86_64`.
 - **macOS** (`macos-latest`, currently arm64): workspace tests, release GUI
-  build, `Fluent.app` staging, app ZIP. Uploads `fluent-macos`; the filename
-  records the runner architecture. Intel macOS is not separately built.
+  build, `Fluent.app` staging, app ZIP. Unpacks the ZIP, validates the plist
+  with `plutil`, inspects the Mach-O architecture with `lipo`, and runs
+  `--version`, `--self-test` and `--smoke-test-gui`. Uploads `fluent-macos`;
+  the filename records the runner architecture. Intel macOS is not separately
+  built.
 - **Release integrity** (only non-PR events): downloads all three artifacts,
   optionally signs archives with Minisign when `MINISIGN_SECRET_KEY` is
-  configured, generates `release-manifest.json`, and uploads the combined
-  `fluent-release-candidate` artifact.
+  configured, verifies every signature against the committed public key,
+  checks archive structure and checksums with
+  `scripts/verify-artifacts.py`, generates `release-manifest.json`, and
+  uploads the combined `fluent-release-candidate` artifact including
+  `minisign.pub`.
 
 ### Triggers
 
@@ -73,14 +81,18 @@ The workflow has run successfully on GitHub:
   `fluent-macos` (6,581,141 B), and `fluent-release-candidate`
   (20,146,036 B). Sizes differ slightly between runs because embedded build
   paths and compression vary.
-- The aggregate job installed the Minisign-compatible signer, ran the signing
-  path, and generated the manifest successfully. This development environment
-  cannot download GitHub artifacts without an API token, so the artifact bytes
-  were not independently inspected. The repository contains no production
-  public key; **do not claim the artifacts are signed unless the owner has
-  configured the key and the manifest says so.**
+- Those historical runs predate the committed production public key and had no
+  `MINISIGN_SECRET_KEY`; their artifacts are **unsigned**. The public key now
+  exists, but the secret is still not configured, so current CI artifacts
+  remain unsigned until the owner performs the one command in section 5.
+- This development environment has no `gh`, token or stored credential, so it
+  cannot download GitHub artifact bytes. The local Linux candidate is verified
+  directly from its bytes, including a real GUI smoke test and a detached
+  signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
-- A later documentation-only commit does not change these application builds.
+- **Cycle 11:** the workflow now extracts and runs each packaged application,
+  validates archive structure/checksums and verifies signatures when present.
+  The execution result and artifact metadata are recorded here after the run.
 
 ## 2. Local packaging commands
 
@@ -130,7 +142,7 @@ the current matrix.
 | Linux | `fluent-0.2.0-linux-x86_64.tar.gz` | `bin/fluent`, `LICENSE`, `README.txt` |
 | Windows | `fluent-0.2.0-windows-x86_64.zip` | `fluent.exe`, `LICENSE`, `README.txt` |
 | macOS | `Fluent-0.2.0-macos-<arch>.zip` | `Fluent.app` with Info.plist, executable, ICNS, PkgInfo |
-| Aggregate | `fluent-release-candidate` | all archives, `.sha256`, optional `.minisig`, `release-manifest.json` |
+| Aggregate | `fluent-release-candidate` | all archives, `.sha256`, optional `.minisig`, `release-manifest.json`, `minisign.pub` |
 
 No artifact contains model weights, tokenizer assets, user configuration,
 caches or development files. The application needs a user-supplied model
@@ -160,32 +172,33 @@ not a signature or proof of authorship.
 Minisign is the chosen detached-signature format. The scripts accept either
 the `minisign` C tool or the Minisign-compatible pure-Rust `rsign` CLI
 (`rsign2` crate). Ubuntu 22.04 does not package `minisign`, so CI installs
-pinned `rsign2`; local users may use either. The repository currently contains
-**no production public key**; `docs/keys/README.md` is the placeholder.
+pinned `rsign2`; local users may use either.
 
-### Owner key setup
+The repository now contains the production **public** key at
+`docs/keys/minisign.pub`:
 
-With Minisign:
+- key ID `B504F2189BB21013`
+- public-key file SHA-256
+  `bd07631dfc69be884ad2edd405fe5238bae27748f4d1ab3cbff7f1331501e713`
+
+The private key is kept outside the repository with owner-only permissions.
+The `MINISIGN_SECRET_KEY` Actions secret is **not configured yet**, so current
+CI artifacts are unsigned. The workflow writes `UNSIGNED.txt` and a manifest
+with `"minisign_status": "unsigned"` rather than inventing a signature.
+
+### Enable CI signing
 
 ```bash
-minisign -G -p minisign.pub -s minisign.key
-# Store minisign.key offline/password-manager protected. Never commit it.
-# Commit only the public key as docs/keys/minisign.pub.
+gh secret set MINISIGN_SECRET_KEY \
+  --repo NeonMC23/Fluent \
+  --body-file "$HOME/.config/fluent-signing/minisign.key"
 ```
 
-With `rsign` for a non-interactive CI key:
-
-```bash
-rsign generate -p minisign.pub -s minisign.key --unencrypted
-# The unencrypted private key is only acceptable inside a protected CI secret
-# or an offline signing machine.
-```
-
-Configure the GitHub Actions secret `MINISIGN_SECRET_KEY` with the contents of
-`minisign.key`. The signing job only runs on non-PR events; pull requests from
-forks never receive the secret. An encrypted key that prompts for a password
-will not work non-interactively in CI; use a protected CI-only key or extend
-the workflow with an approved password mechanism.
+`gh` must be authenticated for the repository owner. The key is read through
+stdin and is never printed. Once the secret exists, the non-PR
+`release-integrity` job signs every archive, verifies each signature against
+`docs/keys/minisign.pub`, and records `"signatures_verified": true` in the
+manifest. Fork pull requests never receive the secret.
 
 ### Sign and verify locally
 
@@ -194,13 +207,19 @@ MINISIGN_SECRET_KEY_FILE=/secure/minisign.key \
   ./scripts/sign-artifacts.sh dist/fluent-*.tar.gz dist/*.zip
 MINISIGN_PUBLIC_KEY_FILE=docs/keys/minisign.pub \
   ./scripts/verify-artifacts.sh dist/fluent-*.tar.gz dist/*.zip
+
+# Full structural, checksum, manifest and signature verification:
+python3 scripts/verify-artifacts.py \
+  --dir dist \
+  --version 0.2.0 \
+  --public-key docs/keys/minisign.pub \
+  --require-signatures
 ```
 
-CI produces `.minisig` files when the secret is present; otherwise it uploads
-artifacts plus `UNSIGNED.txt` and a manifest with `"minisign_status":
-"unsigned"`. No fake signatures are generated. The scripts were tested with a
-throwaway `rsign` key during development; that key was deleted and is not the
-production key.
+Omit `--require-signatures` for an unsigned build; the verifier reports
+`UNSIGNED` explicitly. It never treats a sidecar file's mere existence as
+proof: each `.minisig` is checked with the public key. No fake signatures are
+generated.
 
 ### Key rotation
 
@@ -216,36 +235,40 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
   account, hardened-runtime signing, notarization or stapling is performed.
   Unsigned macOS apps may require Gatekeeper bypass steps; do not claim
   frictionless installation.
-- **Linux:** no package-level signature; Minisign covers the archive when the
-  owner configures the key.
+- **Linux:** no distribution-package signature. Minisign covers the portable
+  archive once the Actions secret is configured; the public key is committed.
 
 ## 7. Release-candidate checklist
 
-- [ ] Version in `Cargo.toml` and GUI About is correct (`0.2.0`).
-- [ ] Linux Ubuntu 22.04 build passes and reports `GLIBC_2.35`.
-- [ ] Linux installer/archive/checksum verified.
-- [ ] Windows native build produced a ZIP and executable metadata.
+- [x] Version in `Cargo.toml` and GUI About is correct (`0.2.0`).
+- [x] Linux Ubuntu 22.04 build passes and reports `GLIBC_2.35`.
+- [x] Linux installer/archive/checksum verified locally.
+- [x] Linux extracted archive passes `--version`, `--self-test` and Xvfb GUI
+  smoke tests.
+- [ ] Windows native build produced a ZIP and executable metadata (CI run).
 - [ ] macOS native build produced `Fluent.app` ZIP (arm64 only currently).
-- [ ] Artifact names and contents match this document.
+- [ ] Artifact names, contents and executable architectures verified by CI.
 - [ ] SHA-256 files generated from actual archives.
-- [ ] Minisign public key committed and signatures verified (owner action).
+- [x] Minisign public key committed (`B504F2189BB21013`).
+- [ ] `MINISIGN_SECRET_KEY` configured and signatures verified (owner action).
 - [ ] Windows Authenticode decision documented.
 - [ ] macOS signing/notarization decision documented.
 - [ ] Model/package/licensing notices current.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
-- [ ] README, CHANGELOG and VERSIONING current.
-- [x] GitHub Actions runs 43605074905 and 43606018556 completed successfully
-  for all four jobs.
-- [ ] Artifact bytes downloaded and inspected by the owner (GitHub auth needed).
+- [x] README, CHANGELOG and VERSIONING current.
+- [ ] Current cycle CI run successful and artifacts independently downloaded.
 - [ ] Release published/tagged only after explicit owner authorization.
 
 ## 8. Current limitations
 
-- Artifact download requires GitHub authentication; the CI-uploaded bytes were
-  not re-inspected here. The native build jobs themselves succeeded.
-- No production Minisign key/signatures are present in this repository.
-- No Minisign production key or signatures yet.
-- No Windows/macOS runtime launch validation.
-- macOS artifact is arm64 only; Intel/universal not produced.
+- CI artifact download requires GitHub authentication. This development
+  environment has no `gh` installation, token or stored credential, so the
+  uploaded bytes cannot be re-downloaded here. The local Linux candidate is
+  verified directly from its actual bytes.
+- `MINISIGN_SECRET_KEY` is not configured; CI artifacts remain unsigned even
+  though the public key is committed.
+- Windows and macOS runtime validation is limited to native GitHub runners,
+  not physical devices. No SmartScreen or Gatekeeper acceptance is claimed.
+- macOS artifact is arm64 only; Intel/universal are not produced.
 - Windows ZIP is portable only; no installer.
 - No DMG is produced; ZIP is the initial macOS format.

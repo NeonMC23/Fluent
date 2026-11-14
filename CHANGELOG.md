@@ -14,6 +14,14 @@ versions until a release is explicitly published.
 - GitHub Actions native builds and downloadable workflow artifacts for Linux,
   Windows and macOS, plus an aggregate release-integrity artifact.
 - Minisign-compatible detached-signature scripts and release manifest tooling.
+- Committed production Minisign public key (`B504F2189BB21013`); private key
+  stays outside the repository and is not yet configured as a CI secret.
+- Non-interactive `--version`, `--self-test` and `--smoke-test-gui` modes.
+- Cross-platform archive/manifest/signature verifier
+  (`scripts/verify-artifacts.py`) that checks actual bytes, executable formats,
+  architectures, checksums and detached signatures.
+- Native CI smoke tests of the extracted Linux archive under Xvfb, Windows ZIP
+  and macOS `.app` bundle, including a real temporary GUI window.
 - Release-integrity/signing preparation documentation and scripts.
 
 ### Changed
