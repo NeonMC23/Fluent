@@ -1190,7 +1190,7 @@ impl Nllb {
         let mut scores = vec![0f64; beams];
         let mut sequences: Vec<Vec<u32>> = vec![Vec::new(); beams];
         let first_rows_started = Instant::now();
-        let mut rows = logits_rows(&first_logits, beams, timers)?;
+        let mut rows = prepare_logits(&first_logits, beams, timers)?;
         timers.search_logits += first_rows_started.elapsed();
 
         let eos_id = tokenizer.eos_id();
@@ -1230,7 +1230,7 @@ impl Nllb {
             let input_ids = Tensor::new(tokens.as_slice(), device)?.unsqueeze(1)?;
             let logits = self.decode_step(&input_ids, &mut cache, timers)?;
             let rows_started = Instant::now();
-            rows = logits_rows(&logits, 1, timers)?;
+            rows = prepare_logits(&logits, 1, timers)?;
             timers.search_logits += rows_started.elapsed();
             timers.search += rows_started.elapsed();
 
@@ -1355,25 +1355,103 @@ fn build_position_table(config: &NllbConfig, dtype: DType, device: &Device) -> R
     Ok(Tensor::from_vec(data, (rows, dim), device)?.to_dtype(dtype)?)
 }
 
-fn logits_rows(
+/// Per-row logits plus the constants needed to reproduce candle's
+/// `log_softmax` value on demand.
+///
+/// Beam search only needs the top candidates of each row, not a fully
+/// normalized vocabulary, so the normalized values are never materialized.
+/// `log_prob` performs exactly the operations candle's reference path performs:
+/// subtract the row maximum, exponentiate, sum sequentially in row order, take
+/// the natural log, then subtract. The reduction order matches candle's CPU
+/// `log_softmax` (which uses a scalar sum when the crate is built without a
+/// global `avx2` target feature), so scores are bit-identical.
+struct LogitsRows {
+    data: Vec<f32>,
+    row_len: usize,
+    max: Vec<f32>,
+    log_norm: Vec<f32>,
+}
+
+impl LogitsRows {
+    fn rows(&self) -> usize {
+        self.max.len()
+    }
+
+    fn row(&self, index: usize) -> &[f32] {
+        &self.data[index * self.row_len..(index + 1) * self.row_len]
+    }
+
+    /// log-softmax value for one entry, identical to candle's result.
+    #[cfg(test)]
+    fn log_prob(&self, row: usize, token: usize) -> f32 {
+        (self.data[row * self.row_len + token] - self.max[row]) - self.log_norm[row]
+    }
+
+    /// Test helper: wrap already-normalized rows so the candidate code sees
+    /// `(v - 0) - 0 == v`, which makes the reference path easy to assert on.
+    #[cfg(test)]
+    fn from_log_probs(rows: &[Vec<f32>]) -> Self {
+        let row_len = rows.first().map(Vec::len).unwrap_or(0);
+        let data = rows.concat();
+        let count = rows.len();
+        Self {
+            data,
+            row_len,
+            max: vec![0.0; count],
+            log_norm: vec![0.0; count],
+        }
+    }
+}
+
+/// Copies the logits and computes the stable log-sum-exp constants per row.
+///
+/// `repeat` mirrors the beam-search prefill: the first target step produces a
+/// single row that is shared by every beam.
+fn prepare_logits(
     logits: &Tensor,
     repeat: usize,
     timers: &mut GenerationTimers,
-) -> Result<Vec<Vec<f32>>> {
+) -> Result<LogitsRows> {
     let logits = logits.to_dtype(DType::F32)?.to_device(&Device::Cpu)?;
-    let log_probs = candle_nn::ops::log_softmax(&logits, 1)?;
+    let (rows, row_len) = logits.dims2()?;
     let started = Instant::now();
-    let rows = log_probs.to_vec2::<f32>()?;
+    let data = logits.flatten_all()?.to_vec1::<f32>()?;
     timers.search_extract += started.elapsed();
-    if repeat <= 1 || rows.len() >= repeat {
-        Ok(rows)
-    } else {
-        let mut out = Vec::with_capacity(repeat);
+
+    let (data, out_rows) = if repeat > rows {
+        let mut repeated = Vec::with_capacity(repeat * row_len);
         for _ in 0..repeat {
-            out.push(rows[0].clone());
+            repeated.extend_from_slice(&data[..row_len]);
         }
-        Ok(out)
+        (repeated, repeat)
+    } else {
+        (data, rows)
+    };
+
+    let mut max = Vec::with_capacity(out_rows);
+    let mut log_norm = Vec::with_capacity(out_rows);
+    for row in 0..out_rows {
+        let values = &data[row * row_len..(row + 1) * row_len];
+        // Start from the first element (rather than -inf) so an all-NaN row
+        // behaves exactly like candle's maximum reduction.
+        let mut row_max = values[0];
+        for &value in &values[1..] {
+            row_max = row_max.max(value);
+        }
+        let mut sum = 0f32;
+        for &value in values {
+            sum += (value - row_max).exp();
+        }
+        max.push(row_max);
+        log_norm.push(sum.ln());
     }
+
+    Ok(LogitsRows {
+        data,
+        row_len,
+        max,
+        log_norm,
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1406,14 +1484,14 @@ impl Ord for Candidate {
 }
 
 #[cfg(test)]
-fn top_candidates(rows: &[Vec<f32>], beam_scores: &[f64], k: usize) -> Vec<Candidate> {
+fn top_candidates(rows: &LogitsRows, beam_scores: &[f64], k: usize) -> Vec<Candidate> {
     use std::cmp::Reverse;
     let mut heap: BinaryHeap<Reverse<Candidate>> = BinaryHeap::with_capacity(k + 1);
-    for (beam, row) in rows.iter().enumerate() {
+    for beam in 0..rows.rows() {
         let beam_score = beam_scores.get(beam).copied().unwrap_or(f64::NEG_INFINITY);
-        for (token, log_prob) in row.iter().enumerate() {
+        for token in 0..rows.row_len {
             let candidate = Candidate {
-                score: beam_score + *log_prob as f64,
+                score: beam_score + rows.log_prob(beam, token) as f64,
                 beam,
                 token: token as u32,
             };
@@ -1438,19 +1516,25 @@ fn top_candidates(rows: &[Vec<f32>], beam_scores: &[f64], k: usize) -> Vec<Candi
 /// Searching globally instead lets the best beam occupy every slot, which can
 /// hide another beam's end-of-sequence token.
 fn top_candidates_per_beam(
-    rows: &[Vec<f32>],
+    rows: &LogitsRows,
     beam_scores: &[f64],
     per_beam: usize,
 ) -> Vec<Candidate> {
     use std::cmp::Reverse;
     let per_beam = per_beam.max(1);
-    let mut pooled = Vec::with_capacity(rows.len() * per_beam);
-    for (beam, row) in rows.iter().enumerate() {
+    let mut pooled = Vec::with_capacity(rows.rows() * per_beam);
+    for beam in 0..rows.rows() {
         let beam_score = beam_scores.get(beam).copied().unwrap_or(f64::NEG_INFINITY);
         let mut heap: BinaryHeap<Reverse<Candidate>> = BinaryHeap::with_capacity(per_beam + 1);
-        for (token, log_prob) in row.iter().enumerate() {
+        // Hoist the row so the scan has no per-token indexing arithmetic; the
+        // value is exactly the inlined `log_prob` result.
+        let row = rows.row(beam);
+        let row_max = rows.max[beam];
+        let log_norm = rows.log_norm[beam];
+        for (token, &value) in row.iter().enumerate() {
+            let log_prob = (value - row_max) - log_norm;
             let candidate = Candidate {
-                score: beam_score + *log_prob as f64,
+                score: beam_score + log_prob as f64,
                 beam,
                 token: token as u32,
             };
@@ -1671,7 +1755,7 @@ mod tests {
 
     #[test]
     fn top_candidates_are_sorted_by_cumulative_score() {
-        let rows = vec![vec![0.0, -1.0], vec![-2.0, -0.5]];
+        let rows = LogitsRows::from_log_probs(&[vec![0.0, -1.0], vec![-2.0, -0.5]]);
         let beam_scores = vec![0.0, -0.1];
         let candidates = top_candidates(&rows, &beam_scores, 4);
 
@@ -1686,7 +1770,7 @@ mod tests {
 
     #[test]
     fn top_candidates_limits_the_result_size() {
-        let rows = vec![vec![0.0, -1.0, -2.0]];
+        let rows = LogitsRows::from_log_probs(&[vec![0.0, -1.0, -2.0]]);
         let candidates = top_candidates(&rows, &[0.0], 2);
         assert_eq!(candidates.len(), 2);
         assert_eq!(candidates[0].token, 0);
@@ -1706,7 +1790,10 @@ mod tests {
     fn per_beam_search_finds_eos_hidden_by_the_best_beam() {
         // Beam 0 dominates the global ranking; beam 1 can only finish if its
         // own EOS candidate is considered.
-        let rows = vec![vec![-0.1, -0.2, -0.3, -10.0], vec![-5.0, -5.1, -5.2, -0.5]];
+        let rows = LogitsRows::from_log_probs(&[
+            vec![-0.1, -0.2, -0.3, -10.0],
+            vec![-5.0, -5.1, -5.2, -0.5],
+        ]);
         let pooled = top_candidates_per_beam(&rows, &[0.0, 0.0], 2);
 
         let beam_one_eos = pooled
@@ -1868,12 +1955,12 @@ mod tests {
     fn early_eos_cannot_be_starved_into_a_512_step_stall() {
         // Regression for the reported FR->EN defect: beam 0 finishes early,
         // while the other beams only expose EOS outside a naive global top-k.
-        let rows = vec![
+        let rows = LogitsRows::from_log_probs(&[
             vec![-0.01, -0.02, -0.03, -0.005],
             vec![-8.0, -8.1, -8.2, -0.5],
             vec![-9.0, -9.1, -9.2, -0.6],
             vec![-10.0, -10.1, -10.2, -0.7],
-        ];
+        ]);
         let mut pooled = top_candidates_per_beam(&rows, &[0.0, 0.0, 0.0, 0.0], 2);
         pooled.sort_by(|a, b| b.score.total_cmp(&a.score));
 
@@ -1887,6 +1974,137 @@ mod tests {
             4,
             EarlyStopping::Heuristic
         ));
+    }
+
+    // -- logits path -------------------------------------------------------
+
+    fn reference_log_probs(data: &[f32], rows: usize, vocab: usize) -> Vec<f32> {
+        let tensor = Tensor::from_vec(data.to_vec(), (rows, vocab), &Device::Cpu).unwrap();
+        candle_nn::ops::log_softmax(&tensor, 1)
+            .unwrap()
+            .flatten_all()
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap()
+    }
+
+    #[test]
+    fn manual_log_softmax_matches_candle_bit_for_bit() {
+        let (rows, vocab) = (4usize, 4096usize);
+        let mut state = 0x0bad_f00du32;
+        let data: Vec<f32> = (0..rows * vocab)
+            .map(|_| {
+                state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+                ((state >> 8) as f32 / 8_388_608.0 - 1.0) * 37.0
+            })
+            .collect();
+        let reference = reference_log_probs(&data, rows, vocab);
+        let tensor = Tensor::from_vec(data, (rows, vocab), &Device::Cpu).unwrap();
+        let mut timers = GenerationTimers::default();
+        let prepared = prepare_logits(&tensor, 1, &mut timers).unwrap();
+
+        for row in 0..rows {
+            for token in 0..vocab {
+                assert_eq!(
+                    prepared.log_prob(row, token).to_bits(),
+                    reference[row * vocab + token].to_bits(),
+                    "row {row} token {token}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn manual_log_softmax_matches_candle_for_adversarial_rows() {
+        let vocab = 512usize;
+        // Very large and very small magnitudes.
+        let mut special = vec![0.0f32; vocab];
+        special[0] = f32::INFINITY;
+        special[1] = f32::NEG_INFINITY;
+        special[2] = f32::NAN;
+        special[3] = f32::MAX;
+        special[4] = f32::MIN;
+        let rows: Vec<Vec<f32>> = vec![
+            (0..vocab).map(|i| i as f32 * 1e35).collect(),
+            (0..vocab).map(|i| -(i as f32) * 1e35).collect(),
+            // Repeated and nearly equal values.
+            vec![1.0; vocab],
+            (0..vocab)
+                .map(|i| 1.0 + (i % 2) as f32 * f32::EPSILON)
+                .collect(),
+            // Infinities and NaN, matching f32 semantics instead of panicking.
+            special,
+            vec![f32::NAN; vocab],
+        ];
+
+        let flat: Vec<f32> = rows.concat();
+        let reference = reference_log_probs(&flat, rows.len(), vocab);
+        let tensor = Tensor::from_vec(flat, (rows.len(), vocab), &Device::Cpu).unwrap();
+        let mut timers = GenerationTimers::default();
+        let prepared = prepare_logits(&tensor, 1, &mut timers).unwrap();
+
+        let mut compared = 0usize;
+        for (row, values) in rows.iter().enumerate() {
+            let expected_row = &reference[row * vocab..(row + 1) * vocab];
+            for (token, _) in values.iter().enumerate() {
+                let actual = prepared.log_prob(row, token).to_bits();
+                let expected = expected_row[token].to_bits();
+                // Both paths may legitimately produce NaN; require identical
+                // bits so the behaviour is pinned, including NaN payloads.
+                assert_eq!(actual, expected, "row {row} token {token}");
+                compared += 1;
+            }
+        }
+        assert_eq!(compared, rows.len() * vocab);
+    }
+
+    #[test]
+    fn prepare_logits_repeats_the_single_prefill_row() {
+        let vocab = 300usize;
+        let data: Vec<f32> = (0..vocab).map(|index| index as f32 * 0.01).collect();
+        let tensor = Tensor::from_vec(data.clone(), (1, vocab), &Device::Cpu).unwrap();
+        let mut timers = GenerationTimers::default();
+        let prepared = prepare_logits(&tensor, 4, &mut timers).unwrap();
+        assert_eq!(prepared.rows(), 4);
+        let reference = reference_log_probs(&data, 1, vocab);
+        for row in 0..4 {
+            for (token, &expected) in reference.iter().enumerate() {
+                assert_eq!(prepared.log_prob(row, token).to_bits(), expected.to_bits());
+            }
+        }
+    }
+
+    #[test]
+    fn optimized_top_candidates_match_the_candle_reference_path() {
+        let (rows, vocab, per_beam) = (4usize, 2048usize, 8usize);
+        let mut state = 0xfeed_faceu32;
+        let data: Vec<f32> = (0..rows * vocab)
+            .map(|_| {
+                state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+                ((state >> 8) as f32 / 8_388_608.0 - 1.0) * 12.0
+            })
+            .collect();
+        let tensor = Tensor::from_vec(data, (rows, vocab), &Device::Cpu).unwrap();
+        let mut timers = GenerationTimers::default();
+        let prepared = prepare_logits(&tensor, 1, &mut timers).unwrap();
+
+        let log_probs = reference_log_probs(
+            &tensor.flatten_all().unwrap().to_vec1::<f32>().unwrap(),
+            rows,
+            vocab,
+        );
+        let reference_rows: Vec<Vec<f32>> = log_probs.chunks(vocab).map(<[f32]>::to_vec).collect();
+        let reference = LogitsRows::from_log_probs(&reference_rows);
+        let beam_scores = [0.0f64, -0.3, -1.7, -2.5];
+        let optimized = top_candidates_per_beam(&prepared, &beam_scores, per_beam);
+        let expected = top_candidates_per_beam(&reference, &beam_scores, per_beam);
+
+        assert_eq!(optimized.len(), expected.len());
+        for (a, e) in optimized.iter().zip(expected.iter()) {
+            assert_eq!(a.token, e.token);
+            assert_eq!(a.beam, e.beam);
+            assert_eq!(a.score.to_bits(), e.score.to_bits());
+        }
     }
 
     // -- fused attention ---------------------------------------------------
