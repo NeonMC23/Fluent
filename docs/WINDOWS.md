@@ -91,8 +91,9 @@ The CI workflow defines a native `windows-latest` job that runs
 `cargo test --workspace`, a release GUI build with the embedded icon/resource,
 and `scripts/package-windows.py`. It uploads the
 `fluent-<version>-windows-x86_64.zip` workflow artifact (14-day retention).
-It has **not executed on GitHub**, and no Windows GUI has been launched by this
-project. Compilation is not runtime validation.
+It executed successfully in GitHub Actions run `43605074905` (commit
+`ae1dfcb`) and uploaded the ZIP artifact. No Windows GUI has been launched by
+this project; compilation is not runtime validation.
 
 The ZIP contains `fluent.exe`, `LICENSE` and `README.txt`; models and user
 configuration are excluded. There is no authenticated installer or Start Menu

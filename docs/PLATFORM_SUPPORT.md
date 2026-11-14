@@ -7,13 +7,13 @@ CI definitions, CI execution and actual GUI runtime validation.
 
 | Platform | Local build | CI job defined | CI executed | GUI runtime validated | Distribution artifact |
 |---|---|---|---|---|---|
-| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum) | **No** | **Yes** (Nobara host + Ubuntu 22.04 container) | Portable tar.gz |
+| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum) | **Yes** (run 43605074905) | **Yes** (Nobara host + Ubuntu 22.04 container) | Portable tar.gz |
 | Linux AArch64 | No | No | No | No | No |
-| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP) | **No** | **No** | Portable ZIP; no installer |
-| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP) | **No** | **No** | `.app` ZIP; unsigned; Intel not produced |
+| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP) | **Yes** (run 43605074905) | **No** | Portable ZIP; no installer |
+| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP) | **Yes** (run 43605074905) | **No** | `.app` ZIP; unsigned; Intel not produced |
 
-“CI job defined” means the workflow contains the job; it does not mean it has
-run or passed. No GitHub Actions run occurred in this cycle.
+The latest successful GitHub run is `43605074905` on commit `ae1dfcb`.
+Compilation/build success is still not Windows or macOS runtime validation.
 
 ## Linux
 
@@ -42,10 +42,10 @@ run or passed. No GitHub Actions run occurred in this cycle.
 
 ## Windows
 
-- The workflow now runs `cargo test --workspace` and a release GUI build on
-  `windows-latest`.
-- This is a compile/test definition only. It has not run on GitHub, and no
-  Windows GUI has ever been launched by this project.
+- The workflow runs `cargo test --workspace`, a release GUI build and the
+  portable ZIP on `windows-latest`.
+- It succeeded in run 43605074905. This is still compile/build validation only;
+  no Windows GUI has ever been launched by this project.
 - No installer, Start Menu integration, DLL inventory, CUDA build, or
   uninstaller is provided.
 - See [WINDOWS.md](WINDOWS.md) for prerequisites and paths.

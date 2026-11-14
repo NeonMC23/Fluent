@@ -103,7 +103,7 @@ application read user-owned configuration from `~/.config/fluent`.
 
 | Area | Linux | Windows | macOS |
 |---|---|---|---|
-| Source build | Yes — host and Ubuntu 22.04 container (`cargo build --release -p fluent-gui`) | CI job defined; not executed | CI job defined; not executed |
+| Source build | Yes — host and Ubuntu 22.04 container (`cargo build --release -p fluent-gui`) | CI built successfully (run 43605074905) | CI built successfully (run 43605074905) |
 | Unit/workspace tests | Yes | Not run | Not run |
 | GUI launch | Yes — installed payload on host and Ubuntu 22.04 container under Wayland | Not run | Not run |
 | Installer | Yes (temp HOMEs, spaces, uninstall) | Not provided | Best-effort script; **untested** |
@@ -140,7 +140,7 @@ installing a new toolchain; that was out of scope.
   validation, and a decision on how models and config are supplied.
 - **Flatpak:** deferred. Requires a manifest, runtime selection, portal
   permissions, and a model-storage strategy outside the sandbox.
-- No artifact was uploaded to a GitHub Release. Workflow artifact upload is defined but unexecuted; the local archive remains untracked under `dist/`.
+- No artifact was uploaded to a GitHub Release. Workflow artifacts were uploaded successfully in run 43605074905 (14-day retention); the local canonical archive remains untracked under `dist/`.
 
 ## 6. Remaining blockers
 
@@ -158,8 +158,9 @@ installing a new toolchain; that was out of scope.
    required consent/checksum workflow.
 6. **Release signing/checksums** — the archive has a SHA-256 file, but no
    signature or trusted release channel yet.
-7. **CI execution** — Linux/Windows/macOS jobs are defined but have not run on
-   GitHub; only YAML syntax and local commands were validated here.
+7. **CI artifact verification** — run 43605074905 passed on Linux, Windows,
+   macOS and release integrity. Artifact bytes still need owner download and
+   inspection; no production signing key is present.
 
 ## 7. Unverified assumptions
 

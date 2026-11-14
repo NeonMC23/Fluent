@@ -58,10 +58,23 @@ release explicitly.
 
 ### Actual execution status
 
-The workflow is defined and YAML-validated locally. **It has not been executed
-on GitHub in this cycle.** The environment used for development has no `gh`
-CLI/API token, so run IDs and artifact download results are not available.
-Open the Actions tab above to inspect the first run.
+The workflow has run successfully on GitHub:
+
+- **Run:** [43605074905](https://github.com/NeonMC23/Fluent/actions/runs/43605074905)
+- **Commit:** `ae1dfcb9bb45c35c6ef0c833edeac3c665a3c26b`
+- **Result:** all four jobs succeeded — Linux, Windows, macOS and Release
+  integrity.
+- **Artifacts (14-day retention):** `fluent-linux-x86_64` (7,894,473 B),
+  `fluent-windows-x86_64` (5,670,791 B), `fluent-macos` (6,581,518 B), and
+  `fluent-release-candidate` (20,147,653 B).
+- The aggregate job installed the Minisign-compatible signer, ran the signing
+  path, and generated the manifest successfully. This development environment
+  cannot download GitHub artifacts without an API token, so the artifact bytes
+  were not independently inspected. The repository contains no production
+  public key; **do not claim the artifacts are signed unless the owner has
+  configured the key and the manifest says so.**
+- The macOS artifact is arm64 on the current `macos-latest` runner.
+- A later documentation-only commit does not change these application builds.
 
 ## 2. Local packaging commands
 
@@ -215,12 +228,15 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - [ ] Model/package/licensing notices current.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [ ] README, CHANGELOG and VERSIONING current.
-- [ ] GitHub Actions run successful and artifacts downloaded/inspected.
+- [x] GitHub Actions run 43605074905 completed successfully for all four jobs.
+- [ ] Artifact bytes downloaded and inspected by the owner (GitHub auth needed).
 - [ ] Release published/tagged only after explicit owner authorization.
 
 ## 8. Current limitations
 
-- Workflow has not executed on GitHub; compile/build results are unverified.
+- Artifact download requires GitHub authentication; the CI-uploaded bytes were
+  not re-inspected here. The native build jobs themselves succeeded.
+- No production Minisign key/signatures are present in this repository.
 - No Minisign production key or signatures yet.
 - No Windows/macOS runtime launch validation.
 - macOS artifact is arm64 only; Intel/universal not produced.

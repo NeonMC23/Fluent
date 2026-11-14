@@ -72,8 +72,8 @@ The CI workflow defines a native `macos-latest` job that runs
 `cargo test --workspace`, a release GUI build, `scripts/package-macos.sh` and
 `scripts/package-macos-archive.py`. It uploads the `fluent-macos` workflow
 artifact containing an unsigned `Fluent-<version>-macos-<arch>.zip` (14-day
-retention; the current runner is arm64). It has
-**not executed on GitHub**, and no macOS GUI has been launched. Compilation is
+retention; the current runner is arm64). It executed successfully in GitHub
+Actions run `43605074905` (commit `ae1dfcb`). No macOS GUI has been launched. Compilation is
 not runtime validation; Metal, Intel macOS, universal binaries and
 notarization remain untested.
 

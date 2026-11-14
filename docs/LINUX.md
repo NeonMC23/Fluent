@@ -166,9 +166,9 @@ requirements. X11/Wayland, OpenGL and font libraries are loaded at runtime by
 still needs the runtime packages listed above. There is no RPATH/RUNPATH
 pointing into the build tree.
 
-The Ubuntu build is currently a local container procedure, not an automated
-release pipeline. CI targets `ubuntu-22.04` and enforces the same baseline check, but GitHub
-Actions has not executed yet.
+The Ubuntu build was validated locally in a container and in the native CI
+job on `ubuntu-22.04`; CI enforces the same GLIBC 2.35 check and succeeded in
+run 43605074905.
 
 CPU dispatch is unchanged: the binary contains AVX2/FMA kernels selected by
 runtime detection, with a scalar fallback. It is not compiled with

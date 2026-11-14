@@ -84,7 +84,7 @@ python3 scripts/verify-branding-assets.py
 
 It checks master hashes/dimensions, every PNG size, ICO directory/payload
 dimensions, ICNS header/chunks/PNG dimensions, and the raw RGBA length. The CI
-workflow includes this check, but the workflow has not executed on GitHub yet.
+workflow executed this check successfully in run 43605074905.
 
 Reproducibility: the same masters, Pillow version and script produce the same
 files here. Different Pillow/zlib versions may choose different PNG compression

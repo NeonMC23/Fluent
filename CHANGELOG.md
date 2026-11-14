@@ -11,7 +11,9 @@ versions until a release is explicitly published.
 - Linux desktop entry and icon installation as part of the per-user installer.
 - Portable Linux archive with deterministic packaging metadata and SHA-256.
 - Windows resource/icon embedding and macOS `.app` bundle staging.
-- GitHub Actions definitions for Linux, Windows and macOS builds.
+- GitHub Actions native builds and downloadable workflow artifacts for Linux,
+  Windows and macOS, plus an aggregate release-integrity artifact.
+- Minisign-compatible detached-signature scripts and release manifest tooling.
 - Release-integrity/signing preparation documentation and scripts.
 
 ### Changed
