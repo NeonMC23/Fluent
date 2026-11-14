@@ -65,7 +65,15 @@ struct RawGeneration {
 
 impl ProjectConfig {
     /// Loads `config.json`, searching in order:
-    /// `FLUENT_CONFIG`, the executable directory, its parent, the current directory.
+    /// `FLUENT_CONFIG`, the executable directory, its parent, the platform
+    /// configuration directory, then the current directory.
+    ///
+    /// The platform directory is the same one the GUI uses for
+    /// `settings.json` (`~/.config/fluent` on Linux,
+    /// `~/Library/Application Support/io.fluent.Fluent` on macOS, and
+    /// `%APPDATA%\fluent\Fluent\config` on Windows). Keeping the installed
+    /// configuration there lets application updates replace the program files
+    /// without touching user-owned configuration.
     pub fn load() -> Self {
         for candidate in config_candidates() {
             if candidate.is_file() {
@@ -180,6 +188,9 @@ fn config_candidates() -> Vec<PathBuf> {
             }
         }
     }
+    if let Some(dirs) = directories::ProjectDirs::from("io", "fluent", "Fluent") {
+        candidates.push(dirs.config_dir().join("config.json"));
+    }
     if let Ok(cwd) = std::env::current_dir() {
         candidates.push(cwd.join("config.json"));
     }
@@ -212,6 +223,21 @@ mod tests {
         let dir = std::env::temp_dir().join(unique);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn candidates_include_the_platform_config_directory() {
+        // The installer writes config.json to the platform configuration
+        // directory so that application updates do not touch user-owned files.
+        let expected = directories::ProjectDirs::from("io", "fluent", "Fluent")
+            .expect("home directory")
+            .config_dir()
+            .join("config.json");
+        assert!(
+            config_candidates().contains(&expected),
+            "platform config candidate missing: {}",
+            expected.display()
+        );
     }
 
     #[test]
