@@ -310,6 +310,35 @@ jobs:
             ARGS+=(--require-signatures)
           fi
           python3 scripts/verify-artifacts.py "${ARGS[@]}"
+      - name: Publish checksum summary
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          directory = Path("dist")
+          parts = []
+          for path in sorted(directory.iterdir()):
+              if not path.is_file():
+                  continue
+              if not (path.name.endswith(".tar.gz") or path.name.endswith(".zip")):
+                  continue
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              parts.append(f"{path.name} {path.stat().st_size} {digest}")
+          manifest = directory / "release-manifest.json"
+          status = "missing"
+          verified = False
+          if manifest.is_file():
+              document = json.loads(manifest.read_text(encoding="utf-8"))
+              status = document.get("signing", {}).get("minisign_status", "unknown")
+              verified = document.get("signing", {}).get("signatures_verified", False)
+          print(
+              "::notice title=Distribution archive SHA-256::"
+              + " | ".join(parts)
+              + f" | signing={status} verified={verified}"
+          )
+          PY
       - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: fluent-release-candidate
