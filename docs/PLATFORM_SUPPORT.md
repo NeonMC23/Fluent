@@ -7,15 +7,15 @@ CI definitions, CI execution and actual GUI runtime validation.
 
 | Platform | Local build | CI job defined | CI executed | GUI runtime validated | Distribution artifact |
 |---|---|---|---|---|---|
-| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum) | **Yes** (run 43605074905) | **Yes** (Nobara host + Ubuntu 22.04 container) | Portable tar.gz |
+| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum + smoke) | **Yes** (run 43621221912) | **Yes** (Nobara host + Ubuntu 22.04 container + Xvfb) | Portable tar.gz |
 | Linux AArch64 | No | No | No | No | No |
-| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP) | **Yes** (run 43605074905) | **No** | Portable ZIP; no installer |
-| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP) | **Yes** (run 43605074905) | **No** | `.app` ZIP; unsigned; Intel not produced |
+| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43621221912) | **Partial**: self-test on runner; GUI skipped (no OpenGL) | Portable ZIP; no installer |
+| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43621221912) | **Yes on CI runner** (bundle GUI smoke) | `.app` ZIP; unsigned; Intel not produced |
 
-Successful GitHub runs include `43605074905` (code commit `ae1dfcb`), the
-documentation follow-up `43606018556`, and the final path-remapping build
-`43606646499` (`af7dbca`). Compilation/build success is still not Windows or
-macOS runtime validation.
+The current fully green run is `43621221912` (`09a71e9`), including packaged
+application smoke tests and artifact verification. Earlier successful runs are
+`43605074905`, `43606018556`, `43606646499` and `43620495032`. GitHub-runner
+execution is still not physical-device validation.
 
 ## Linux
 
@@ -46,20 +46,21 @@ macOS runtime validation.
 
 - The workflow runs `cargo test --workspace`, a release GUI build, the portable
   ZIP, and executes the packaged `fluent.exe --version` / `--self-test`.
-- GitHub's hosted Windows runner has no OpenGL 2.0+ context, so the temporary
-  GUI-window smoke is SKIPPED there. This is still not physical-device GUI
-  validation, and no Windows GUI has been launched on real Windows hardware.
+- Run `43621221912` passed those checks. GitHub's hosted Windows runner has no
+  OpenGL 2.0+ context, so the temporary GUI-window smoke is SKIPPED there.
+  This is still not physical-device GUI validation.
 - No installer, Start Menu integration, DLL inventory, CUDA build, or
   uninstaller is provided.
 - See [WINDOWS.md](WINDOWS.md) for prerequisites and paths.
 
 ## macOS
 
-- The workflow now runs `cargo test --workspace` and a release GUI build on
+- The workflow runs `cargo test --workspace`, a release GUI build, `.app`
+  staging, plist/Mach-O validation and a bundled GUI smoke test on
   `macos-latest`.
-- No macOS GUI has been launched, no `.app`/`.icns`/`Info.plist` exists, and
-  Metal, universal binaries, signing and notarization are unvalidated.
-- The macOS CI job compiles, tests and stages a ZIP, but is not runtime validation.
+- Run `43621221912` passed all of those steps, so the arm64 `.app` is runtime
+  validated on the CI runner. Metal, Intel macOS, universal binaries, signing
+  and notarization remain unvalidated.
 - See [MACOS.md](MACOS.md) for the CPU-only/Metal build commands and remaining
   bundle work.
 

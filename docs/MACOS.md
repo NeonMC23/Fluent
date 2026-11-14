@@ -73,9 +73,10 @@ The CI workflow defines a native `macos-latest` job that runs
 `scripts/package-macos-archive.py`. It uploads the `fluent-macos` workflow
 artifact containing an unsigned `Fluent-<version>-macos-<arch>.zip` (14-day
 retention; the current runner is arm64). It executed successfully in GitHub
-Actions run `43605074905` (commit `ae1dfcb`). No macOS GUI has been launched. Compilation is
-not runtime validation; Metal, Intel macOS, universal binaries and
-notarization remain untested.
+Actions run `43621221912` (commit `09a71e9`), including a plist/Mach-O
+validation and a bundled GUI smoke test on the runner. Metal, Intel macOS,
+universal binaries, signing and notarization remain untested; this is not
+notarized Gatekeeper validation.
 
 The ZIP contains the staged `Fluent.app` bundle (Info.plist, executable,
 Fluent.icns, PkgInfo). Models and user configuration are excluded. Intel macOS is not produced by the current matrix.

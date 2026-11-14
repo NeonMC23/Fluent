@@ -191,9 +191,11 @@ These are not release assets. Successful runs include
 [43605074905](https://github.com/NeonMC23/Fluent/actions/runs/43605074905)
 (code commit `ae1dfcb`), the documentation follow-up
 [43606018556](https://github.com/NeonMC23/Fluent/actions/runs/43606018556),
-and the final path-remapping build
+the final path-remapping build
 [43606646499](https://github.com/NeonMC23/Fluent/actions/runs/43606646499)
-(`af7dbca`): Linux, Windows, macOS and the aggregate release candidate all
+(`af7dbca`), and the Cycle 11 packaged-smoke run
+[43621221912](https://github.com/NeonMC23/Fluent/actions/runs/43621221912)
+(`09a71e9`): Linux, Windows, macOS and the aggregate release candidate all
 passed. The Linux artifact is an application-only tar.gz;
 Windows is a portable ZIP; macOS is an `.app` ZIP whose filename records the
 runner architecture (the current `macos-latest` matrix produces arm64). Models
@@ -308,7 +310,7 @@ Install the required system packages:
 
 ```bash
 sudo dnf install gcc gcc-c++ make cmake pkgconf-pkg-config \
-    libxkbcommon-devel wayland-devel mesa-libGL-devel \
+    libxkbcommon-devel libxkbcommon-x11 wayland-devel mesa-libGL-devel \
     fontconfig-devel libX11-devel libXcursor-devel libXi-devel libXrandr-devel
 ```
 
@@ -324,15 +326,18 @@ cargo build --release -p fluent-gui
 
 ### Windows
 
-Windows is not validated in this cycle and no Windows installer is provided.
-See [docs/WINDOWS.md](docs/WINDOWS.md) for prerequisites, the MSVC build
-command, and configuration/model paths.
+Windows x86-64 is built and smoke-tested by CI (executable startup, version,
+icon and self-test); the hosted runner cannot create an OpenGL context, so the
+GUI window is not validated there. No Windows installer is provided. See
+[docs/WINDOWS.md](docs/WINDOWS.md) for prerequisites, the MSVC build command,
+and configuration/model paths.
 
 ### macOS
 
-macOS is not validated in this cycle. See [docs/MACOS.md](docs/MACOS.md) for
-the CPU-only and Metal build commands, Apple Silicon limitations, and the
-bundle/signing work that remains.
+macOS arm64 is built and its `.app` bundle is smoke-tested by CI, including a
+temporary GUI window. Intel macOS, universal binaries, signing and notarization
+are not provided. See [docs/MACOS.md](docs/MACOS.md) for the CPU-only and Metal
+build commands and remaining bundle/signing work.
 
 ### CLI example
 

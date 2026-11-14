@@ -91,9 +91,24 @@ The workflow has run successfully on GitHub:
   directly from its bytes, including a real GUI smoke test and a detached
   signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
-- **Cycle 11:** the workflow now extracts and runs each packaged application,
-  validates archive structure/checksums and verifies signatures when present.
-  The execution result and artifact metadata are recorded here after the run.
+- **Cycle 11 final run:**
+  [43621221912](https://github.com/NeonMC23/Fluent/actions/runs/43621221912)
+  on `09a71e94…`. All four jobs succeeded. Linux and macOS ran the packaged
+  GUI smoke test; Windows ran `--version` and `--self-test` and reported the
+  GUI window as SKIPPED because the hosted runner has no OpenGL 2.0+ context.
+- **Verified inner archive SHA-256 (from the run’s checksum notice):**
+  - `fluent-0.2.0-linux-x86_64.tar.gz` — 7,924,697 B,
+    `512167036b12f735f60399fb0cdd44ffe5af6303a7b8f1fb30364ea0a7011a23`
+  - `fluent-0.2.0-windows-x86_64.zip` — 5,693,060 B,
+    `3369029402bc7102bb7dfe07eb2a336e4c9ffb59a43f16ae632ea16e474f2a78`
+  - `Fluent-0.2.0-macos-arm64.zip` — 6,602,402 B,
+    `92cf43ad11a9c622fc7091023d694ed42c003d2bec5a5397908b7df8d45bd34f`
+- **GitHub artifact ZIP digests (uploaded bundles, not inner archives):**
+  Linux `efcb9fb9…`, Windows `a86edc34…`, macOS `116b593f…`,
+  release candidate `c8f4d657…`.
+- **Signing status of that run:** `unsigned`, `signatures_verified=false`;
+  no secret was configured. The verifier still checked every archive’s exact
+  contents, format, architecture, checksum and manifest.
 
 ## 2. Local packaging commands
 
@@ -246,9 +261,11 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - [x] Linux installer/archive/checksum verified locally.
 - [x] Linux extracted archive passes `--version`, `--self-test` and Xvfb GUI
   smoke tests.
-- [ ] Windows native build produced a ZIP and executable metadata (CI run).
-- [ ] macOS native build produced `Fluent.app` ZIP (arm64 only currently).
-- [ ] Artifact names, contents and executable architectures verified by CI.
+- [x] Windows native build produced a ZIP; CI verified its PE32+ x86-64
+  executable, contents and checksum and ran `--version`/`--self-test`.
+- [x] macOS native build produced `Fluent.app` ZIP (arm64); CI validated the
+  plist, Mach-O architecture, contents and checksum.
+- [x] Artifact names, contents, architectures and checksums verified by CI.
 - [ ] SHA-256 files generated from actual archives.
 - [x] Minisign public key committed (`B504F2189BB21013`).
 - [ ] `MINISIGN_SECRET_KEY` configured and signatures verified (owner action).
@@ -257,7 +274,10 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - [ ] Model/package/licensing notices current.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [ ] Current cycle CI run successful and artifacts independently downloaded.
+- [x] Current cycle CI run 43621221912 succeeded for all four jobs; inner
+  archive checksums were published by the run.
+- [ ] Artifact bytes independently downloaded and inspected (requires GitHub
+  authentication).
 - [ ] Release published/tagged only after explicit owner authorization.
 
 ## 8. Current limitations
