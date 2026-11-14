@@ -47,6 +47,10 @@ jobs:
         run: cargo build --release -p fluent-gui
       - name: Installer tests
         run: ./scripts/test-installer.sh
+      - name: Portable archive smoke test
+        run: |
+          ./scripts/package-linux.sh --skip-build
+          (cd dist && sha256sum -c ./*.sha256)
 
   core-portability:
     name: Core compile check (${{ matrix.os }})
