@@ -155,6 +155,7 @@ jobs:
               $guiText = ($guiOutput | Out-String)
               if ($guiText -match 'egui_glow requires opengl|OpenGL') {
                 Write-Output "::warning title=Windows GUI smoke skipped::GitHub's hosted Windows runner has no OpenGL 2.0+ context; executable startup, version, icon, language and config checks passed."
+                $global:LASTEXITCODE = 0
               } else {
                 throw "fluent --smoke-test-gui failed"
               }
@@ -165,6 +166,7 @@ jobs:
             Write-Output "::error title=Windows smoke log::$escaped"
             throw
           }
+          exit 0
       - name: Upload Windows smoke log on failure
         if: failure()
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
