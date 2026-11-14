@@ -8,6 +8,8 @@ Translate across **190+ languages and dialects** with a clean desktop interface,
 
 [![Rust](https://img.shields.io/badge/Rust-Native-FF66C4?style=flat-square&labelColor=171717)](https://www.rust-lang.org/) [![Languages](https://img.shields.io/badge/Languages-190%2B-A3E635?style=flat-square&labelColor=171717)](#-features) [![AI](https://img.shields.io/badge/AI-NLLB--200-FF66C4?style=flat-square&labelColor=171717)](https://github.com/facebookresearch/fairseq/tree/nllb) [![License](https://img.shields.io/badge/License-MIT-A3E635?style=flat-square&labelColor=171717)](LICENSE)
 
+<p align="center"><img src="src/logo/banner.png" alt="Fluent — Local Translation" width="100%"></p>
+
 ---
 
 ## ◈ Preview
@@ -167,7 +169,7 @@ directory. See [docs/LINUX.md](docs/LINUX.md) for migration from the old
 | `--skip-build` | Reuse an existing `target/release/fluent` binary. |
 | `--models-src DIR` | Model source containing `nllb-200-1.3b/` and `nllb-200-3.3b/` (the repository default `./models` is empty in a fresh checkout). |
 | `--skip-models` | Create empty model directories only. |
-| `--icon FILE` | Install an SVG icon and reference it from the desktop entry. |
+| `--icon FILE` | Install an SVG or PNG icon; the bundled 256×256 Fluent icon is used by default. |
 | `--no-desktop` | Skip desktop integration. |
 | `--reset-config` | Regenerate `config.json` (otherwise preserved). |
 | `--uninstall` | Same as `uninstall.sh`; preserves configuration and models. |
@@ -381,7 +383,7 @@ the unresolved tokenizer-redistribution question.
 - [macOS build guide](docs/MACOS.md)
 - [Model package specification](docs/MODEL_PACKAGE.md)
 - [Model provenance and licensing](docs/MODEL_PROVENANCE.md)
-- [Icon and branding requirements](docs/ASSETS.md)
+- [Branding assets and icon integration](docs/ASSETS.md)
 
 ---
 

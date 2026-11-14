@@ -34,6 +34,16 @@ cargo build --release --locked -p fluent-gui
 
 No administrator privileges are needed to build or run from a user directory.
 
+## Application icon
+
+`crates/fluent-gui/build.rs` embeds
+`src/logo/generated/windows/fluent.ico` through the `winres` build dependency on
+Windows hosts. The ICO has 16, 24, 32, 48, 64, 128 and 256 px entries and is
+independently validated by `scripts/verify-branding-assets.py`. Product name,
+file description, original filename and numeric file/product versions are set.
+The icon and metadata have **not** been inspected in Windows Explorer, and a
+Windows build has not been executed here.
+
 ## Configuration and models
 
 The application searches for `config.json` in this order:

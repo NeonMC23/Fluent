@@ -51,7 +51,7 @@ The default layout is:
 ~/.config/fluent/settings.json             preferences (created by the GUI)
 ~/.local/share/fluent/models/              model files (user-owned)
 ~/.local/share/applications/io.fluent.Fluent.desktop
-~/.local/share/icons/hicolor/scalable/apps/io.fluent.Fluent.svg   (optional)
+~/.local/share/icons/hicolor/256x256/apps/io.fluent.Fluent.png  (default)
 ~/.local/state/fluent/install-manifest     used by uninstall
 ```
 
@@ -68,7 +68,7 @@ The binary can be launched directly or from the desktop menu.
 | `--skip-build` | Use `target/release/fluent` without running Cargo. |
 | `--models-src DIR` | Directory containing `nllb-200-1.3b/` and `nllb-200-3.3b/`. Default: `./models`, which is empty in a fresh checkout. A legacy `~/.fluent/models` is also checked. |
 | `--skip-models` | Create empty model directories only. |
-| `--icon FILE` | Install an SVG icon and reference it from the desktop entry. |
+| `--icon FILE` | Install an SVG or PNG icon. By default the bundled 256×256 Fluent PNG is installed automatically. |
 | `--no-desktop` | Do not create a desktop entry or icon. |
 | `--reset-config` | Regenerate `config.json` (existing configuration is otherwise preserved). |
 | `--uninstall` | Remove application files; configuration and models are preserved. |
@@ -162,8 +162,8 @@ still needs the runtime packages listed above. There is no RPATH/RUNPATH
 pointing into the build tree.
 
 The Ubuntu build is currently a local container procedure, not an automated
-release pipeline. CI now runs on `ubuntu-22.04` and enforces the same baseline
-check, but GitHub Actions has not executed yet.
+release pipeline. CI targets `ubuntu-22.04` and enforces the same baseline check, but GitHub
+Actions has not executed yet.
 
 CPU dispatch is unchanged: the binary contains AVX2/FMA kernels selected by
 runtime detection, with a scalar fallback. It is not compiled with
@@ -182,7 +182,11 @@ section. Other distributions and older glibc versions remain untested.
 If `~/.local/bin` is not on your `PATH`, add it in your shell configuration.
 The installer writes `io.fluent.Fluent.desktop` with an absolute `Exec` path
 (quoted correctly, including spaces) and `StartupWMClass=io.fluent.Fluent`.
-If `desktop-file-validate`, `update-desktop-database` or
+The installer automatically copies the bundled
+`src/logo/generated/png/fluent-256.png` to
+`~/.local/share/icons/hicolor/256x256/apps/io.fluent.Fluent.png` and references
+`Icon=io.fluent.Fluent`. An explicit SVG or PNG can still be supplied with
+`--icon`. If `desktop-file-validate`, `update-desktop-database` or
 `gtk-update-icon-cache` are available, the installer uses them; otherwise it
 continues without failing.
 

@@ -73,6 +73,23 @@ The CI workflow defines a `macos-latest` job that runs
 GitHub**, and no macOS GUI has been launched. Compilation is not runtime
 validation; Metal, universal binaries and bundles remain untested.
 
+## Application icon and bundle staging
+
+`scripts/package-macos.sh` stages:
+
+```text
+dist/Fluent.app/Contents/MacOS/fluent
+dist/Fluent.app/Contents/Resources/Fluent.icns
+dist/Fluent.app/Contents/Info.plist
+dist/Fluent.app/Contents/PkgInfo
+```
+
+`Info.plist` uses bundle identifier `io.fluent.Fluent`, executable `fluent`,
+icon `Fluent.icns`, display name `Fluent`, minimum macOS 12.0 and high-DPI
+support. The ICNS is validated independently on Linux; the bundle layout and
+plist can be staged and parsed on Linux, but only a macOS build can produce a
+usable executable. No macOS build or launch has been performed.
+
 ## Packaging, signing and notarization
 
 There is no `.app` bundle, `.icns` icon, universal binary, code signature,

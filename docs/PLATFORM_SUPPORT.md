@@ -9,8 +9,8 @@ CI definitions, CI execution and actual GUI runtime validation.
 |---|---|---|---|---|---|
 | Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`) | **No** | **Yes** (Nobara host + Ubuntu 22.04 container) | Portable tar.gz |
 | Linux AArch64 | No | No | No | No | No |
-| Windows x86-64 | No toolchain | Yes (compile/test + release GUI) | **No** | **No** | No installer |
-| macOS Apple Silicon / Intel | No toolchain | Yes (compile/test + release GUI) | **No** | **No** | No `.app`, no signing |
+| Windows x86-64 | No toolchain | Yes (compile/test + release GUI, icon resource) | **No** | **No** | No installer |
+| macOS Apple Silicon / Intel | No toolchain | Yes (compile/test + release GUI + bundle staging) | **No** | **No** | Staged `.app`; no signing |
 
 “CI job defined” means the workflow contains the job; it does not mean it has
 run or passed. No GitHub Actions run occurred in this cycle.
@@ -30,6 +30,8 @@ run or passed. No GitHub Actions run occurred in this cycle.
 - **Runtime-only libraries:** X11 or Wayland, OpenGL 3.3 driver, fontconfig and
   the usual desktop libraries loaded by `winit`/`glutin`; not all appear in
   `ldd`.
+- **Branding:** the official 256 px PNG is installed automatically by the
+  installer and the window icon is embedded in the binary.
 - **Archive:** `dist/fluent-0.1.0-linux-x86_64.tar.gz`; application-only
   (binary, LICENSE, README); no models or tokenizer files.
 - **Not tested:** Debian/Fedora stable releases other than the build/runtime

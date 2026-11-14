@@ -22,7 +22,8 @@ Linux is not evidence that Windows or macOS binaries work.
 | A missing model produces an actionable error. | `Error::ModelNotFound(path)` and `Error::MissingModelFile { dir, hint }` are surfaced in the GUI error banner. |
 | CPU feature detection remains safe. | `quant.rs` selects AVX2/FMA through `is_x86_feature_detected!`; the scalar path is always compiled and was exercised in Cycle 5. |
 | CUDA and Metal are optional. | Workspace/gui features default to empty; `engine.rs` compiles CPU fallbacks when the features are absent. |
-| The legacy `install.sh` mixed application, configuration, models, and launcher in `~/.fluent`. | Audit of the previous script; replaced in this cycle. |
+| The legacy `install.sh` mixed application, configuration, models, and launcher in `~/.fluent`. | Audit of the previous script; replaced in Cycle 6. |
+| Branding is integrated for Linux, window, Windows resource and macOS bundle staging. | `src/logo/generated`, `main.rs` embedded RGBA, installer default PNG, `build.rs`/`winres`, `scripts/package-macos.sh`; asset structure validated. Windows/macOS runtime still unvalidated. |
 
 ### Platform-sensitive code
 
