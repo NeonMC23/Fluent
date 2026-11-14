@@ -113,10 +113,11 @@ command -v gzip >/dev/null 2>&1 || die "gzip was not found"
 command -v sha256sum >/dev/null 2>&1 || die "sha256sum was not found"
 command -v install >/dev/null 2>&1 || die "install was not found"
 
-GLIBC_BUILD="unknown"
-if command -v ldd >/dev/null 2>&1; then
-    GLIBC_BUILD="$(ldd --version 2>/dev/null | head -n 1 || true)"
-    [ -n "$GLIBC_BUILD" ] || GLIBC_BUILD="unknown"
+GLIBC_REQUIRED="unknown"
+if command -v objdump >/dev/null 2>&1; then
+    GLIBC_REQUIRED="$(objdump -T "$BIN_SRC" 2>/dev/null |
+        grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -n 1 || true)"
+    [ -n "$GLIBC_REQUIRED" ] || GLIBC_REQUIRED="unknown"
 fi
 
 if [ "$DO_BUILD" -eq 1 ]; then
@@ -148,9 +149,9 @@ models, tokenizer files, configuration, user data or installer scripts.
 
 Runtime requirements
 --------------------
-- Linux on $ARCH with glibc at least as new as the build host.
-  Build host runtime: $GLIBC_BUILD
-  The strongest requirement can be inspected with:
+- Linux on $ARCH with glibc satisfying this binary.
+  Maximum required glibc symbol: $GLIBC_REQUIRED
+  Confirm it yourself with:
 
       objdump -T bin/fluent | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1
 - X11 or Wayland with an OpenGL 3.3 capable driver (eframe/glow renderer).
