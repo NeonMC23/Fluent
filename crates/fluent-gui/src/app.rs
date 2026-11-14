@@ -48,6 +48,9 @@ pub struct FluentApp {
     picker: Option<PickerTarget>,
     picker_search: String,
     picker_focus: bool,
+
+    /// Non-interactive CI smoke test: close after N painted frames.
+    smoke_frames: Option<u32>,
 }
 
 impl FluentApp {
@@ -85,7 +88,15 @@ impl FluentApp {
             picker: None,
             picker_search: String::new(),
             picker_focus: false,
+            smoke_frames: None,
         }
+    }
+
+    /// Ask the GUI to close itself after a few painted frames. This exercises
+    /// window creation, GL context setup, theme application and one full
+    /// layout pass without requiring user interaction.
+    pub fn set_smoke_frames(&mut self, frames: u32) {
+        self.smoke_frames = Some(frames.max(1));
     }
 
     // ------------------------------------------------------------------
@@ -1476,6 +1487,18 @@ impl FluentApp {
 
 impl eframe::App for FluentApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        if let Some(frames) = self.smoke_frames.as_mut() {
+            if *frames == 0 {
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                ui.ctx().request_repaint();
+                return;
+            }
+            *frames -= 1;
+            // Keep the event loop awake long enough to paint the requested
+            // frames and process the close request on every backend.
+            ui.ctx().request_repaint_after(Duration::from_millis(16));
+        }
+
         let ctx = ui.ctx().clone();
         self.drain_events();
 
