@@ -51,7 +51,8 @@ Options:
                           (default: ./models, which in a fresh checkout contains
                           only a README; a legacy ~/.fluent/models is also
                           considered when the target is empty)
-  --icon FILE             Install an SVG application icon
+  --icon FILE             Install an SVG or PNG application icon. By default
+                          the bundled 256x256 Fluent PNG is used on Linux.
   --no-desktop            Skip the desktop entry and icon (Linux)
   --reset-config          Regenerate config.json even if one already exists
   --uninstall             Remove application files, launcher and desktop entry.
@@ -336,7 +337,7 @@ case "$(uname -s)" in
         DEFAULT_CONFIG_DIR="$CONFIG_HOME/fluent"
         DEFAULT_MODELS_DIR="$DATA_HOME/fluent/models"
         DESKTOP_DIR="$DATA_HOME/applications"
-        ICON_DIR="$DATA_HOME/icons/hicolor/scalable/apps"
+        ICON_DIR="$DATA_HOME/icons/hicolor"
         ;;
     Darwin*)
         PLATFORM="macOS"
@@ -359,6 +360,13 @@ esac
 
 STATE_DIR="$STATE_HOME/fluent"
 MANIFEST="$STATE_DIR/install-manifest"
+
+if [ "$PLATFORM" = "Linux" ] && [ "$DO_DESKTOP" -eq 1 ] && [ -z "$ICON_SRC" ]; then
+    DEFAULT_ICON="$SCRIPT_DIR/src/logo/generated/png/fluent-256.png"
+    if [ -f "$DEFAULT_ICON" ]; then
+        ICON_SRC="$DEFAULT_ICON"
+    fi
+fi
 
 APP_DIR="$(expand_tilde "${APP_DIR_ARG:-${FLUENT_APP_DIR:-${FLUENT_INSTALL_DIR:-$DEFAULT_APP_DIR}}}")"
 BIN_DIR="$(expand_tilde "${BIN_DIR_ARG:-${FLUENT_BIN_DIR:-$DEFAULT_BIN_DIR}}")"
@@ -433,7 +441,7 @@ if [ "$DO_UNINSTALL" -eq 1 ]; then
         update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
     fi
     if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -n "$ICON_DIR" ]; then
-        gtk-update-icon-cache -f -t "${ICON_DIR%/scalable/apps}" >/dev/null 2>&1 || true
+        gtk-update-icon-cache -f -t "$ICON_DIR" >/dev/null 2>&1 || true
     fi
 
     cat <<EOF
@@ -504,8 +512,8 @@ if [ -n "$ICON_SRC" ]; then
     ICON_SRC="$(absolute_path "$(expand_tilde "$ICON_SRC")")"
     [ -f "$ICON_SRC" ] || die "icon not found: $ICON_SRC"
     case "$ICON_SRC" in
-        *.svg) ;;
-        *) die "only SVG icons are supported; convert the asset to SVG first" ;;
+        *.svg|*.png) ;;
+        *) die "icon must be an SVG or PNG file: $ICON_SRC" ;;
     esac
 fi
 
@@ -646,8 +654,11 @@ DESKTOP_FILE=""
 ICON_FILE=""
 if [ "$DO_DESKTOP" -eq 1 ]; then
     if [ -n "$ICON_SRC" ]; then
-        ensure_dir "$ICON_DIR"
-        ICON_FILE="$ICON_DIR/$APP_ID.svg"
+        case "$ICON_SRC" in
+            *.svg) ICON_FILE="$ICON_DIR/scalable/apps/$APP_ID.svg" ;;
+            *.png) ICON_FILE="$ICON_DIR/256x256/apps/$APP_ID.png" ;;
+        esac
+        ensure_dir "$(dirname -- "$ICON_FILE")"
         install -m 0644 "$ICON_SRC" "$ICON_FILE" 2>/dev/null ||
             cp -- "$ICON_SRC" "$ICON_FILE"
     fi
@@ -683,7 +694,7 @@ if [ "$DO_DESKTOP" -eq 1 ]; then
         update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
     fi
     if [ -n "$ICON_FILE" ] && command -v gtk-update-icon-cache >/dev/null 2>&1; then
-        gtk-update-icon-cache -f -t "${ICON_DIR%/scalable/apps}" >/dev/null 2>&1 || true
+        gtk-update-icon-cache -f -t "$ICON_DIR" >/dev/null 2>&1 || true
     fi
 fi
 
