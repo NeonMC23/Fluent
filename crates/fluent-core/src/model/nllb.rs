@@ -2005,10 +2005,10 @@ mod tests {
 
         for row in 0..rows {
             for token in 0..vocab {
-                assert_eq!(
-                    prepared.log_prob(row, token).to_bits(),
-                    reference[row * vocab + token].to_bits(),
-                    "row {row} token {token}"
+                assert_log_prob_matches(
+                    prepared.log_prob(row, token),
+                    reference[row * vocab + token],
+                    &format!("row {row} token {token}"),
                 );
             }
         }
@@ -2047,11 +2047,13 @@ mod tests {
         for (row, values) in rows.iter().enumerate() {
             let expected_row = &reference[row * vocab..(row + 1) * vocab];
             for (token, _) in values.iter().enumerate() {
-                let actual = prepared.log_prob(row, token).to_bits();
-                let expected = expected_row[token].to_bits();
                 // Both paths may legitimately produce NaN; require identical
                 // bits so the behaviour is pinned, including NaN payloads.
-                assert_eq!(actual, expected, "row {row} token {token}");
+                assert_log_prob_matches(
+                    prepared.log_prob(row, token),
+                    expected_row[token],
+                    &format!("row {row} token {token}"),
+                );
                 compared += 1;
             }
         }
@@ -2069,7 +2071,11 @@ mod tests {
         let reference = reference_log_probs(&data, 1, vocab);
         for row in 0..4 {
             for (token, &expected) in reference.iter().enumerate() {
-                assert_eq!(prepared.log_prob(row, token).to_bits(), expected.to_bits());
+                assert_log_prob_matches(
+                    prepared.log_prob(row, token),
+                    expected,
+                    &format!("row {row} token {token}"),
+                );
             }
         }
     }
@@ -2103,11 +2109,33 @@ mod tests {
         for (a, e) in optimized.iter().zip(expected.iter()) {
             assert_eq!(a.token, e.token);
             assert_eq!(a.beam, e.beam);
-            assert_eq!(a.score.to_bits(), e.score.to_bits());
+            if cfg!(target_arch = "aarch64") {
+                assert!((a.score - e.score).abs() <= 2e-5f64.max(e.score.abs() * 2e-5));
+            } else {
+                assert_eq!(a.score.to_bits(), e.score.to_bits());
+            }
         }
     }
 
     // -- fused attention ---------------------------------------------------
+
+    /// Candle uses a sequential CPU sum on default x86-64 builds, so the
+    /// manual log-softmax is bit-identical there. On aarch64 Candle uses NEON
+    /// reductions; the same math differs by a few ULPs and is compared with a
+    /// tight tolerance instead. Non-finite values must still match exactly.
+    fn assert_log_prob_matches(actual: f32, expected: f32, context: &str) {
+        if actual.is_nan() || expected.is_nan() || actual.is_infinite() || expected.is_infinite() {
+            assert_eq!(actual.to_bits(), expected.to_bits(), "{context}");
+        } else if cfg!(target_arch = "aarch64") {
+            let tolerance = 2e-5f32.max(expected.abs() * 2e-5);
+            assert!(
+                (actual - expected).abs() <= tolerance,
+                "{context}: actual {actual} expected {expected}"
+            );
+        } else {
+            assert_eq!(actual.to_bits(), expected.to_bits(), "{context}");
+        }
+    }
 
     fn pseudo_random(count: usize, seed: u32) -> Vec<f32> {
         let mut state = seed;

@@ -47,7 +47,17 @@ jobs:
       - name: Tests
         run: cargo test --workspace --locked
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: |
+          set -o pipefail
+          cargo clippy --workspace --all-targets --locked -- -D warnings 2>&1 | tee clippy.log
+      - name: Upload Clippy log on failure
+        if: failure()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: linux-clippy-log
+          path: clippy.log
+          retention-days: 3
+          if-no-files-found: ignore
       - name: Release GUI build
         run: cargo build --release --locked -p fluent-gui
       - name: Verify GLIBC 2.35 baseline
@@ -104,7 +114,17 @@ jobs:
           toolchain: 1.99.0
       - uses: Swatinem/rust-cache@aa7c1c80a07a27a84c0aa76d0cef0aad3830e330 # v2.7.8
       - name: Tests
-        run: cargo test --workspace --locked
+        run: |
+          set -o pipefail
+          cargo test --workspace --locked 2>&1 | tee macos-test.log
+      - name: Upload macOS test log on failure
+        if: failure()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: macos-test-log
+          path: macos-test.log
+          retention-days: 3
+          if-no-files-found: ignore
       - name: Release GUI build
         run: cargo build --release --locked -p fluent-gui
       - name: Stage and archive Fluent.app
