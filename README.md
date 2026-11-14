@@ -2,6 +2,8 @@
 
 **Private AI translation. No cloud. Your machine.**
 
+_Development version 0.2.0 · last published 0.1.0_
+
 A native, local-first translation application powered by Meta's NLLB-200 models — built in Rust for Linux, Windows, and macOS.
 
 Translate across **190+ languages and dialects** with a clean desktop interface, selectable translation modes, and optional GPU acceleration.
@@ -382,6 +384,7 @@ the unresolved tokenizer-redistribution question.
 - [Model package specification](docs/MODEL_PACKAGE.md)
 - [Model provenance and licensing](docs/MODEL_PROVENANCE.md)
 - [Branding assets and icon integration](docs/ASSETS.md)
+- [Versioning and releases](docs/VERSIONING.md)
 
 ---
 

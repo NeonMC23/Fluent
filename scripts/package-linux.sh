@@ -82,7 +82,7 @@ case "$(uname -m)" in
     *) die "unsupported Linux architecture: $(uname -m)" ;;
 esac
 
-VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$ROOT/Cargo.toml" | head -n 1)"
+VERSION="$("$ROOT/scripts/version.sh")"
 [ -n "$VERSION" ] || die "could not read the workspace version from Cargo.toml"
 
 NAME="fluent-$VERSION-linux-$ARCH"

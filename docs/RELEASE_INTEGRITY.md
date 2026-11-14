@@ -115,7 +115,7 @@ history. It is generated from the exact tracked HEAD with Git's own archive:
 ```bash
 ./scripts/make-source-snapshot.sh
 # equivalent to:
-# git archive --format=tar.gz -o dist/fluent-0.1.0-source.tar.gz HEAD
+# git archive --format=tar.gz -o dist/fluent-<version>-source.tar.gz HEAD
 ```
 
 Properties:
@@ -129,7 +129,14 @@ Properties:
 Snapshots are generated on demand into `dist/` (ignored, local only); no
 redundant snapshot is retained in the canonical workspace.
 
-## 5. What remains true
+## 5. Version and artifact identity
+
+The current unreleased version is `0.2.0`; the last published version was
+`0.1.0`. Artifact names and metadata must be generated from the workspace
+version in `Cargo.toml`; see [VERSIONING.md](VERSIONING.md). A release manifest
+must record the actual Git commit and workflow run, not just the version.
+
+## 6. What remains true
 
 - Current tree: **clean of NLLB assets**.
 - Git history: **retains them** reachable from main, tags and remote refs.

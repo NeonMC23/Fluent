@@ -33,7 +33,7 @@ run or passed. No GitHub Actions run occurred in this cycle.
 - **Branding:** the official 256 px PNG is installed automatically by the
   installer, the window icon is embedded in the binary, and the main window
   header shows the official mark next to the Fluent wordmark.
-- **Archive:** `dist/fluent-0.1.0-linux-x86_64.tar.gz`; application-only
+- **Archive:** `dist/fluent-0.2.0-linux-x86_64.tar.gz`; application-only
   (binary, LICENSE, README); no models or tokenizer files.
 - **Not tested:** Debian/Fedora stable releases other than the build/runtime
   hosts, ARM Linux, non-glibc systems, X11-only sessions (the container used

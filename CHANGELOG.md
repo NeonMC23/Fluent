@@ -1,0 +1,35 @@
+# Changelog
+
+All notable changes to Fluent are documented here. Versions are development
+versions until a release is explicitly published.
+
+## 0.2.0 — unreleased
+
+### Added
+
+- Official Fluent branding in the application header and platform icons.
+- Linux desktop entry and icon installation as part of the per-user installer.
+- Portable Linux archive with deterministic packaging metadata and SHA-256.
+- Windows resource/icon embedding and macOS `.app` bundle staging.
+- GitHub Actions definitions for Linux, Windows and macOS builds.
+- Release-integrity/signing preparation documentation and scripts.
+
+### Changed
+
+- Application version is centralized in the Cargo workspace and derived by
+  build/package scripts and the GUI About string.
+- Settings layout uses aligned grids and equal model cards.
+- Source and translation panels reserve matching footer space and heights.
+- Single, larger language swap control with consistent header control sizes.
+
+### Fixed
+
+- Installed launch now creates the `.desktop` entry and icon automatically.
+- `XDG_BIN_HOME` and custom XDG locations are respected.
+- Packaging works from checkout paths containing spaces.
+
+## 0.1.0 — previous published version
+
+Initial public/development release with local NLLB inference, Q8 CPU weights,
+AVX2 with scalar fallback, fused attention/cache, cancellation, benchmark
+harness and Linux installer foundation.
