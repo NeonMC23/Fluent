@@ -1,9 +1,10 @@
 name: CI
 
 # Validation only. No model downloads, secrets, signing, artifacts or releases.
-# The Linux job is the locally verified quality gate. The Windows/macOS job
-# compiles and unit-tests the platform-neutral core crate; it is not a GUI or
-# runtime validation.
+# Linux is built on Ubuntu 22.04 and checked against the GLIBC_2.35 baseline.
+# Windows/macOS jobs compile and test the full workspace and release GUI, but
+# they are not runtime validation; no GUI has been launched there by this
+# project yet.
 
 on:
   push:
@@ -19,7 +20,7 @@ permissions:
 jobs:
   linux:
     name: Linux quality gates
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -45,6 +46,8 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Release GUI build
         run: cargo build --release -p fluent-gui
+      - name: Verify GLIBC 2.35 baseline
+        run: ./scripts/check-linux-baseline.sh target/release/fluent 2.35
       - name: Installer tests
         run: ./scripts/test-installer.sh
       - name: Portable archive smoke test
@@ -52,8 +55,8 @@ jobs:
           ./scripts/package-linux.sh --skip-build
           (cd dist && sha256sum -c ./*.sha256)
 
-  core-portability:
-    name: Core compile check (${{ matrix.os }})
+  desktop-build:
+    name: Desktop compile/test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -63,7 +66,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Check core crate
-        run: cargo check -p fluent-core --all-targets
-      - name: Unit tests (no model required)
-        run: cargo test -p fluent-core --lib
+      - name: Tests (no model required)
+        run: cargo test --workspace
+      - name: Release GUI build
+        run: cargo build --release -p fluent-gui
+      # Compilation and tests only. GUI launch, Metal, signing and
+      # notarization require real platform validation and are not claimed.
