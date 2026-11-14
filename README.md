@@ -189,9 +189,11 @@ version. Test builds are produced as **GitHub Actions workflow artifacts**:
 
 These are not release assets. Successful runs include
 [43605074905](https://github.com/NeonMC23/Fluent/actions/runs/43605074905)
-(code commit `ae1dfcb`) and
-[43606018556](https://github.com/NeonMC23/Fluent/actions/runs/43606018556)
-(follow-up): Linux, Windows, macOS and the aggregate release candidate all
+(code commit `ae1dfcb`), the documentation follow-up
+[43606018556](https://github.com/NeonMC23/Fluent/actions/runs/43606018556),
+and the final path-remapping build
+[43606646499](https://github.com/NeonMC23/Fluent/actions/runs/43606646499)
+(`af7dbca`): Linux, Windows, macOS and the aggregate release candidate all
 passed. The Linux artifact is an application-only tar.gz;
 Windows is a portable ZIP; macOS is an `.app` ZIP whose filename records the
 runner architecture (the current `macos-latest` matrix produces arm64). Models

@@ -12,9 +12,10 @@ CI definitions, CI execution and actual GUI runtime validation.
 | Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP) | **Yes** (run 43605074905) | **No** | Portable ZIP; no installer |
 | macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP) | **Yes** (run 43605074905) | **No** | `.app` ZIP; unsigned; Intel not produced |
 
-Successful GitHub runs include `43605074905` (code commit `ae1dfcb`) and the
-documentation follow-up `43606018556`. Compilation/build success is still not
-Windows or macOS runtime validation.
+Successful GitHub runs include `43605074905` (code commit `ae1dfcb`), the
+documentation follow-up `43606018556`, and the final path-remapping build
+`43606646499` (`af7dbca`). Compilation/build success is still not Windows or
+macOS runtime validation.
 
 ## Linux
 

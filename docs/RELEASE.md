@@ -61,14 +61,18 @@ release explicitly.
 The workflow has run successfully on GitHub:
 
 - **Runs:** [43605074905](https://github.com/NeonMC23/Fluent/actions/runs/43605074905)
-  on code commit `ae1dfcb9…`, and the documentation follow-up
+  on code commit `ae1dfcb9…`, the documentation follow-up
   [43606018556](https://github.com/NeonMC23/Fluent/actions/runs/43606018556)
-  on `b104b398…`.
-- **Result:** all four jobs succeeded in both runs — Linux, Windows, macOS and
+  on `b104b398…`, and the final path-remapping build
+  [43606646499](https://github.com/NeonMC23/Fluent/actions/runs/43606646499)
+  on `af7dbca0…`.
+- **Result:** all four jobs succeeded in every run — Linux, Windows, macOS and
   Release integrity.
-- **Artifacts (14-day retention):** `fluent-linux-x86_64` (7,894,473 B),
-  `fluent-windows-x86_64` (5,670,791 B), `fluent-macos` (6,581,518 B), and
-  `fluent-release-candidate` (20,147,653 B).
+- **Artifacts from the final run (14-day retention):**
+  `fluent-linux-x86_64` (7,894,084 B), `fluent-windows-x86_64` (5,669,939 B),
+  `fluent-macos` (6,581,141 B), and `fluent-release-candidate`
+  (20,146,036 B). Sizes differ slightly between runs because embedded build
+  paths and compression vary.
 - The aggregate job installed the Minisign-compatible signer, ran the signing
   path, and generated the manifest successfully. This development environment
   cannot download GitHub artifacts without an API token, so the artifact bytes
