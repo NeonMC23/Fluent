@@ -17,7 +17,7 @@ Fedora / Nobara:
 
 ```bash
 sudo dnf install gcc gcc-c++ make cmake pkgconf-pkg-config \
-    libxkbcommon-devel wayland-devel mesa-libGL-devel fontconfig-devel \
+    libxkbcommon-devel libxkbcommon-x11 wayland-devel mesa-libGL-devel fontconfig-devel \
     libX11-devel libXcursor-devel libXi-devel libXrandr-devel
 ```
 
@@ -25,7 +25,7 @@ Debian / Ubuntu:
 
 ```bash
 sudo apt install build-essential pkg-config cmake \
-    libxkbcommon-dev libwayland-dev libgl1-mesa-dev libegl1-mesa-dev \
+    libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libgl1-mesa-dev libegl1-mesa-dev \
     libfontconfig1-dev libx11-dev libxcursor-dev libxi-dev libxrandr-dev
 ```
 

@@ -37,7 +37,7 @@ jobs:
             libxkbcommon-dev libwayland-dev \
             libx11-dev libxcursor-dev libxi-dev libxrandr-dev \
             libgl1-mesa-dev libegl1-mesa-dev libfontconfig1-dev \
-            desktop-file-utils
+            desktop-file-utils xvfb libgl1-mesa-dri libxkbcommon-x11-0
       - name: Verify branding assets
         run: python3 scripts/verify-branding-assets.py
       - name: Formatting
@@ -70,6 +70,21 @@ jobs:
         run: |
           ./scripts/package-linux.sh --skip-build
           (cd dist && sha256sum -c ./*.sha256)
+      - name: Verify archive and run packaged GUI smoke test
+        run: |
+          python3 scripts/verify-artifacts.py --dir dist --version "$(./scripts/version.sh)"
+          SMOKE="$(mktemp -d)"
+          tar -xzf dist/fluent-*.tar.gz -C "$SMOKE"
+          BIN="$(find "$SMOKE" -path '*/bin/fluent' -type f -print -quit)"
+          test -n "$BIN"
+          export HOME="$SMOKE/home"
+          export XDG_CONFIG_HOME="$HOME/.config"
+          export XDG_DATA_HOME="$HOME/.local/share"
+          mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
+          cd "$SMOKE"
+          "$BIN" --version
+          "$BIN" --self-test
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a "$BIN" --smoke-test-gui
       - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: fluent-linux-x86_64
@@ -100,6 +115,28 @@ jobs:
             Select-Object -First 1).Matches.Groups[1].Value
           python scripts/package-windows.py `
             --binary target/release/fluent.exe --version $version --output dist
+      - name: Verify ZIP and run packaged smoke tests
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"' |
+            Select-Object -First 1).Matches.Groups[1].Value
+          python scripts/verify-artifacts.py --dir dist --version $version
+          $smoke = Join-Path $env:RUNNER_TEMP "fluent-smoke"
+          Remove-Item -Recurse -Force $smoke -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $smoke | Out-Null
+          $zip = (Get-ChildItem dist\fluent-*.zip | Select-Object -First 1).FullName
+          Expand-Archive -Path $zip -DestinationPath $smoke
+          $exe = Join-Path $smoke "fluent.exe"
+          Set-Location $smoke
+          $versionOutput = & $exe --version
+          if ($LASTEXITCODE -ne 0) { throw "fluent --version failed" }
+          if ($versionOutput -notlike "*Fluent $version*") {
+            throw "unexpected version output: $versionOutput"
+          }
+          & $exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw "fluent --self-test failed" }
+          & $exe --smoke-test-gui
+          if ($LASTEXITCODE -ne 0) { throw "fluent --smoke-test-gui failed" }
       - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: fluent-windows-x86_64
@@ -141,6 +178,19 @@ jobs:
             --version "$(./scripts/version.sh)" \
             --arch "$(uname -m)" \
             --output dist
+      - name: Verify bundle and run packaged smoke tests
+        run: |
+          python3 scripts/verify-artifacts.py --dir dist --version "$(./scripts/version.sh)"
+          SMOKE="$(mktemp -d)"
+          ditto -x -k dist/Fluent-*.zip "$SMOKE"
+          APP="$SMOKE/Fluent.app"
+          test -x "$APP/Contents/MacOS/fluent"
+          plutil -lint "$APP/Contents/Info.plist"
+          lipo -info "$APP/Contents/MacOS/fluent"
+          cd "$SMOKE"
+          "$APP/Contents/MacOS/fluent" --version
+          "$APP/Contents/MacOS/fluent" --self-test
+          "$APP/Contents/MacOS/fluent" --smoke-test-gui
       - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: fluent-macos
@@ -161,6 +211,8 @@ jobs:
           pattern: fluent-*
           path: dist
           merge-multiple: true
+      - name: Stage the public verification key
+        run: cp docs/keys/minisign.pub dist/minisign.pub
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # pinned action
         with:
           toolchain: 1.99.0
@@ -169,6 +221,7 @@ jobs:
           cargo install rsign2 --version 0.6.7 --locked --root "$RUNNER_TEMP/rsign"
           echo "$RUNNER_TEMP/rsign/bin" >> "$GITHUB_PATH"
       - name: Sign if the protected secret is configured
+        id: signing
         env:
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
         run: |
@@ -178,19 +231,47 @@ jobs:
             chmod 600 "$RUNNER_TEMP/minisign/minisign.key"
             MINISIGN_SECRET_KEY_FILE="$RUNNER_TEMP/minisign/minisign.key" \
               ./scripts/sign-artifacts.sh dist/*.tar.gz dist/*.zip
+            echo "signed=true" >> "$GITHUB_OUTPUT"
           else
             echo "No MINISIGN_SECRET_KEY configured; artifacts are unsigned." \
               | tee dist/UNSIGNED.txt
+            echo "signed=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: Generate release manifest
+      - name: Verify detached signatures
+        if: steps.signing.outputs.signed == 'true'
         run: |
-          python3 scripts/release-manifest.py \
-            --dir dist \
-            --version "$(./scripts/version.sh)" \
-            --commit "$GITHUB_SHA" \
-            --run-id "$GITHUB_RUN_ID" \
-            --workflow "$GITHUB_WORKFLOW" \
+          MINISIGN_PUBLIC_KEY_FILE=docs/keys/minisign.pub \
+            ./scripts/verify-artifacts.sh dist/*.tar.gz dist/*.zip
+      - name: Generate release manifest
+        env:
+          SIGNED: ${{ steps.signing.outputs.signed }}
+        run: |
+          ARGS=(
+            --dir dist
+            --version "$(./scripts/version.sh)"
+            --commit "$GITHUB_SHA"
+            --run-id "$GITHUB_RUN_ID"
+            --workflow "$GITHUB_WORKFLOW"
+            --public-key docs/keys/minisign.pub
             --output dist/release-manifest.json
+          )
+          if [ "$SIGNED" = "true" ]; then
+            ARGS+=(--signatures-verified)
+          fi
+          python3 scripts/release-manifest.py "${ARGS[@]}"
+      - name: Verify release candidate contents
+        env:
+          SIGNED: ${{ steps.signing.outputs.signed }}
+        run: |
+          ARGS=(
+            --dir dist
+            --version "$(./scripts/version.sh)"
+            --public-key docs/keys/minisign.pub
+          )
+          if [ "$SIGNED" = "true" ]; then
+            ARGS+=(--require-signatures)
+          fi
+          python3 scripts/verify-artifacts.py "${ARGS[@]}"
       - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: fluent-release-candidate
@@ -200,5 +281,6 @@ jobs:
             dist/*.sha256
             dist/*.minisig
             dist/release-manifest.json
+            dist/minisign.pub
             dist/UNSIGNED.txt
           retention-days: 14
