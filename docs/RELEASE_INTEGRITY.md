@@ -71,18 +71,13 @@ snapshot. Neither was published.
 
 ## 3. Sanitized history candidate
 
-A candidate was prepared in an isolated bare mirror, outside the working
-repository:
-
-```text
-/home/neon/fluent-build/cycle8-history-candidate.git
-```
-
-Procedure (reproducible with available tools; `git-filter-repo` was not
-installed and no package was added):
+A candidate was prepared in an isolated bare mirror outside the working
+repository and removed after verification during the canonical-workspace
+cleanup. The procedure remains reproducible with available tools
+(`git-filter-repo` was not installed and no package was added):
 
 ```bash
-git clone --mirror --no-local /tmp/opencode/fluent-cycle2 candidate.git
+git clone --mirror --no-local "$PWD" candidate.git
 cd candidate.git
 git filter-branch \
   --index-filter 'git rm -r --cached --ignore-unmatch \
@@ -93,10 +88,10 @@ git reflog expire --expire=now --all
 git gc --prune=now
 ```
 
-The procedure was executed on a Cycle 7 candidate during the audit and then
-regenerated from the final Cycle 8 HEAD after the last code commit. The exact
-candidate HEAD and tree hash are recorded in the Cycle 8 engineering report.
-For each run, verification confirmed:
+The procedure was executed on a Cycle 7 candidate and regenerated from later
+HEADs. The disposable candidate was removed after verification; recreate and
+re-verify it before any release-repository decision. For each run, verification
+confirmed:
 
 - the candidate tree is **identical** to the source HEAD tree;
 - the reachable commit count is preserved;
@@ -107,9 +102,10 @@ For each run, verification confirmed:
 - the candidate pack is ~0.4 MiB versus ~8.8 MB for the original repository;
 - `main` differs from the original only by the 20 removed asset paths.
 
-The candidate is **not** the working repository, was not pushed, and did not
-alter any real ref. It is a candidate only; publication still requires owner
-and legal authorization.
+The candidate was **not** the working repository, was never pushed, and did
+not alter any real ref. It has been removed as temporary cleanup; regenerate it
+from the current HEAD if a sanitized release history is chosen. Publication
+still requires owner and legal authorization.
 
 ## 4. Source snapshot
 
@@ -130,9 +126,8 @@ Properties:
 - adjacent SHA-256 file;
 - not published or uploaded.
 
-The snapshot is in `dist/` (ignored, local only). It was regenerated from the
-final Cycle 8 HEAD after the last code commit; its exact checksum is recorded
-in the Cycle 8 engineering report.
+Snapshots are generated on demand into `dist/` (ignored, local only); no
+redundant snapshot is retained in the canonical workspace.
 
 ## 5. What remains true
 

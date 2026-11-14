@@ -155,11 +155,10 @@ under Wayland (software GL) with no model installed: it stayed up for the
 6-second timeout and emitted no errors. This is a real runtime check on the
 glibc 2.35 baseline, not only a compile check.
 
-The previous host-built archive (glibc 2.43) is preserved locally under
-`dist/legacy-glibc243/`; it is not the canonical artifact and should not be
-distributed as the compatible build. The current host can also build a binary,
-but it will inherit the host's glibc; use the Ubuntu 22.04 procedure for
-releases.
+The old host-built glibc 2.43 comparison archive was removed during the
+canonical-workspace cleanup; only the current glibc 2.35 archive is retained.
+The host can still build a binary, but it inherits the host's glibc; use the
+Ubuntu 22.04 procedure for releases.
 
 The binary is a dynamically linked x86-64 PIE with no GLIBCXX/CXXABI
 requirements. X11/Wayland, OpenGL and font libraries are loaded at runtime by
