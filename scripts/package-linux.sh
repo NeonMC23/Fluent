@@ -104,10 +104,6 @@ else
     BIN_SRC="$TARGET_DIR/release/fluent"
 fi
 
-case "$ROOT" in
-    *' '*) die "the checkout path contains spaces; path remapping requires a space-free path" ;;
-esac
-
 command -v tar >/dev/null 2>&1 || die "tar was not found"
 command -v gzip >/dev/null 2>&1 || die "gzip was not found"
 command -v sha256sum >/dev/null 2>&1 || die "sha256sum was not found"
@@ -125,7 +121,12 @@ if [ "$DO_BUILD" -eq 1 ]; then
     echo "Building Fluent $VERSION for Linux/$ARCH..."
     CARGO_REGISTRY="${CARGO_HOME:-$HOME/.cargo}/registry"
     # Keep developer and registry paths out of panic locations in the binary.
-    export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$ROOT=. --remap-path-prefix=$CARGO_REGISTRY=/cargo/registry --remap-path-prefix=$TARGET_DIR=/target"
+    # CARGO_ENCODED_RUSTFLAGS separates arguments with 0x1f, so checkout paths
+    # containing spaces work correctly.
+    if [ -n "${RUSTFLAGS:-}" ]; then
+        warn "RUSTFLAGS is replaced by the packaging path-remap settings"
+    fi
+    export CARGO_ENCODED_RUSTFLAGS="--remap-path-prefix=$ROOT=."$'\x1f'"--remap-path-prefix=$CARGO_REGISTRY=/cargo/registry"$'\x1f'"--remap-path-prefix=$TARGET_DIR=/target"
     (cd "$ROOT" && cargo build --release --locked -p fluent-gui)
 fi
 
