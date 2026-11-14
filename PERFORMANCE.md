@@ -442,9 +442,10 @@ indicative).
 
 `/home/neon/Documents/CODE LOCAL/Fluent/models/nllb-200-3.3b` contains a
 complete-looking checkpoint: `config.json` (d_model 2048, 24+24 layers, vocab
-256,206, f32) and three `pytorch_model-0000{1,2,3}-of-00003.bin` shards totalling
-17,577,465,405 bytes (~16.4 GiB). The loader enumerates bare shards, so the
-directory is discoverable.
+256,206, f32), `pytorch_model.bin.index.json` and three
+`pytorch_model-0000{1,2,3}-of-00003.bin` shards totalling 17,577,465,405 bytes
+(~16.4 GiB). The loader discovers it through the index, so the directory is
+readable.
 
 It was **not run**. The f32 checkpoint is larger than the machine's 15,757 MB
 of RAM, and the host already had ~12 GB resident and ~13 GB of swap in use.
