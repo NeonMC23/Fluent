@@ -58,6 +58,8 @@ jobs:
           path: clippy.log
           retention-days: 3
           if-no-files-found: ignore
+      - name: Configure release path remapping
+        run: python3 scripts/set-ci-remap.py
       - name: Release GUI build
         run: cargo build --release --locked -p fluent-gui
       - name: Verify GLIBC 2.35 baseline
@@ -87,6 +89,8 @@ jobs:
       - uses: Swatinem/rust-cache@aa7c1c80a07a27a84c0aa76d0cef0aad3830e330 # v2.7.8
       - name: Tests
         run: cargo test --workspace --locked
+      - name: Configure release path remapping
+        run: python scripts/set-ci-remap.py
       - name: Release GUI build
         run: cargo build --release --locked -p fluent-gui
       - name: Portable Windows ZIP
@@ -125,6 +129,8 @@ jobs:
           path: macos-test.log
           retention-days: 3
           if-no-files-found: ignore
+      - name: Configure release path remapping
+        run: python3 scripts/set-ci-remap.py
       - name: Release GUI build
         run: cargo build --release --locked -p fluent-gui
       - name: Stage and archive Fluent.app
