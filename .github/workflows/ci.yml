@@ -118,9 +118,13 @@ jobs:
       - name: Verify ZIP and run packaged smoke tests
         shell: pwsh
         run: |
+          $log = Join-Path $env:GITHUB_WORKSPACE "windows-smoke.log"
+          "== verify ==" | Tee-Object -FilePath $log
           $version = (Select-String -Path Cargo.toml -Pattern '^version = "([^"]+)"' |
             Select-Object -First 1).Matches.Groups[1].Value
-          python scripts/verify-artifacts.py --dir dist --version $version
+          python scripts/verify-artifacts.py --dir dist --version $version 2>&1 |
+            Tee-Object -FilePath $log -Append
+          if ($LASTEXITCODE -ne 0) { throw "artifact verification failed" }
           $smoke = Join-Path $env:RUNNER_TEMP "fluent-smoke"
           Remove-Item -Recurse -Force $smoke -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $smoke | Out-Null
@@ -128,15 +132,27 @@ jobs:
           Expand-Archive -Path $zip -DestinationPath $smoke
           $exe = Join-Path $smoke "fluent.exe"
           Set-Location $smoke
-          $versionOutput = & $exe --version
+          "== version ==" | Tee-Object -FilePath $log -Append
+          $versionOutput = & $exe --version 2>&1
+          $versionOutput | Tee-Object -FilePath $log -Append
           if ($LASTEXITCODE -ne 0) { throw "fluent --version failed" }
           if ($versionOutput -notlike "*Fluent $version*") {
             throw "unexpected version output: $versionOutput"
           }
-          & $exe --self-test
+          "== self-test ==" | Tee-Object -FilePath $log -Append
+          & $exe --self-test 2>&1 | Tee-Object -FilePath $log -Append
           if ($LASTEXITCODE -ne 0) { throw "fluent --self-test failed" }
-          & $exe --smoke-test-gui
+          "== gui smoke ==" | Tee-Object -FilePath $log -Append
+          & $exe --smoke-test-gui 2>&1 | Tee-Object -FilePath $log -Append
           if ($LASTEXITCODE -ne 0) { throw "fluent --smoke-test-gui failed" }
+      - name: Upload Windows smoke log on failure
+        if: failure()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: windows-smoke-log
+          path: windows-smoke.log
+          retention-days: 3
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: fluent-windows-x86_64
