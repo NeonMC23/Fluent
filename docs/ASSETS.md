@@ -108,7 +108,22 @@ The Windows icon embedding is only exercised when the build script runs on a
 Windows host. Cross-compiling from Linux would need additional resource-tool
 setup and is not claimed.
 
-## 5. Platform output requirements
+## 5. Interface screenshots
+
+Captured from the actual running application on the canonical Linux host:
+
+| View | Path |
+|---|---|
+| Main interface, dark theme | `src/image1.png` |
+| Settings page | `docs/screenshots/settings.png` |
+| Language picker | `docs/screenshots/language-picker.png` |
+| Main interface, light theme | `docs/screenshots/main-light.png` |
+
+The settings screenshot uses a disposable home directory so no user paths or
+private text are exposed. The main preview was captured with neutral sample
+text. These are documentation captures, not mockups.
+
+## 6. Platform output requirements
 
 For a future release:
 
