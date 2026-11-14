@@ -17,8 +17,9 @@ Workflow: `.github/workflows/ci.yml` — **CI and build artifacts**.
   `--smoke-test-gui` window under Xvfb. Uploads `fluent-linux-x86_64`.
 - **Windows** (`windows-latest`, x86-64): workspace tests, release GUI build
   with embedded ICO/metadata, portable ZIP. Extracts the ZIP and runs
-  `--version`, `--self-test` and `--smoke-test-gui`. Uploads
-  `fluent-windows-x86_64`.
+  `--version` and `--self-test`. The hosted runner has no OpenGL 2.0+ context,
+  so `--smoke-test-gui` is reported as SKIPPED there; any other GUI error fails
+  the job. Uploads `fluent-windows-x86_64`.
 - **macOS** (`macos-latest`, currently arm64): workspace tests, release GUI
   build, `Fluent.app` staging, app ZIP. Unpacks the ZIP, validates the plist
   with `plutil`, inspects the Mach-O architecture with `lipo`, and runs
@@ -268,7 +269,10 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - `MINISIGN_SECRET_KEY` is not configured; CI artifacts remain unsigned even
   though the public key is committed.
 - Windows and macOS runtime validation is limited to native GitHub runners,
-  not physical devices. No SmartScreen or Gatekeeper acceptance is claimed.
+  not physical devices. The Windows runner cannot create an OpenGL 2.0+
+  context, so its GUI-window smoke is SKIPPED; `--version` and `--self-test`
+  still execute the real packaged `fluent.exe`. No SmartScreen or Gatekeeper
+  acceptance is claimed.
 - macOS artifact is arm64 only; Intel/universal are not produced.
 - Windows ZIP is portable only; no installer.
 - No DMG is produced; ZIP is the initial macOS format.

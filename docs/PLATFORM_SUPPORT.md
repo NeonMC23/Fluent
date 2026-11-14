@@ -44,10 +44,11 @@ macOS runtime validation.
 
 ## Windows
 
-- The workflow runs `cargo test --workspace`, a release GUI build and the
-  portable ZIP on `windows-latest`.
-- It succeeded in run 43605074905. This is still compile/build validation only;
-  no Windows GUI has ever been launched by this project.
+- The workflow runs `cargo test --workspace`, a release GUI build, the portable
+  ZIP, and executes the packaged `fluent.exe --version` / `--self-test`.
+- GitHub's hosted Windows runner has no OpenGL 2.0+ context, so the temporary
+  GUI-window smoke is SKIPPED there. This is still not physical-device GUI
+  validation, and no Windows GUI has been launched on real Windows hardware.
 - No installer, Start Menu integration, DLL inventory, CUDA build, or
   uninstaller is provided.
 - See [WINDOWS.md](WINDOWS.md) for prerequisites and paths.
