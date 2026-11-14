@@ -183,11 +183,12 @@ When the corresponding feature is enabled, select the desired device in **Settin
 
 ## ⚡ CPU Performance
 
-On CPU, Fluent keeps the model weights in memory as 8-bit blocks (Q8) instead of f32. A block of 32 values shares one f32 scale, which cuts weight traffic and resident memory by about 3.5× while the arithmetic stays in f32 at block granularity. On x86-64 an AVX2/FMA kernel is selected at runtime when the processor supports it; a portable scalar kernel is always available, so the build does not require a particular instruction set.
+On CPU, Fluent keeps the model weights in memory as 8-bit blocks (Q8) instead of f32. A block of 32 values shares one f32 scale, which cuts weight traffic and resident memory by about 3.5×. The inner loop is an integer `i8 × i8` multiply-accumulate; the block result is then scaled in f32, so accuracy stays close to the f32 reference at block granularity. On x86-64 an AVX2/FMA kernel is selected at runtime when the processor supports it; a portable scalar kernel is always available, so the build does not require a particular instruction set.
 
 - The model file on disk is **never modified**. Quantization happens once while loading and the f32 weights are released immediately.
 - The Q8 path is used automatically only for CPU inference in f32. CUDA, Metal and explicit f16 keep the existing path.
-- Decoding uses a fused attention kernel and a preallocated per-beam KV cache instead of rebuilding and broadcasting tensors every step.
+- Encoder prefill processes eight source rows per quantized weight-block traversal, which keeps the activation tile in cache and cut encoder time by about 20% on the reference machine.
+- Decoding uses a fused attention kernel and a preallocated per-beam KV cache instead of rebuilding and broadcasting tensors every step. Logits are normalized on demand with a bit-identical log-sum-exp, so the full vocabulary is never materialized during beam search.
 
 Two environment overrides are available for diagnosis:
 
