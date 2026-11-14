@@ -328,12 +328,13 @@ xdg_dir() {
 CONFIG_HOME="$(xdg_dir XDG_CONFIG_HOME "$HOME/.config")"
 DATA_HOME="$(xdg_dir XDG_DATA_HOME "$HOME/.local/share")"
 STATE_HOME="$(xdg_dir XDG_STATE_HOME "$HOME/.local/state")"
+BIN_HOME="$(xdg_dir XDG_BIN_HOME "$HOME/.local/bin")"
 
 case "$(uname -s)" in
     Linux*)
         PLATFORM="Linux"
         DEFAULT_APP_DIR="$HOME/.local/lib/fluent"
-        DEFAULT_BIN_DIR="$HOME/.local/bin"
+        DEFAULT_BIN_DIR="$BIN_HOME"
         DEFAULT_CONFIG_DIR="$CONFIG_HOME/fluent"
         DEFAULT_MODELS_DIR="$DATA_HOME/fluent/models"
         DESKTOP_DIR="$DATA_HOME/applications"
@@ -343,7 +344,7 @@ case "$(uname -s)" in
         PLATFORM="macOS"
         FLUENT_BASE="$HOME/Library/Application Support/io.fluent.Fluent"
         DEFAULT_APP_DIR="$FLUENT_BASE/app"
-        DEFAULT_BIN_DIR="$HOME/.local/bin"
+        DEFAULT_BIN_DIR="$BIN_HOME"
         DEFAULT_CONFIG_DIR="$FLUENT_BASE"
         DEFAULT_MODELS_DIR="$FLUENT_BASE/models"
         DESKTOP_DIR=""
@@ -673,6 +674,7 @@ if [ "$DO_DESKTOP" -eq 1 ]; then
         printf '%s\n' 'GenericName=Translation'
         printf '%s\n' 'Comment=Local-first, offline translation with NLLB-200'
         printf 'Exec=%s\n' "$EXEC_LINE"
+        printf 'Path=%s\n' "$HOME"
         if [ -n "$ICON_FILE" ]; then
             printf 'Icon=%s\n' "$APP_ID"
         fi

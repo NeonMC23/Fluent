@@ -125,10 +125,29 @@ assert_absent "$PLAIN_HOME/.local/share/applications/io.fluent.Fluent.desktop"
 [ -d "$PLAIN_HOME/.local/share/fluent/models/nllb-200-1.3b" ] ||
     fail 'model directory was not created'
 
-echo '7. placeholder models are rejected'
+echo '7. custom XDG locations and spaces'
+XDG_HOME="$TMP/home custom xdg"; mkdir -p "$XDG_HOME"
+XDG_CFG="$XDG_HOME/custom config"; XDG_DAT="$XDG_HOME/custom data"; XDG_ST="$XDG_HOME/custom state"; XDG_BIN="$XDG_HOME/custom bin"
+run_in_home "$XDG_HOME" env XDG_CONFIG_HOME="$XDG_CFG" XDG_DATA_HOME="$XDG_DAT" XDG_STATE_HOME="$XDG_ST" XDG_BIN_HOME="$XDG_BIN" \
+    "$ROOT/install.sh" --binary "$FAKE_BIN" --skip-models > "$TMP/custom.log" 2>&1
+assert_file "$XDG_BIN/fluent"
+assert_file "$XDG_CFG/fluent/config.json"
+[ -d "$XDG_DAT/fluent/models/nllb-200-1.3b" ] || fail 'custom model directory missing'
+assert_file "$XDG_DAT/applications/io.fluent.Fluent.desktop"
+assert_file "$XDG_DAT/icons/hicolor/256x256/apps/io.fluent.Fluent.png"
+grep -q "^Path=$XDG_HOME$" "$XDG_DAT/applications/io.fluent.Fluent.desktop" || fail 'desktop Path is wrong'
+run_in_home "$XDG_HOME" env XDG_CONFIG_HOME="$XDG_CFG" XDG_DATA_HOME="$XDG_DAT" XDG_STATE_HOME="$XDG_ST" XDG_BIN_HOME="$XDG_BIN" \
+    "$ROOT/uninstall.sh" > "$TMP/custom-uninstall.log" 2>&1
+assert_absent "$XDG_BIN/fluent"
+assert_absent "$XDG_DAT/applications/io.fluent.Fluent.desktop"
+
+echo '8. placeholder models are rejected'
 PLACEHOLDER_HOME="$TMP/home placeholder"; mkdir -p "$PLACEHOLDER_HOME"
+PLACEHOLDER_SRC="$TMP/placeholder source"
+mkdir -p "$PLACEHOLDER_SRC/nllb-200-1.3b"
+printf 'x' > "$PLACEHOLDER_SRC/nllb-200-1.3b/pytorch_model.bin"
 run_in_home "$PLACEHOLDER_HOME" "$ROOT/install.sh" \
-    --binary "$FAKE_BIN" --models-src "$ROOT/models" --no-desktop > "$TMP/placeholder.log" 2>&1
+    --binary "$FAKE_BIN" --models-src "$PLACEHOLDER_SRC" --no-desktop > "$TMP/placeholder.log" 2>&1
 assert_absent "$PLACEHOLDER_HOME/.local/share/fluent/models/nllb-200-1.3b/pytorch_model.bin"
 
 echo 'PASS: installer tests completed'

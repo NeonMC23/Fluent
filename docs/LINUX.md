@@ -55,7 +55,9 @@ The default layout is:
 ~/.local/state/fluent/install-manifest     used by uninstall
 ```
 
-`XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and `HOME` are respected.
+`XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_BIN_HOME` and `HOME`
+are respected. Relative XDG values are ignored in favour of the standard
+fallbacks.
 The binary can be launched directly or from the desktop menu.
 
 ## Installer options
@@ -73,6 +75,10 @@ The binary can be launched directly or from the desktop menu.
 | `--reset-config` | Regenerate `config.json` (existing configuration is otherwise preserved). |
 | `--uninstall` | Remove application files; configuration and models are preserved. |
 | `--app-dir`, `--bin-dir`, `--config-dir`, `--models-dir` | Override individual locations. `--install-dir` is a legacy alias for `--app-dir`. |
+
+The launcher defaults to `$XDG_BIN_HOME/fluent` when `XDG_BIN_HOME` is an
+absolute path, otherwise `~/.local/bin/fluent`. `~/.local/bin` is used in the
+layout above.
 
 Environment equivalents: `FLUENT_APP_DIR`, `FLUENT_BIN_DIR`,
 `FLUENT_CONFIG_DIR`, `FLUENT_MODELS_DIR`, `FLUENT_MODELS_SRC`,
@@ -181,7 +187,8 @@ section. Other distributions and older glibc versions remain untested.
 
 If `~/.local/bin` is not on your `PATH`, add it in your shell configuration.
 The installer writes `io.fluent.Fluent.desktop` with an absolute `Exec` path
-(quoted correctly, including spaces) and `StartupWMClass=io.fluent.Fluent`.
+(quoted correctly, including spaces), `Path=$HOME` and
+`StartupWMClass=io.fluent.Fluent`.
 The installer automatically copies the bundled
 `src/logo/generated/png/fluent-256.png` to
 `~/.local/share/icons/hicolor/256x256/apps/io.fluent.Fluent.png` and references
