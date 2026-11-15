@@ -274,7 +274,7 @@ pub fn install_model(
             file,
             target,
             *part_size,
-            completed,
+            completed.saturating_sub(*part_size),
             total_bytes,
             index,
             plan.len(),
@@ -551,6 +551,7 @@ fn download_url(
             )));
         }
         let elapsed = started.elapsed().as_secs_f64().max(0.001);
+        let total_done = completed.saturating_add(done);
         let speed = (done.saturating_sub(if append { part_size } else { 0 })) as f64 / elapsed;
         progress(TaskProgress {
             mode: spec.mode,
@@ -558,13 +559,13 @@ fn download_url(
             file: Some(file.name.to_string()),
             file_index,
             file_count,
-            completed_bytes: completed.saturating_add(done),
+            completed_bytes: total_done,
             total_bytes: total,
             file_bytes: done,
             file_total: file.size,
             speed_bps: speed,
             eta_seconds: if speed > 0.0 {
-                Some(((file.size.saturating_sub(done)) as f64 / speed) as u64)
+                Some((total.saturating_sub(total_done) as f64 / speed) as u64)
             } else {
                 None
             },
