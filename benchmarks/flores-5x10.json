@@ -1,0 +1,488 @@
+{
+  "name": "FLORES-200 devtest sample",
+  "license": "CC-BY-SA-4.0",
+  "source": "https://dl.fbaipublicfiles.com/nllb/flores200_dataset.tar.gz",
+  "notes": "First 5 devtest sentences per pair. The archive is not committed; this JSON is a small attribution sample for reproducible evaluation.",
+  "cases": [
+    {
+      "id": "flores-eng_Latn-fra_Latn-1",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "We now have 4-month-old mice that are non-diabetic that used to be diabetic,\" he added.",
+      "reference": "« Nous avons à présent des souris de 4 mois qui ne sont pas diabétiques alors qu'elles l'étaient auparavant », a-t-il ajouté."
+    },
+    {
+      "id": "flores-eng_Latn-fra_Latn-2",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days.",
+      "reference": "Le Dr Ehud Ur, professeur de médecine à l'Université Dalhousie de Halifax (Nouvelle-Écosse) et président de la division clinique et scientifique de l'Association canadienne du diabète, a averti que la recherche en était encore à ses débuts."
+    },
+    {
+      "id": "flores-eng_Latn-fra_Latn-3",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes.",
+      "reference": "À l'instar d'autres experts, il se montre sceptique quant à la possibilité de guérir le diabète, faisant remarquer que ces résultats ne sont pas applicables aux personnes qui souffrent déjà de diabète de type 1."
+    },
+    {
+      "id": "flores-eng_Latn-fra_Latn-4",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him.",
+      "reference": "Lundi, lors d'une émission de radio sur Sveriges Radio, en Suède, Sara Danius, secrétaire permanente du Comité Nobel de Littérature de l'Académie Suédoise, a annoncé publiquement que le comité, incapable de joindre directement Bob Dylan au sujet du prix Nobel de littérature 2016, avait renoncé à le contacter."
+    },
+    {
+      "id": "flores-eng_Latn-fra_Latn-5",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "Danius said, \"Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough.",
+      "reference": "Danius a déclaré : « En ce moment, nous ne faisons rien. J'ai appelé et envoyé des courriels à son plus proche collaborateur et j'ai reçu des réponses très amicales. Pour l'instant, c'est certainement suffisant. »"
+    },
+    {
+      "id": "flores-fra_Latn-eng_Latn-1",
+      "category": "flores-devtest",
+      "source_lang": "fra_Latn",
+      "target_lang": "eng_Latn",
+      "source": "« Nous avons à présent des souris de 4 mois qui ne sont pas diabétiques alors qu'elles l'étaient auparavant », a-t-il ajouté.",
+      "reference": "We now have 4-month-old mice that are non-diabetic that used to be diabetic,\" he added."
+    },
+    {
+      "id": "flores-fra_Latn-eng_Latn-2",
+      "category": "flores-devtest",
+      "source_lang": "fra_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Le Dr Ehud Ur, professeur de médecine à l'Université Dalhousie de Halifax (Nouvelle-Écosse) et président de la division clinique et scientifique de l'Association canadienne du diabète, a averti que la recherche en était encore à ses débuts.",
+      "reference": "Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days."
+    },
+    {
+      "id": "flores-fra_Latn-eng_Latn-3",
+      "category": "flores-devtest",
+      "source_lang": "fra_Latn",
+      "target_lang": "eng_Latn",
+      "source": "À l'instar d'autres experts, il se montre sceptique quant à la possibilité de guérir le diabète, faisant remarquer que ces résultats ne sont pas applicables aux personnes qui souffrent déjà de diabète de type 1.",
+      "reference": "Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes."
+    },
+    {
+      "id": "flores-fra_Latn-eng_Latn-4",
+      "category": "flores-devtest",
+      "source_lang": "fra_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Lundi, lors d'une émission de radio sur Sveriges Radio, en Suède, Sara Danius, secrétaire permanente du Comité Nobel de Littérature de l'Académie Suédoise, a annoncé publiquement que le comité, incapable de joindre directement Bob Dylan au sujet du prix Nobel de littérature 2016, avait renoncé à le contacter.",
+      "reference": "On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him."
+    },
+    {
+      "id": "flores-fra_Latn-eng_Latn-5",
+      "category": "flores-devtest",
+      "source_lang": "fra_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Danius a déclaré : « En ce moment, nous ne faisons rien. J'ai appelé et envoyé des courriels à son plus proche collaborateur et j'ai reçu des réponses très amicales. Pour l'instant, c'est certainement suffisant. »",
+      "reference": "Danius said, \"Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough."
+    },
+    {
+      "id": "flores-eng_Latn-deu_Latn-1",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "We now have 4-month-old mice that are non-diabetic that used to be diabetic,\" he added.",
+      "reference": "„Wir haben jetzt 4 Monate alte Mäuse, die Diabetes hatten und jetzt keinen mehr haben“, fügte er hinzu."
+    },
+    {
+      "id": "flores-eng_Latn-deu_Latn-2",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days.",
+      "reference": "Dr. Ehud Ur, Professor für Medizin an der Dalhousie University in Halifax, Nova Scotia, und Vorsitzender der Abteilung für Klinik und Wissenschaft des Kanadischen Diabetesverbands gab zu bedenken, dass die Forschungsarbeit noch in den Kinderschuhen stecke."
+    },
+    {
+      "id": "flores-eng_Latn-deu_Latn-3",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes.",
+      "reference": "Wie einige andere Experten zeigte er sich skeptisch, ob es möglich sei, Diabetes zu heilen, und wies darauf hin, dass die Befunde für Menschen, die bereits unter Typ-1-Diabetes litten, keine Bedeutung hätten."
+    },
+    {
+      "id": "flores-eng_Latn-deu_Latn-4",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him.",
+      "reference": "Am Montag gab Sara Danius, Ständige Sekretärin des Literaturnobelpreiskomitees der Schwedischen Akademie in einer Radiosendung auf Sveriges Radio in Schweden bekannt, dass das Komitee seine Bemühungen eingestellt habe, Bob Dylan über seine Ehrung mit dem Literaturnobelpreis für Literator zu informieren, nachdem es nicht gelungen war, ihn persönlich zu erreichen."
+    },
+    {
+      "id": "flores-eng_Latn-deu_Latn-5",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "Danius said, \"Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough.",
+      "reference": "Danius sagte: „Im Moment unternehmen wir nichts. Ich habe seinen engsten Mitarbeiter angerufen und ihm E-Mails geschickt und sehr freundliche Antworten erhalten. Das ist vorläufig genug.“"
+    },
+    {
+      "id": "flores-deu_Latn-eng_Latn-1",
+      "category": "flores-devtest",
+      "source_lang": "deu_Latn",
+      "target_lang": "eng_Latn",
+      "source": "„Wir haben jetzt 4 Monate alte Mäuse, die Diabetes hatten und jetzt keinen mehr haben“, fügte er hinzu.",
+      "reference": "We now have 4-month-old mice that are non-diabetic that used to be diabetic,\" he added."
+    },
+    {
+      "id": "flores-deu_Latn-eng_Latn-2",
+      "category": "flores-devtest",
+      "source_lang": "deu_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Dr. Ehud Ur, Professor für Medizin an der Dalhousie University in Halifax, Nova Scotia, und Vorsitzender der Abteilung für Klinik und Wissenschaft des Kanadischen Diabetesverbands gab zu bedenken, dass die Forschungsarbeit noch in den Kinderschuhen stecke.",
+      "reference": "Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days."
+    },
+    {
+      "id": "flores-deu_Latn-eng_Latn-3",
+      "category": "flores-devtest",
+      "source_lang": "deu_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Wie einige andere Experten zeigte er sich skeptisch, ob es möglich sei, Diabetes zu heilen, und wies darauf hin, dass die Befunde für Menschen, die bereits unter Typ-1-Diabetes litten, keine Bedeutung hätten.",
+      "reference": "Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes."
+    },
+    {
+      "id": "flores-deu_Latn-eng_Latn-4",
+      "category": "flores-devtest",
+      "source_lang": "deu_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Am Montag gab Sara Danius, Ständige Sekretärin des Literaturnobelpreiskomitees der Schwedischen Akademie in einer Radiosendung auf Sveriges Radio in Schweden bekannt, dass das Komitee seine Bemühungen eingestellt habe, Bob Dylan über seine Ehrung mit dem Literaturnobelpreis für Literator zu informieren, nachdem es nicht gelungen war, ihn persönlich zu erreichen.",
+      "reference": "On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him."
+    },
+    {
+      "id": "flores-deu_Latn-eng_Latn-5",
+      "category": "flores-devtest",
+      "source_lang": "deu_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Danius sagte: „Im Moment unternehmen wir nichts. Ich habe seinen engsten Mitarbeiter angerufen und ihm E-Mails geschickt und sehr freundliche Antworten erhalten. Das ist vorläufig genug.“",
+      "reference": "Danius said, \"Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough."
+    },
+    {
+      "id": "flores-eng_Latn-spa_Latn-1",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "spa_Latn",
+      "source": "We now have 4-month-old mice that are non-diabetic that used to be diabetic,\" he added.",
+      "reference": "«Actualmente, tenemos ratones de cuatro meses de edad que antes solían ser diabéticos y que ya no lo son», agregó."
+    },
+    {
+      "id": "flores-eng_Latn-spa_Latn-2",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "spa_Latn",
+      "source": "Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days.",
+      "reference": "La investigación todavía se ubica en su etapa inicial, conforme indicara el Dr. Ehud Ur, docente en la carrera de medicina de la Universidad de Dalhousie, en Halifax, Nueva Escocia, y director del departamento clínico y científico de la Asociación Canadiense de Diabetes."
+    },
+    {
+      "id": "flores-eng_Latn-spa_Latn-3",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "spa_Latn",
+      "source": "Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes.",
+      "reference": "Al igual que otros especialistas, es escéptico acerca de si la diabetes tiene cura y remarca que estos descubrimientos no son relevantes para quienes que ya padecen de diabetes de tipo 1."
+    },
+    {
+      "id": "flores-eng_Latn-spa_Latn-4",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "spa_Latn",
+      "source": "On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him.",
+      "reference": "El lunes, Sara Danius, secretaria permanente del Comité por el Nobel de Literatura de la Academia Sueca, declaró públicamente en un programa radiofónico de Sveriges, en Suecia, que, al no poder contactar directamente con Bob Dylan para comunicarle el premio en Literatura 2016, el comité había abandonado sus esfuerzos por comunicarse con él."
+    },
+    {
+      "id": "flores-eng_Latn-spa_Latn-5",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "spa_Latn",
+      "source": "Danius said, \"Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough.",
+      "reference": "Danius declaró: «Actualmente no estamos haciendo nada. Llamé y envié correos electrónicos a su asistente más cercano y recibí contestaciones muy cordiales. Por el momento, eso es sin dudas suficiente»."
+    },
+    {
+      "id": "flores-spa_Latn-eng_Latn-1",
+      "category": "flores-devtest",
+      "source_lang": "spa_Latn",
+      "target_lang": "eng_Latn",
+      "source": "«Actualmente, tenemos ratones de cuatro meses de edad que antes solían ser diabéticos y que ya no lo son», agregó.",
+      "reference": "We now have 4-month-old mice that are non-diabetic that used to be diabetic,\" he added."
+    },
+    {
+      "id": "flores-spa_Latn-eng_Latn-2",
+      "category": "flores-devtest",
+      "source_lang": "spa_Latn",
+      "target_lang": "eng_Latn",
+      "source": "La investigación todavía se ubica en su etapa inicial, conforme indicara el Dr. Ehud Ur, docente en la carrera de medicina de la Universidad de Dalhousie, en Halifax, Nueva Escocia, y director del departamento clínico y científico de la Asociación Canadiense de Diabetes.",
+      "reference": "Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days."
+    },
+    {
+      "id": "flores-spa_Latn-eng_Latn-3",
+      "category": "flores-devtest",
+      "source_lang": "spa_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Al igual que otros especialistas, es escéptico acerca de si la diabetes tiene cura y remarca que estos descubrimientos no son relevantes para quienes que ya padecen de diabetes de tipo 1.",
+      "reference": "Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes."
+    },
+    {
+      "id": "flores-spa_Latn-eng_Latn-4",
+      "category": "flores-devtest",
+      "source_lang": "spa_Latn",
+      "target_lang": "eng_Latn",
+      "source": "El lunes, Sara Danius, secretaria permanente del Comité por el Nobel de Literatura de la Academia Sueca, declaró públicamente en un programa radiofónico de Sveriges, en Suecia, que, al no poder contactar directamente con Bob Dylan para comunicarle el premio en Literatura 2016, el comité había abandonado sus esfuerzos por comunicarse con él.",
+      "reference": "On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him."
+    },
+    {
+      "id": "flores-spa_Latn-eng_Latn-5",
+      "category": "flores-devtest",
+      "source_lang": "spa_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Danius declaró: «Actualmente no estamos haciendo nada. Llamé y envié correos electrónicos a su asistente más cercano y recibí contestaciones muy cordiales. Por el momento, eso es sin dudas suficiente».",
+      "reference": "Danius said, \"Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough."
+    },
+    {
+      "id": "flores-eng_Latn-jpn_Jpan-1",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "jpn_Jpan",
+      "source": "We now have 4-month-old mice that are non-diabetic that used to be diabetic,\" he added.",
+      "reference": "「我々が飼っている生後4か月のマウスはかつて糖尿病でしたが現在は糖尿病ではない、」と彼は付け加えました。"
+    },
+    {
+      "id": "flores-eng_Latn-jpn_Jpan-2",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "jpn_Jpan",
+      "source": "Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days.",
+      "reference": "ノバスコシア州ハリファックスにあるダルハウジー大学医学部教授でカナダ糖尿病協会の臨床・科学部門の責任者を務めるエフード・ウル博士は、この研究はまだ初期段階にあるとして注意を促しました。"
+    },
+    {
+      "id": "flores-eng_Latn-jpn_Jpan-3",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "jpn_Jpan",
+      "source": "Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes.",
+      "reference": "他の専門家たちと同様に、彼は糖尿病を完治できるかどうかについては懐疑的であり、これらの調査結果はすでにI型糖尿病を患っている人々には何の関連性もないことを指摘しています。"
+    },
+    {
+      "id": "flores-eng_Latn-jpn_Jpan-4",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "jpn_Jpan",
+      "source": "On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him.",
+      "reference": "スウェーデンアカデミーのノーベル文学委員会の常任幹事であるサラ・ダニウス氏は月曜日、スウェーデンの公共放送ラジオの番組の中で、同委員会が2016年のノーベル文学賞受賞についてボブ・ディラン氏と直接連絡を取れなかったため、同氏と連絡を取ることを諦めたことを公に発表しました。"
+    },
+    {
+      "id": "flores-eng_Latn-jpn_Jpan-5",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "jpn_Jpan",
+      "source": "Danius said, \"Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough.",
+      "reference": "ダニアスは「今は何もしていない。彼の親しい協力者に電話をかけたり、メールを送ったりしたが、非常に友好的な返事が返ってきた。今のところは、確かにそれで十分だ。」と語った。"
+    },
+    {
+      "id": "flores-jpn_Jpan-eng_Latn-1",
+      "category": "flores-devtest",
+      "source_lang": "jpn_Jpan",
+      "target_lang": "eng_Latn",
+      "source": "「我々が飼っている生後4か月のマウスはかつて糖尿病でしたが現在は糖尿病ではない、」と彼は付け加えました。",
+      "reference": "We now have 4-month-old mice that are non-diabetic that used to be diabetic,\" he added."
+    },
+    {
+      "id": "flores-jpn_Jpan-eng_Latn-2",
+      "category": "flores-devtest",
+      "source_lang": "jpn_Jpan",
+      "target_lang": "eng_Latn",
+      "source": "ノバスコシア州ハリファックスにあるダルハウジー大学医学部教授でカナダ糖尿病協会の臨床・科学部門の責任者を務めるエフード・ウル博士は、この研究はまだ初期段階にあるとして注意を促しました。",
+      "reference": "Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days."
+    },
+    {
+      "id": "flores-jpn_Jpan-eng_Latn-3",
+      "category": "flores-devtest",
+      "source_lang": "jpn_Jpan",
+      "target_lang": "eng_Latn",
+      "source": "他の専門家たちと同様に、彼は糖尿病を完治できるかどうかについては懐疑的であり、これらの調査結果はすでにI型糖尿病を患っている人々には何の関連性もないことを指摘しています。",
+      "reference": "Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes."
+    },
+    {
+      "id": "flores-jpn_Jpan-eng_Latn-4",
+      "category": "flores-devtest",
+      "source_lang": "jpn_Jpan",
+      "target_lang": "eng_Latn",
+      "source": "スウェーデンアカデミーのノーベル文学委員会の常任幹事であるサラ・ダニウス氏は月曜日、スウェーデンの公共放送ラジオの番組の中で、同委員会が2016年のノーベル文学賞受賞についてボブ・ディラン氏と直接連絡を取れなかったため、同氏と連絡を取ることを諦めたことを公に発表しました。",
+      "reference": "On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him."
+    },
+    {
+      "id": "flores-jpn_Jpan-eng_Latn-5",
+      "category": "flores-devtest",
+      "source_lang": "jpn_Jpan",
+      "target_lang": "eng_Latn",
+      "source": "ダニアスは「今は何もしていない。彼の親しい協力者に電話をかけたり、メールを送ったりしたが、非常に友好的な返事が返ってきた。今のところは、確かにそれで十分だ。」と語った。",
+      "reference": "Danius said, \"Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough."
+    },
+    {
+      "id": "flores-eng_Latn-arb_Arab-1",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "arb_Arab",
+      "source": "We now have 4-month-old mice that are non-diabetic that used to be diabetic,\" he added.",
+      "reference": "أضاف قائلاً، \"لدينا الآن فئران تبلغ من العمر 4 أشهر التي كانت تعاني في السابق من مرض السكري، ولكنها لم تعد تعاني منه الآن."
+    },
+    {
+      "id": "flores-eng_Latn-arb_Arab-2",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "arb_Arab",
+      "source": "Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days.",
+      "reference": "نبه الدكتور إيهود أور -أستاذ الطب في جامعة دالهوزي في هاليفاكس، نوفا سكوتيا ورئيس الشعبة الطبية والعلمية في الجمعية الكندية للسكري- إلى أن البحث لا يزال في أيامه الأولى."
+    },
+    {
+      "id": "flores-eng_Latn-arb_Arab-3",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "arb_Arab",
+      "source": "Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes.",
+      "reference": "مثل باقي الخبراء الآخرين، فهو متشكك فيما إذا كان يمكن علاج السكري، مع ملاحظة أن هذه النتائج ليس لها علاقة بالناس الذي لديهم السكري من النوع الأول سابقاً."
+    },
+    {
+      "id": "flores-eng_Latn-arb_Arab-4",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "arb_Arab",
+      "source": "On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him.",
+      "reference": "في يوم الإثنين ، أعلنت سارة دانيوس -السكرتيرة الدائمة للجنة نوبل للأدب في الأكاديمية السويدية- على الملأ خلال برنامج إذاعي على راديو السويد في السويد، أن اللجنة -التي لم تتمكن من الوصول مباشرة إلى بوب ديلان بشأن الفوز بجائزة نوبل في الأدب لعام 2016- قد تخلت عن جهودها للوصول إليه."
+    },
+    {
+      "id": "flores-eng_Latn-arb_Arab-5",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "arb_Arab",
+      "source": "Danius said, \"Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough.",
+      "reference": "قال دانيوس \"لن نقوم الآن بفعل أي شيء. لقد قمت بالاتصال وإرسال رسائل بريد إلكتروني إلى أقرب المتعاونين معه وحصلت على ردود لطيفة جداً. هذا يكفي في الوقت الحالي بالطبع\"."
+    },
+    {
+      "id": "flores-arb_Arab-eng_Latn-1",
+      "category": "flores-devtest",
+      "source_lang": "arb_Arab",
+      "target_lang": "eng_Latn",
+      "source": "أضاف قائلاً، \"لدينا الآن فئران تبلغ من العمر 4 أشهر التي كانت تعاني في السابق من مرض السكري، ولكنها لم تعد تعاني منه الآن.",
+      "reference": "We now have 4-month-old mice that are non-diabetic that used to be diabetic,\" he added."
+    },
+    {
+      "id": "flores-arb_Arab-eng_Latn-2",
+      "category": "flores-devtest",
+      "source_lang": "arb_Arab",
+      "target_lang": "eng_Latn",
+      "source": "نبه الدكتور إيهود أور -أستاذ الطب في جامعة دالهوزي في هاليفاكس، نوفا سكوتيا ورئيس الشعبة الطبية والعلمية في الجمعية الكندية للسكري- إلى أن البحث لا يزال في أيامه الأولى.",
+      "reference": "Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days."
+    },
+    {
+      "id": "flores-arb_Arab-eng_Latn-3",
+      "category": "flores-devtest",
+      "source_lang": "arb_Arab",
+      "target_lang": "eng_Latn",
+      "source": "مثل باقي الخبراء الآخرين، فهو متشكك فيما إذا كان يمكن علاج السكري، مع ملاحظة أن هذه النتائج ليس لها علاقة بالناس الذي لديهم السكري من النوع الأول سابقاً.",
+      "reference": "Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes."
+    },
+    {
+      "id": "flores-arb_Arab-eng_Latn-4",
+      "category": "flores-devtest",
+      "source_lang": "arb_Arab",
+      "target_lang": "eng_Latn",
+      "source": "في يوم الإثنين ، أعلنت سارة دانيوس -السكرتيرة الدائمة للجنة نوبل للأدب في الأكاديمية السويدية- على الملأ خلال برنامج إذاعي على راديو السويد في السويد، أن اللجنة -التي لم تتمكن من الوصول مباشرة إلى بوب ديلان بشأن الفوز بجائزة نوبل في الأدب لعام 2016- قد تخلت عن جهودها للوصول إليه.",
+      "reference": "On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him."
+    },
+    {
+      "id": "flores-arb_Arab-eng_Latn-5",
+      "category": "flores-devtest",
+      "source_lang": "arb_Arab",
+      "target_lang": "eng_Latn",
+      "source": "قال دانيوس \"لن نقوم الآن بفعل أي شيء. لقد قمت بالاتصال وإرسال رسائل بريد إلكتروني إلى أقرب المتعاونين معه وحصلت على ردود لطيفة جداً. هذا يكفي في الوقت الحالي بالطبع\".",
+      "reference": "Danius said, \"Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough."
+    },
+    {
+      "id": "flores-eng_Latn-swh_Latn-1",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "swh_Latn",
+      "source": "We now have 4-month-old mice that are non-diabetic that used to be diabetic,\" he added.",
+      "reference": "Sasa tuna panya wenye umri wa miezi minne ambao hawana kisukari ambao awali walikuwa na kisukari\", aliongeza."
+    },
+    {
+      "id": "flores-eng_Latn-swh_Latn-2",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "swh_Latn",
+      "source": "Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days.",
+      "reference": "Dak. Ehud Ur, profesa wa udaktari katika chuo kikuu cha Dalhousie kule Halifix, Nova Scotia na mwenyekiti wa kitengo cha kliniki na kisayansi kwenye ushirika wa ugonjwa wa kisukari nchini Canada alionya kuwa utafiti bado uko kwenye siku za mapema."
+    },
+    {
+      "id": "flores-eng_Latn-swh_Latn-3",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "swh_Latn",
+      "source": "Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes.",
+      "reference": "Kama wataalam wengine, ana shaka kuhusu kama ugonjwa wa kisukari unaweza kutibiwa, akagundua kuwa matokeo haya hayana umuhimu kwa watu ambao tayari wana ugojwa wa kisukari wa aina 1."
+    },
+    {
+      "id": "flores-eng_Latn-swh_Latn-4",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "swh_Latn",
+      "source": "On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him.",
+      "reference": "Mnamo Jumatatu, Sara Danius, katibu wa kudumu wa Kamati ya Nobel ya Fasihi katika Chuo cha Uswidi, alitangaza hadharani wakati wa kipindi cha redio kwenye Sveriges Radio katika Uswidi kwamba kamati hiyo, kwa kutoweza kumfikia Bob Dylan moja kwa moja kuhusu ushindi wa Tuzo la Nobel la Fasihi 2016, iliacha juhudi zake za kujaribu kumfikia."
+    },
+    {
+      "id": "flores-eng_Latn-swh_Latn-5",
+      "category": "flores-devtest",
+      "source_lang": "eng_Latn",
+      "target_lang": "swh_Latn",
+      "source": "Danius said, \"Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough.",
+      "reference": "Danius alisema, \"Sasa hivi hatufanyi chochote. Nimepiga simu na kutuma barua pepe kwa mshirika wake wa karibu na kupata majibu ya kirafiki sana. Kwa sasa, hakika hiyo imetosha."
+    },
+    {
+      "id": "flores-swh_Latn-eng_Latn-1",
+      "category": "flores-devtest",
+      "source_lang": "swh_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Sasa tuna panya wenye umri wa miezi minne ambao hawana kisukari ambao awali walikuwa na kisukari\", aliongeza.",
+      "reference": "We now have 4-month-old mice that are non-diabetic that used to be diabetic,\" he added."
+    },
+    {
+      "id": "flores-swh_Latn-eng_Latn-2",
+      "category": "flores-devtest",
+      "source_lang": "swh_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Dak. Ehud Ur, profesa wa udaktari katika chuo kikuu cha Dalhousie kule Halifix, Nova Scotia na mwenyekiti wa kitengo cha kliniki na kisayansi kwenye ushirika wa ugonjwa wa kisukari nchini Canada alionya kuwa utafiti bado uko kwenye siku za mapema.",
+      "reference": "Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days."
+    },
+    {
+      "id": "flores-swh_Latn-eng_Latn-3",
+      "category": "flores-devtest",
+      "source_lang": "swh_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Kama wataalam wengine, ana shaka kuhusu kama ugonjwa wa kisukari unaweza kutibiwa, akagundua kuwa matokeo haya hayana umuhimu kwa watu ambao tayari wana ugojwa wa kisukari wa aina 1.",
+      "reference": "Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes."
+    },
+    {
+      "id": "flores-swh_Latn-eng_Latn-4",
+      "category": "flores-devtest",
+      "source_lang": "swh_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Mnamo Jumatatu, Sara Danius, katibu wa kudumu wa Kamati ya Nobel ya Fasihi katika Chuo cha Uswidi, alitangaza hadharani wakati wa kipindi cha redio kwenye Sveriges Radio katika Uswidi kwamba kamati hiyo, kwa kutoweza kumfikia Bob Dylan moja kwa moja kuhusu ushindi wa Tuzo la Nobel la Fasihi 2016, iliacha juhudi zake za kujaribu kumfikia.",
+      "reference": "On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him."
+    },
+    {
+      "id": "flores-swh_Latn-eng_Latn-5",
+      "category": "flores-devtest",
+      "source_lang": "swh_Latn",
+      "target_lang": "eng_Latn",
+      "source": "Danius alisema, \"Sasa hivi hatufanyi chochote. Nimepiga simu na kutuma barua pepe kwa mshirika wake wa karibu na kupata majibu ya kirafiki sana. Kwa sasa, hakika hiyo imetosha.",
+      "reference": "Danius said, \"Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough."
+    }
+  ]
+}

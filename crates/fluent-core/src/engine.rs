@@ -198,6 +198,9 @@ pub struct TranslationResult {
     pub detected: Option<Detection>,
     /// `true` if the source text was truncated to `max_length` tokens.
     pub truncated: bool,
+    /// Number of encoded source tokens, including any target-language prefix
+    /// and EOS token used by the backend.
+    pub source_tokens: usize,
     pub generated_tokens: usize,
     pub duration: Duration,
     pub mode: Mode,
@@ -299,11 +302,16 @@ pub fn estimate_memory_for_choice(
     device: DeviceChoice,
 ) -> Result<MemoryEstimate> {
     let config = crate::model::nllb::NllbConfig::from_dir(model_dir)?;
-    let precision = resolve_precision(precision, config.d_model);
     let on_cpu = match device {
         DeviceChoice::Cpu => true,
         DeviceChoice::Auto => !has_accelerator(),
         DeviceChoice::Cuda(_) | DeviceChoice::Metal(_) => false,
+    };
+    // CPU auto mode uses the Q8 path for every model size. On this CPU the
+    // Q8 3.3B path is substantially faster than f16 and uses less memory.
+    let precision = match (precision, on_cpu) {
+        (Precision::Auto, true) => Precision::F32,
+        _ => resolve_precision(precision, config.d_model),
     };
     estimate_memory_impl(model_dir, precision, on_cpu && precision == Precision::F32)
 }
@@ -839,6 +847,7 @@ impl Engine {
             target_language: request.target_language.clone(),
             detected,
             truncated,
+            source_tokens: source_ids.len(),
             generated_tokens: tokens.len(),
             duration: started.elapsed(),
             mode: self.config.mode,
@@ -907,12 +916,15 @@ fn new_metal(index: usize) -> Result<Device> {
     }
 }
 
-fn resolve_dtype(precision: Precision, device: &Device, d_model: usize) -> DType {
+fn resolve_dtype(precision: Precision, device: &Device, _d_model: usize) -> DType {
     match precision {
         Precision::F32 => DType::F32,
         Precision::F16 => DType::F16,
         Precision::Auto => {
-            if device.is_cpu() && d_model < 2048 {
+            // CPU inference uses f32 blocks with Q8 quantization for both
+            // NLLB sizes. F16 CPU matmuls are much slower here and the Q8
+            // path also has a smaller resident footprint. GPU auto stays f16.
+            if device.is_cpu() {
                 DType::F32
             } else {
                 DType::F16
@@ -1032,9 +1044,20 @@ mod tests {
     #[test]
     fn automatic_precision_follows_the_model_size() {
         assert_eq!(resolve_precision(Precision::Auto, 1024), Precision::F32);
+        // The conservative public estimator keeps its size-based rule; the
+        // device-aware estimator and actual CPU load select Q8 for both sizes.
         assert_eq!(resolve_precision(Precision::Auto, 2048), Precision::F16);
         assert_eq!(resolve_precision(Precision::F32, 4096), Precision::F32);
         assert_eq!(resolve_precision(Precision::F16, 1024), Precision::F16);
+        // CPU auto uses the Q8 path at both model sizes.
+        assert_eq!(
+            resolve_dtype(Precision::Auto, &Device::Cpu, 1024),
+            DType::F32
+        );
+        assert_eq!(
+            resolve_dtype(Precision::Auto, &Device::Cpu, 2048),
+            DType::F32
+        );
     }
 
     #[test]

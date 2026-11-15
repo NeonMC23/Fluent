@@ -1,0 +1,168 @@
+{
+  "name": "Fluent-oriented English→French/German review corpus",
+  "license": "MIT (original text written for this benchmark)",
+  "source": "Fluent project, Cycle 14",
+  "notes": "Reference-free cases for human review; categories cover conversation, technical documentation, instructions, long paragraphs, numbers/dates, proper nouns, lists, ambiguity, formal and informal phrasing.",
+  "cases": [
+    {
+      "id": "fluent-fra-01",
+      "category": "conversation",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "Hi, how are you doing? I haven't seen you since the conference in Lyon. Are you still working on the same project?",
+      "reference": ""
+    },
+    {
+      "id": "fluent-fra-02",
+      "category": "technology",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "To reset the device, hold the power button for ten seconds. The status light will blink twice, then turn solid green when the reset is complete.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-fra-03",
+      "category": "instructions",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "Preheat the oven to 180°C. Mix the flour, sugar and butter in a large bowl, then add the eggs one at a time and bake for twenty-five minutes.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-fra-04",
+      "category": "long_paragraph",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "The city council approved a plan to redesign the central market square. The project will remove two lanes of traffic, add wider sidewalks and plant forty trees along the eastern edge. Shops will remain open during construction, although deliveries will be restricted to the morning. Residents have asked for more bicycle parking and a small covered stage for weekend events. The first phase is expected to begin in April and finish before the summer festival. Funding comes from the regional transport budget and a grant for urban green spaces. Officials said the final design will be published in February, and a public meeting will be held at the town hall on the first Thursday of March.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-fra-05",
+      "category": "numbers_dates",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "Invoice 2026-014 was issued on 3 March 2026. The total is €1,249.50, including 20% VAT. Payment is due within 30 days; please quote reference A-77/B.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-fra-06",
+      "category": "proper_nouns",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "Marie Curie moved to Paris in 1891 and later worked with Pierre Curie at the Sorbonne. Their research on radioactivity earned them the Nobel Prize in Physics in 1903.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-fra-07",
+      "category": "lists_punctuation",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "Please bring: a notebook, two pens, the printed agenda (version 3.2), and a valid identity document. Doors open at 08:45; the session starts at 09:00 sharp.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-fra-08",
+      "category": "ambiguity",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "The bank was steep, so we walked slowly and held the railing. Across the river, the other bank was crowded with people waiting for the ferry.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-fra-09",
+      "category": "formal",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "We respectfully request that the committee reconsider the proposed deadline and provide an additional two weeks for public consultation.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-fra-10",
+      "category": "informal",
+      "source_lang": "eng_Latn",
+      "target_lang": "fra_Latn",
+      "source": "Hey, can you grab some coffee on your way in? The usual place is fine, and I'll pay you back at lunch.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-deu-01",
+      "category": "conversation",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "Hi, how are you doing? I haven't seen you since the conference in Lyon. Are you still working on the same project?",
+      "reference": ""
+    },
+    {
+      "id": "fluent-deu-02",
+      "category": "technology",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "To reset the device, hold the power button for ten seconds. The status light will blink twice, then turn solid green when the reset is complete.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-deu-03",
+      "category": "instructions",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "Preheat the oven to 180°C. Mix the flour, sugar and butter in a large bowl, then add the eggs one at a time and bake for twenty-five minutes.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-deu-04",
+      "category": "long_paragraph",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "The city council approved a plan to redesign the central market square. The project will remove two lanes of traffic, add wider sidewalks and plant forty trees along the eastern edge. Shops will remain open during construction, although deliveries will be restricted to the morning. Residents have asked for more bicycle parking and a small covered stage for weekend events. The first phase is expected to begin in April and finish before the summer festival. Funding comes from the regional transport budget and a grant for urban green spaces. Officials said the final design will be published in February, and a public meeting will be held at the town hall on the first Thursday of March.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-deu-05",
+      "category": "numbers_dates",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "Invoice 2026-014 was issued on 3 March 2026. The total is €1,249.50, including 20% VAT. Payment is due within 30 days; please quote reference A-77/B.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-deu-06",
+      "category": "proper_nouns",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "Marie Curie moved to Paris in 1891 and later worked with Pierre Curie at the Sorbonne. Their research on radioactivity earned them the Nobel Prize in Physics in 1903.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-deu-07",
+      "category": "lists_punctuation",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "Please bring: a notebook, two pens, the printed agenda (version 3.2), and a valid identity document. Doors open at 08:45; the session starts at 09:00 sharp.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-deu-08",
+      "category": "ambiguity",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "The bank was steep, so we walked slowly and held the railing. Across the river, the other bank was crowded with people waiting for the ferry.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-deu-09",
+      "category": "formal",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "We respectfully request that the committee reconsider the proposed deadline and provide an additional two weeks for public consultation.",
+      "reference": ""
+    },
+    {
+      "id": "fluent-deu-10",
+      "category": "informal",
+      "source_lang": "eng_Latn",
+      "target_lang": "deu_Latn",
+      "source": "Hey, can you grab some coffee on your way in? The usual place is fine, and I'll pay you back at lunch.",
+      "reference": ""
+    }
+  ]
+}
