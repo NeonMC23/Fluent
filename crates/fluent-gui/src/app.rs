@@ -2,9 +2,9 @@ use std::time::{Duration, Instant};
 
 use eframe::egui;
 use fluent_core::{
-    estimate_memory_for_choice, find_language, languages, popular_languages, DeviceChoice,
-    EngineConfig, EngineStatus, Language, Mode, Precision, Progress, ProjectConfig,
-    TranslationRequest, TranslationResult,
+    estimate_memory_for_mode, find_language, languages, model_spec, popular_languages,
+    Architecture, DeviceChoice, EngineConfig, EngineStatus, Language, Mode, Precision, Progress,
+    ProjectConfig, TranslationRequest, TranslationResult, MODELS,
 };
 
 use crate::settings::{settings_path, OutputLengthSetting, Settings, ThemeChoice, ACCENTS};
@@ -332,7 +332,7 @@ impl FluentApp {
                         .color(palette.text),
                 );
                 ui.label(
-                    egui::RichText::new("Local translation · NLLB-200")
+                    egui::RichText::new("Local translation · on-device")
                         .size(11.5)
                         .color(palette.muted),
                 );
@@ -490,7 +490,7 @@ impl FluentApp {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 widgets::section_label(ui, &palette, "Mode");
-                for mode in [Mode::Accurate, Mode::Fast] {
+                for mode in [Mode::Madlad, Mode::Accurate, Mode::Fast] {
                     let selected = self.settings.mode == mode;
                     let fill = if selected {
                         palette.accent
@@ -509,15 +509,46 @@ impl FluentApp {
                         .fill(fill)
                         .stroke(egui::Stroke::new(1.0, palette.border))
                         .corner_radius(egui::CornerRadius::same(255))
-                        .min_size(egui::vec2(72.0, 30.0)),
+                        .min_size(egui::vec2(68.0, 30.0)),
                     );
                     if response.clicked() && !selected && !self.busy {
-                        self.settings.mode = mode;
-                        self.settings.save();
+                        self.select_mode(mode);
                     }
                 }
             });
         });
+    }
+
+    /// Switches model family and keeps language selections valid.
+    fn select_mode(&mut self, mode: Mode) {
+        if self.busy || self.settings.mode == mode {
+            return;
+        }
+        self.settings.mode = mode;
+        let mut adjusted = false;
+        if self.settings.source_language != "auto"
+            && !mode.supports_language(&self.settings.source_language)
+        {
+            self.settings.source_language = "auto".to_string();
+            adjusted = true;
+        }
+        if !mode.supports_language(&self.settings.target_language) {
+            self.settings.target_language = ["eng_Latn", "fra_Latn"]
+                .into_iter()
+                .find(|code| mode.supports_language(code))
+                .unwrap_or("eng_Latn")
+                .to_string();
+            adjusted = true;
+        }
+        if adjusted {
+            self.notice = Some((
+                format!("Language selection adjusted for {}.", mode.model_label()),
+                Instant::now(),
+            ));
+        }
+        self.result = None;
+        self.status = None;
+        self.settings.save();
     }
 
     fn open_picker(&mut self, target: PickerTarget) {
@@ -954,30 +985,27 @@ impl FluentApp {
                         widgets::section_label(ui, &palette, "Translation model");
                         ui.add_space(6.0);
                         let mut selected_mode = self.settings.mode;
-                        ui.columns(2, |columns| {
-                            for (ui, mode) in
-                                columns.iter_mut().zip([Mode::Fast, Mode::Accurate])
-                            {
-                                let selected = self.settings.mode == mode;
-                                let fill = if selected {
-                                    palette.accent_soft
-                                } else {
-                                    palette.card_alt
-                                };
-                                let stroke = egui::Stroke::new(
-                                    if selected { 1.5 } else { 1.0 },
-                                    if selected { palette.accent } else { palette.border },
-                                );
-                                let card = egui::Frame::NONE
-                                    .fill(fill)
-                                    .stroke(stroke)
-                                    .corner_radius(egui::CornerRadius::same(12))
-                                    .inner_margin(egui::Margin::same(14))
-                                    .show(ui, |ui| {
-                                        ui.set_min_width(ui.available_width());
-                                        ui.set_min_height(64.0);
+                        for spec in MODELS {
+                            let selected = self.settings.mode == spec.mode;
+                            let fill = if selected {
+                                palette.accent_soft
+                            } else {
+                                palette.card_alt
+                            };
+                            let stroke = egui::Stroke::new(
+                                if selected { 1.5 } else { 1.0 },
+                                if selected { palette.accent } else { palette.border },
+                            );
+                            let card = egui::Frame::NONE
+                                .fill(fill)
+                                .stroke(stroke)
+                                .corner_radius(egui::CornerRadius::same(12))
+                                .inner_margin(egui::Margin::same(12))
+                                .show(ui, |ui| {
+                                    ui.set_min_width(ui.available_width());
+                                    ui.horizontal(|ui| {
                                         ui.label(
-                                            egui::RichText::new(mode.model_label())
+                                            egui::RichText::new(spec.name)
                                                 .size(14.0)
                                                 .strong()
                                                 .color(if selected {
@@ -986,30 +1014,49 @@ impl FluentApp {
                                                     palette.text
                                                 }),
                                         );
-                                        ui.label(
-                                            egui::RichText::new(match mode {
-                                                Mode::Fast => {
-                                                    "Fast · 5.2 GB · recommended on CPU"
-                                                }
-                                                Mode::Accurate => {
-                                                    "Accurate · 17.5 GB · GPU or lots of RAM"
-                                                }
-                                            })
-                                            .size(11.0)
-                                            .color(palette.muted),
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                widgets::badge(
+                                                    ui,
+                                                    &palette,
+                                                    spec.architecture.label(),
+                                                    if selected {
+                                                        palette.accent
+                                                    } else {
+                                                        palette.faint
+                                                    },
+                                                );
+                                            },
                                         );
-                                    })
-                                    .response
-                                    .interact(egui::Sense::click())
-                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                if card.clicked() {
-                                    selected_mode = mode;
-                                }
+                                    });
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "{} · {} · {}",
+                                            spec.parameters, spec.storage, spec.license
+                                        ))
+                                        .size(11.0)
+                                        .color(palette.muted),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(spec.description)
+                                            .size(11.0)
+                                            .color(palette.faint),
+                                    );
+                                })
+                                .response
+                                .interact(egui::Sense::click())
+                                .on_hover_cursor(egui::CursorIcon::PointingHand);
+                            if card.clicked() {
+                                selected_mode = spec.mode;
                             }
-                        });
-                        self.settings.mode = selected_mode;
+                            ui.add_space(6.0);
+                        }
+                        if selected_mode != self.settings.mode {
+                            self.select_mode(selected_mode);
+                        }
 
-                        ui.add_space(8.0);
+                        ui.add_space(2.0);
                         let model_dir = self.project.model_path(self.settings.mode);
                         ui.horizontal(|ui| {
                             ui.label(
@@ -1028,13 +1075,26 @@ impl FluentApp {
                             );
                         });
 
+                        let spec = model_spec(self.settings.mode);
+                        let t5 = spec.architecture == Architecture::T5;
+                        let t5_files_ok = !t5
+                            || (fluent_core::model::madlad::find_gguf(model_dir).is_some()
+                                && model_dir.join("tokenizer.json").is_file()
+                                && model_dir.join("config.json").is_file());
                         if !model_dir.is_dir() {
                             widgets::error_banner(
                                 ui,
                                 &palette,
                                 "This model folder cannot be found.",
                             );
-                        } else if let Ok(estimate) = estimate_memory_for_choice(
+                        } else if !t5_files_ok {
+                            widgets::error_banner(
+                                ui,
+                                &palette,
+                                "MADLAD files are incomplete. Run scripts/fetch-madlad.py or see docs/MADLAD.md.",
+                            );
+                        } else if let Ok(estimate) = estimate_memory_for_mode(
+                            self.settings.mode,
                             model_dir,
                             self.settings.precision,
                             self.settings.device_choice(),
@@ -1070,7 +1130,7 @@ impl FluentApp {
                                 widgets::error_banner(
                                     ui,
                                     &palette,
-                                    "Not enough memory: choose Fast mode, f16 precision, or free up memory.",
+                                    "Not enough memory: choose a smaller model or free up memory.",
                                 );
                             } else if estimate
                                 .info
@@ -1087,91 +1147,144 @@ impl FluentApp {
                         }
 
                         ui.add_space(10.0);
-                        egui::Grid::new("settings_device_precision")
-                            .num_columns(2)
-                            .spacing([16.0, 8.0])
-                            .show(ui, |ui| {
-                                ui.label(
-                                    egui::RichText::new("Device")
-                                        .size(13.0)
-                                        .color(palette.text),
-                                );
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        let current = self.settings.device_choice();
-                                        egui::ComboBox::from_id_salt("device_combo")
-                                            .selected_text(current.label())
-                                            .width(230.0)
-                                            .show_ui(ui, |ui| {
-                                                for choice in [
-                                                    DeviceChoice::Auto,
-                                                    DeviceChoice::Cpu,
-                                                    DeviceChoice::Cuda(0),
-                                                    DeviceChoice::Metal(0),
-                                                ] {
-                                                    if ui
-                                                        .selectable_label(
-                                                            current == choice,
-                                                            choice.label(),
-                                                        )
-                                                        .clicked()
-                                                    {
-                                                        self.settings.set_device(choice);
+                        if t5 {
+                            egui::Grid::new("settings_madlad_runtime")
+                                .num_columns(2)
+                                .spacing([16.0, 8.0])
+                                .show(ui, |ui| {
+                                    ui.label(
+                                        egui::RichText::new("Device")
+                                            .size(13.0)
+                                            .color(palette.text),
+                                    );
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            ui.label(
+                                                egui::RichText::new("Processor (CPU)")
+                                                    .size(12.5)
+                                                    .color(palette.muted),
+                                            );
+                                        },
+                                    );
+                                    ui.end_row();
+                                    ui.label(
+                                        egui::RichText::new("Precision")
+                                            .size(13.0)
+                                            .color(palette.text),
+                                    );
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            ui.label(
+                                                egui::RichText::new("Q4_K · GGUF")
+                                                    .size(12.5)
+                                                    .color(palette.muted),
+                                            );
+                                        },
+                                    );
+                                    ui.end_row();
+                                });
+                            widgets::hint(
+                                ui,
+                                &palette,
+                                "MADLAD runs on CPU with q4_k GGUF. CUDA and Metal are not implemented for this backend.",
+                            );
+                        } else {
+                            egui::Grid::new("settings_device_precision")
+                                .num_columns(2)
+                                .spacing([16.0, 8.0])
+                                .show(ui, |ui| {
+                                    ui.label(
+                                        egui::RichText::new("Device")
+                                            .size(13.0)
+                                            .color(palette.text),
+                                    );
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            let current = self.settings.device_choice();
+                                            egui::ComboBox::from_id_salt("device_combo")
+                                                .selected_text(current.label())
+                                                .width(230.0)
+                                                .show_ui(ui, |ui| {
+                                                    for choice in [
+                                                        DeviceChoice::Auto,
+                                                        DeviceChoice::Cpu,
+                                                        DeviceChoice::Cuda(0),
+                                                        DeviceChoice::Metal(0),
+                                                    ] {
+                                                        if ui
+                                                            .selectable_label(
+                                                                current == choice,
+                                                                choice.label(),
+                                                            )
+                                                            .clicked()
+                                                        {
+                                                            self.settings.set_device(choice);
+                                                        }
                                                     }
-                                                }
-                                            });
-                                    },
-                                );
-                                ui.end_row();
+                                                });
+                                        },
+                                    );
+                                    ui.end_row();
 
-                                ui.label(
-                                    egui::RichText::new("Precision")
-                                        .size(13.0)
-                                        .color(palette.text),
-                                );
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        egui::ComboBox::from_id_salt("precision_combo")
-                                            .selected_text(self.settings.precision.label())
-                                            .width(230.0)
-                                            .show_ui(ui, |ui| {
-                                                for precision in [
-                                                    Precision::Auto,
-                                                    Precision::F32,
-                                                    Precision::F16,
-                                                ] {
-                                                    if ui
-                                                        .selectable_label(
-                                                            self.settings.precision == precision,
-                                                            precision.label(),
-                                                        )
-                                                        .clicked()
-                                                    {
-                                                        self.settings.precision = precision;
+                                    ui.label(
+                                        egui::RichText::new("Precision")
+                                            .size(13.0)
+                                            .color(palette.text),
+                                    );
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            egui::ComboBox::from_id_salt("precision_combo")
+                                                .selected_text(self.settings.precision.label())
+                                                .width(230.0)
+                                                .show_ui(ui, |ui| {
+                                                    for precision in [
+                                                        Precision::Auto,
+                                                        Precision::F32,
+                                                        Precision::F16,
+                                                    ] {
+                                                        if ui
+                                                            .selectable_label(
+                                                                self.settings.precision == precision,
+                                                                precision.label(),
+                                                            )
+                                                            .clicked()
+                                                        {
+                                                            self.settings.precision = precision;
+                                                        }
                                                     }
-                                                }
-                                            });
-                                    },
-                                );
-                                ui.end_row();
-                            });
-                        widgets::hint(
-                            ui,
-                            &palette,
-                            if cfg!(feature = "cuda") {
-                                "CUDA is compiled into this build."
-                            } else {
-                                "CUDA / Metal require a dedicated build (--features cuda or metal)."
-                            },
-                        );
+                                                });
+                                        },
+                                    );
+                                    ui.end_row();
+                                });
+                            widgets::hint(
+                                ui,
+                                &palette,
+                                if cfg!(feature = "cuda") {
+                                    "CUDA is compiled into this build."
+                                } else {
+                                    "CUDA / Metal require a dedicated build (--features cuda or metal)."
+                                },
+                            );
+                        }
 
                         ui.add_space(8.0);
-                        ui.add(
-                            egui::Slider::new(&mut self.settings.num_beams, 1..=8)
-                                .text("Beam search"),
-                        );
+                        if spec.supports_beams {
+                            ui.add(
+                                egui::Slider::new(&mut self.settings.num_beams, 1..=8)
+                                    .text("Beam search"),
+                            );
+                        } else {
+                            ui.label(
+                                egui::RichText::new("Decoding: deterministic greedy")
+                                    .size(12.5)
+                                    .color(palette.muted),
+                            );
+                        }
                         ui.add(
                             egui::Slider::new(&mut self.settings.max_length, 64..=512)
                                 .step_by(32.0)
@@ -1234,6 +1347,10 @@ impl FluentApp {
                                 OutputLengthSetting::Limited => {
                                     "Custom limit stops at the selected maximum even without EOS."
                                 }
+                                OutputLengthSetting::Unlimited if t5 => {
+                                    "No limit continues until EOS or cancellation. Long outputs \
+                                     use more memory and time."
+                                }
                                 OutputLengthSetting::Unlimited => {
                                     "No limit continues until EOS, cancellation, or the model's \
                                      1024-position capacity (about 1022 generated tokens). \
@@ -1244,8 +1361,13 @@ impl FluentApp {
                         widgets::hint(
                             ui,
                             &palette,
-                            "More beams = better quality but slower generation. \
-                             Changing the model, device or precision reloads the model.",
+                            if spec.supports_beams {
+                                "More beams = better quality but slower generation. \
+                                 Changing the model, device or precision reloads the model."
+                            } else {
+                                "MADLAD uses deterministic greedy decoding; beam search is not used. \
+                                 Changing the model reloads it."
+                            },
                         );
 
                         ui.add_space(12.0);
@@ -1313,7 +1435,7 @@ impl FluentApp {
                         ui.add_space(4.0);
                         ui.label(
                             egui::RichText::new(format!(
-                                "Fluent {} · {} {} · NLLB-200 engine in Rust",
+                                "Fluent {} · {} {} · local translation engine in Rust",
                                 env!("CARGO_PKG_VERSION"),
                                 std::env::consts::OS,
                                 std::env::consts::ARCH
@@ -1480,8 +1602,12 @@ impl FluentApp {
                             PickerTarget::Target => self.settings.target_language.as_str(),
                         };
 
+                        let mode = self.settings.mode;
                         if query.is_empty() {
                             for language in popular_languages() {
+                                if !mode.supports_language(language.code) {
+                                    continue;
+                                }
                                 if picker_language_row(ui, &palette, language, current) {
                                     selected = Some(language.code);
                                 }
@@ -1490,7 +1616,7 @@ impl FluentApp {
                             widgets::section_label(ui, &palette, "All languages");
                             ui.add_space(2.0);
                             for language in languages() {
-                                if language.popular {
+                                if language.popular || !mode.supports_language(language.code) {
                                     continue;
                                 }
                                 if picker_language_row(ui, &palette, language, current) {
@@ -1500,6 +1626,9 @@ impl FluentApp {
                         } else {
                             let mut count = 0usize;
                             for language in languages() {
+                                if !mode.supports_language(language.code) {
+                                    continue;
+                                }
                                 let haystack = language.search_haystack();
                                 if !haystack.contains(&query) {
                                     continue;

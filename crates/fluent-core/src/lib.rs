@@ -17,11 +17,12 @@ use std::path::PathBuf;
 pub use config::ProjectConfig;
 pub use detect::Detection;
 pub use engine::{
-    estimate_memory, estimate_memory_for_choice, memory_info, DeviceChoice, Engine, EngineConfig,
-    EngineStatus, MemoryEstimate, MemoryInfo, Precision, Progress, ProgressStage,
-    TranslationRequest, TranslationResult,
+    estimate_memory, estimate_memory_for_choice, estimate_memory_for_mode, memory_info,
+    DeviceChoice, Engine, EngineConfig, EngineStatus, MemoryEstimate, MemoryInfo, Precision,
+    Progress, ProgressStage, TranslationRequest, TranslationResult,
 };
 pub use languages::{find_language, languages, popular_languages};
+pub use model::registry::{language_list, model_spec, Architecture, ModelSpec, MODELS};
 pub use tokenizer::NllbTokenizer;
 
 /// Requested output-length policy.
@@ -135,6 +136,7 @@ impl Language {
 pub enum Mode {
     Fast,
     Accurate,
+    Madlad,
 }
 
 impl Mode {
@@ -142,6 +144,7 @@ impl Mode {
         match self {
             Self::Fast => "fast",
             Self::Accurate => "accurate",
+            Self::Madlad => "madlad",
         }
     }
 
@@ -149,6 +152,7 @@ impl Mode {
         match self {
             Self::Fast => "Fast",
             Self::Accurate => "Accurate",
+            Self::Madlad => "MADLAD",
         }
     }
 
@@ -156,7 +160,12 @@ impl Mode {
         match self {
             Self::Fast => "NLLB-200 1.3B",
             Self::Accurate => "NLLB-200 3.3B",
+            Self::Madlad => "MADLAD-400 3B MT",
         }
+    }
+
+    pub fn supports_language(self, code: &str) -> bool {
+        crate::model::registry::supports_language(self, code)
     }
 }
 
@@ -173,6 +182,7 @@ impl std::str::FromStr for Mode {
         match value.trim().to_ascii_lowercase().as_str() {
             "fast" | "1.3b" => Ok(Self::Fast),
             "accurate" | "3.3b" => Ok(Self::Accurate),
+            "madlad" | "madlad400" | "madlad-400-3b-mt" | "3b" => Ok(Self::Madlad),
             other => Err(Error::Config(format!("unknown translation mode: {other}"))),
         }
     }
@@ -189,6 +199,8 @@ mod tests {
         assert_eq!("1.3B".parse::<Mode>().unwrap(), Mode::Fast);
         assert_eq!("accurate".parse::<Mode>().unwrap(), Mode::Accurate);
         assert_eq!(" 3.3b ".parse::<Mode>().unwrap(), Mode::Accurate);
+        assert_eq!("madlad".parse::<Mode>().unwrap(), Mode::Madlad);
+        assert_eq!("MADLAD400".parse::<Mode>().unwrap(), Mode::Madlad);
         assert!("medium".parse::<Mode>().is_err());
     }
 

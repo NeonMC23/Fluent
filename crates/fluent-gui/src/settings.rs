@@ -293,6 +293,15 @@ mod tests {
     }
 
     #[test]
+    fn madlad_mode_round_trips_in_settings() {
+        let parsed: Settings =
+            serde_json::from_str(r#"{"mode":"madlad","target_language":"fra_Latn"}"#).unwrap();
+        assert_eq!(parsed.mode, Mode::Madlad);
+        assert!(Mode::Madlad.supports_language("fra_Latn"));
+        assert!(!Mode::Madlad.supports_language("not_a_language"));
+    }
+
+    #[test]
     fn unknown_output_choice_falls_back_to_automatic() {
         let parsed: Settings =
             serde_json::from_str(r#"{"output_length":"something-new","num_beams":3}"#).unwrap();

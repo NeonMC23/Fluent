@@ -134,6 +134,7 @@ fn run_self_test() -> i32 {
     for (label, path) in [
         ("fast-model", &config.fast_model),
         ("accurate-model", &config.accurate_model),
+        ("madlad-model", &config.madlad_model),
     ] {
         if path.is_dir() {
             println!("{label}: present ({})", path.display());

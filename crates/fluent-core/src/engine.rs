@@ -12,7 +12,9 @@ use candle_core::{DType, Device};
 
 use crate::config::ProjectConfig;
 use crate::detect::{detect, Detection};
+use crate::model::madlad::{Madlad, MadladTokenizer};
 use crate::model::nllb::{GenerateOptions, Nllb};
+use crate::model::registry::{model_spec, Architecture};
 use crate::model::Checkpoint;
 use crate::tokenizer::NllbTokenizer;
 use crate::{Error, Mode, OutputLimit, Result};
@@ -306,6 +308,38 @@ pub fn estimate_memory_for_choice(
     estimate_memory_impl(model_dir, precision, on_cpu && precision == Precision::F32)
 }
 
+/// Estimates memory for the selected model family.
+pub fn estimate_memory_for_mode(
+    mode: Mode,
+    model_dir: &Path,
+    precision: Precision,
+    device: DeviceChoice,
+) -> Result<MemoryEstimate> {
+    match model_spec(mode).architecture {
+        Architecture::Nllb200 => estimate_memory_for_choice(model_dir, precision, device),
+        Architecture::T5 => estimate_madlad_memory(model_dir),
+    }
+}
+
+fn estimate_madlad_memory(model_dir: &Path) -> Result<MemoryEstimate> {
+    let gguf =
+        crate::model::madlad::find_gguf(model_dir).ok_or_else(|| Error::MissingModelFile {
+            dir: model_dir.to_path_buf(),
+            hint: "missing model-q4k.gguf (see docs/MADLAD.md)".to_string(),
+        })?;
+    let on_disk = std::fs::metadata(&gguf)?.len();
+    let weights_mb = (on_disk as f64 / (1024.0 * 1024.0)).ceil() as u64;
+    // Quantized weights are stored close to their on-disk size; activations,
+    // the tokenizer and the growing KV cache need a separate margin.
+    let overhead_mb = (weights_mb / 3).max(768);
+    Ok(MemoryEstimate {
+        weights_mb,
+        overhead_mb,
+        needed_mb: weights_mb + overhead_mb,
+        info: memory_info(),
+    })
+}
+
 fn resolve_precision(precision: Precision, d_model: usize) -> Precision {
     match precision {
         Precision::Auto if d_model >= 2048 => Precision::F16,
@@ -355,12 +389,83 @@ fn estimate_memory_impl(
 // Engine
 // ---------------------------------------------------------------------------
 
+enum LoadedBackend {
+    Nllb {
+        model: Box<Nllb>,
+        tokenizer: Box<NllbTokenizer>,
+    },
+    Madlad {
+        model: Box<Madlad>,
+        tokenizer: Box<MadladTokenizer>,
+    },
+}
+
 struct Loaded {
-    model: Nllb,
-    tokenizer: NllbTokenizer,
+    backend: LoadedBackend,
     device: Device,
-    dtype: DType,
+    precision_label: String,
     load_time: Duration,
+}
+
+impl Loaded {
+    fn max_source_tokens(&self) -> Option<usize> {
+        match &self.backend {
+            LoadedBackend::Nllb { .. } => None,
+            LoadedBackend::Madlad { model, .. } => Some(model.max_source_tokens()),
+        }
+    }
+
+    fn encode_source(
+        &self,
+        text: &str,
+        source_language: &str,
+        target_language: &str,
+        max_tokens: usize,
+    ) -> Result<(Vec<u32>, bool)> {
+        match &self.backend {
+            LoadedBackend::Nllb { tokenizer, .. } => {
+                tokenizer.encode_source(text, source_language, max_tokens)
+            }
+            LoadedBackend::Madlad { tokenizer, .. } => {
+                tokenizer.encode_source(text, target_language, max_tokens)
+            }
+        }
+    }
+
+    fn generate(
+        &mut self,
+        source_ids: &[u32],
+        target_language: &str,
+        output_limit: OutputLimit,
+        num_beams: usize,
+        progress: &mut dyn FnMut(crate::model::nllb::GenerationProgress),
+        cancel: &AtomicBool,
+    ) -> Result<Vec<u32>> {
+        match &mut self.backend {
+            LoadedBackend::Nllb { model, tokenizer } => model.generate(
+                tokenizer,
+                source_ids,
+                target_language,
+                GenerateOptions {
+                    output_limit,
+                    num_beams: num_beams.max(1),
+                    early_stopping: Default::default(),
+                },
+                progress,
+                cancel,
+            ),
+            LoadedBackend::Madlad { model, tokenizer } => {
+                model.generate(tokenizer, source_ids, output_limit, progress, cancel)
+            }
+        }
+    }
+
+    fn decode(&self, ids: &[u32]) -> Result<String> {
+        match &self.backend {
+            LoadedBackend::Nllb { tokenizer, .. } => tokenizer.decode(ids),
+            LoadedBackend::Madlad { tokenizer, .. } => tokenizer.decode(ids),
+        }
+    }
 }
 
 pub struct Engine {
@@ -401,8 +506,15 @@ impl Engine {
     }
 
     pub fn load(&mut self, progress: &mut dyn FnMut(Progress), cancel: &AtomicBool) -> Result<()> {
-        let started = Instant::now();
         self.loaded = None;
+        match model_spec(self.config.mode).architecture {
+            Architecture::Nllb200 => self.load_nllb(progress, cancel),
+            Architecture::T5 => self.load_madlad(progress, cancel),
+        }
+    }
+
+    fn load_nllb(&mut self, progress: &mut dyn FnMut(Progress), cancel: &AtomicBool) -> Result<()> {
+        let started = Instant::now();
 
         progress(Progress::new(
             ProgressStage::Preparing,
@@ -486,10 +598,104 @@ impl Engine {
         ));
 
         self.loaded = Some(Loaded {
-            model,
-            tokenizer,
+            backend: LoadedBackend::Nllb {
+                model: Box::new(model),
+                tokenizer: Box::new(tokenizer),
+            },
             device,
-            dtype,
+            precision_label: dtype_label(dtype),
+            load_time: started.elapsed(),
+        });
+        Ok(())
+    }
+
+    fn load_madlad(
+        &mut self,
+        progress: &mut dyn FnMut(Progress),
+        cancel: &AtomicBool,
+    ) -> Result<()> {
+        let started = Instant::now();
+        if !self.config.model_dir.is_dir() {
+            return Err(Error::ModelNotFound(self.config.model_dir.clone()));
+        }
+        // MADLAD's validated path is CPU q4_k GGUF. Do not silently fall back
+        // to another device or advertise acceleration that is not implemented.
+        match self.config.device {
+            DeviceChoice::Auto | DeviceChoice::Cpu => {}
+            DeviceChoice::Cuda(_) | DeviceChoice::Metal(_) => {
+                return Err(Error::Other(
+                    "MADLAD currently supports CPU execution only".to_string(),
+                ));
+            }
+        }
+
+        progress(Progress::new(
+            ProgressStage::Preparing,
+            Some(0.05),
+            "Checking MADLAD files",
+        ));
+        let estimate = estimate_memory_for_mode(
+            self.config.mode,
+            &self.config.model_dir,
+            self.config.precision,
+            DeviceChoice::Cpu,
+        )?;
+        if !estimate.fits() {
+            return Err(Error::OutOfMemory {
+                needed_mb: estimate.needed_mb,
+                available_mb: estimate
+                    .info
+                    .available_with_swap_mb()
+                    .unwrap_or(estimate.needed_mb),
+            });
+        }
+
+        progress(Progress::new(
+            ProgressStage::LoadingModel,
+            Some(0.12),
+            "Loading MADLAD q4_k weights",
+        ));
+        let mut report = |step: usize| {
+            let fraction = match step {
+                1 => 0.35,
+                2 => 0.55,
+                3 => 0.82,
+                _ => 0.82,
+            };
+            progress(Progress::new(
+                ProgressStage::LoadingModel,
+                Some(fraction),
+                match step {
+                    1 => "Reading GGUF tensor table",
+                    2 => "Validating T5 configuration",
+                    _ => "Building T5 decoder",
+                },
+            ));
+        };
+        let model = Madlad::load(&self.config.model_dir, cancel, &mut report)?;
+        if cancel.load(Ordering::Relaxed) {
+            return Err(Error::Cancelled);
+        }
+
+        progress(Progress::new(
+            ProgressStage::LoadingModel,
+            Some(0.92),
+            "Loading MADLAD tokenizer",
+        ));
+        let tokenizer = MadladTokenizer::from_dir(&self.config.model_dir)?;
+
+        progress(Progress::new(
+            ProgressStage::Finishing,
+            Some(1.0),
+            "MADLAD ready",
+        ));
+        self.loaded = Some(Loaded {
+            backend: LoadedBackend::Madlad {
+                model: Box::new(model),
+                tokenizer: Box::new(tokenizer),
+            },
+            device: Device::Cpu,
+            precision_label: "Q4_K · GGUF".to_string(),
             load_time: started.elapsed(),
         });
         Ok(())
@@ -507,22 +713,30 @@ impl Engine {
                 mode: self.config.mode,
                 model_dir: self.config.model_dir.clone(),
                 device: device_label(&loaded.device),
-                precision: dtype_label(loaded.dtype),
+                precision: loaded.precision_label.clone(),
                 load_time: Some(loaded.load_time),
             },
             None => EngineStatus {
                 loaded: false,
                 mode: self.config.mode,
                 model_dir: self.config.model_dir.clone(),
-                device: resolve_device(self.config.device)
-                    .map(|device| device_label(&device))
-                    .unwrap_or_else(|_| "unavailable".to_string()),
-                precision: match self.config.precision {
-                    Precision::Auto => "automatic",
-                    Precision::F32 => "f32",
-                    Precision::F16 => "f16",
-                }
-                .to_string(),
+                device: if self.config.mode == Mode::Madlad {
+                    "Processor (CPU)".to_string()
+                } else {
+                    resolve_device(self.config.device)
+                        .map(|device| device_label(&device))
+                        .unwrap_or_else(|_| "unavailable".to_string())
+                },
+                precision: if self.config.mode == Mode::Madlad {
+                    "Q4_K · GGUF".to_string()
+                } else {
+                    match self.config.precision {
+                        Precision::Auto => "automatic",
+                        Precision::F32 => "f32",
+                        Precision::F16 => "f16",
+                    }
+                    .to_string()
+                },
                 load_time: None,
             },
         }
@@ -548,9 +762,12 @@ impl Engine {
             return Err(Error::Cancelled);
         }
 
+        let output_limit = self.config.output_limit;
+        let num_beams = self.config.num_beams.max(1);
+        let max_length = self.config.max_length;
         let loaded = self
             .loaded
-            .as_ref()
+            .as_mut()
             .ok_or_else(|| Error::Other("the model is not loaded".to_string()))?;
 
         let (source_language, detected) = if request.source_language == "auto" {
@@ -567,10 +784,12 @@ impl Engine {
             None,
             format!("Encoding text ({source_language})"),
         ));
+        let max_source = loaded
+            .max_source_tokens()
+            .map(|limit| max_length.min(limit))
+            .unwrap_or(max_length);
         let (source_ids, truncated) =
-            loaded
-                .tokenizer
-                .encode_source(text, &source_language, self.config.max_length)?;
+            loaded.encode_source(text, &source_language, &request.target_language, max_source)?;
 
         if cancel.load(Ordering::Relaxed) {
             return Err(Error::Cancelled);
@@ -581,16 +800,11 @@ impl Engine {
             Some(0.0),
             "Generating translation",
         ));
-        let options = GenerateOptions {
-            output_limit: self.config.output_limit,
-            num_beams: self.config.num_beams.max(1),
-            early_stopping: Default::default(),
-        };
-        let tokens = loaded.model.generate(
-            &loaded.tokenizer,
+        let tokens = loaded.generate(
             &source_ids,
             &request.target_language,
-            options,
+            output_limit,
+            num_beams,
             &mut |generation| {
                 let fraction = if generation.max == 0 {
                     None
@@ -617,7 +831,7 @@ impl Engine {
             Some(1.0),
             "Finishing translation",
         ));
-        let translated = loaded.tokenizer.decode(&tokens)?;
+        let translated = loaded.decode(&tokens)?;
 
         Ok(TranslationResult {
             text: translated,

@@ -14,6 +14,7 @@ pub struct ProjectConfig {
     pub theme: String,
     pub fast_model: PathBuf,
     pub accurate_model: PathBuf,
+    pub madlad_model: PathBuf,
     pub max_length: usize,
     /// Generated-token policy. `Auto` derives a finite budget from the
     /// encoded source; `Tokens(n)` uses a finite ceiling; `UntilEos` removes
@@ -29,6 +30,7 @@ impl Default for ProjectConfig {
             config_path: None,
             fast_model: base_dir.join("models/nllb-200-1.3b"),
             accurate_model: base_dir.join("models/nllb-200-3.3b"),
+            madlad_model: base_dir.join("models/madlad400-3b-mt"),
             base_dir,
             default_source_language: "auto".to_string(),
             default_target_language: "eng_Latn".to_string(),
@@ -55,6 +57,7 @@ struct RawConfig {
 struct RawModels {
     fast: Option<String>,
     accurate: Option<String>,
+    madlad: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -130,6 +133,9 @@ impl ProjectConfig {
             if let Some(accurate) = models.accurate {
                 config.accurate_model = resolve_model_path(&base_dir, &accurate);
             }
+            if let Some(madlad) = models.madlad {
+                config.madlad_model = resolve_model_path(&base_dir, &madlad);
+            }
         }
         if let Some(generation) = raw.generation {
             if let Some(max_length) = generation.max_length {
@@ -157,6 +163,12 @@ impl ProjectConfig {
                 config.accurate_model = fallback;
             }
         }
+        if !config.madlad_model.is_dir() {
+            let fallback = base_dir.join("models/madlad400-3b-mt");
+            if fallback.is_dir() {
+                config.madlad_model = fallback;
+            }
+        }
 
         Ok(config)
     }
@@ -165,6 +177,7 @@ impl ProjectConfig {
         match mode {
             Mode::Fast => &self.fast_model,
             Mode::Accurate => &self.accurate_model,
+            Mode::Madlad => &self.madlad_model,
         }
     }
 
@@ -256,7 +269,7 @@ mod tests {
             r#"{
                 "default_source_language": "auto",
                 "default_target_language": "fra_Latn",
-                "models": {"fast": "models/nllb-200-1.3b", "accurate": "models/nllb-200-3.3b"},
+                "models": {"fast": "models/nllb-200-1.3b", "accurate": "models/nllb-200-3.3b", "madlad": "models/madlad400-3b-mt"},
                 "generation": {"max_length": 5000, "max_new_tokens": 5000, "num_beams": 42}
             }"#,
         )
@@ -266,6 +279,7 @@ mod tests {
         assert_eq!(config.base_dir, dir);
         assert_eq!(config.fast_model, dir.join("models/nllb-200-1.3b"));
         assert_eq!(config.accurate_model, dir.join("models/nllb-200-3.3b"));
+        assert_eq!(config.madlad_model, dir.join("models/madlad400-3b-mt"));
         assert_eq!(config.default_target_language, "fra_Latn");
         // Out-of-range values are clamped.
         assert_eq!(config.max_length, 1024);
@@ -280,6 +294,7 @@ mod tests {
         let dir = temp_dir("fallback");
         fs::create_dir_all(dir.join("models/nllb-200-1.3b")).unwrap();
         fs::create_dir_all(dir.join("models/nllb-200-3.3b")).unwrap();
+        fs::create_dir_all(dir.join("models/madlad400-3b-mt")).unwrap();
         fs::write(
             dir.join("config.json"),
             r#"{"models": {"fast": "elsewhere", "accurate": "elsewhere-too"}}"#,
@@ -289,6 +304,7 @@ mod tests {
         let config = ProjectConfig::load_from(&dir.join("config.json")).unwrap();
         assert_eq!(config.fast_model, dir.join("models/nllb-200-1.3b"));
         assert_eq!(config.accurate_model, dir.join("models/nllb-200-3.3b"));
+        assert_eq!(config.madlad_model, dir.join("models/madlad400-3b-mt"));
         assert_eq!(config.output_limit, OutputLimit::Auto);
 
         fs::remove_dir_all(dir).ok();

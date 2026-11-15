@@ -553,6 +553,7 @@ else
     TMP_CONFIG="$(mktemp "$CONFIG_DIR/.config.XXXXXX")"
     FAST_JSON="$(json_escape "$MODELS_DIR/nllb-200-1.3b")"
     ACCURATE_JSON="$(json_escape "$MODELS_DIR/nllb-200-3.3b")"
+    MADLAD_JSON="$(json_escape "$MODELS_DIR/madlad400-3b-mt")"
     cat > "$TMP_CONFIG" <<EOF
 {
   "default_source_language": "auto",
@@ -561,7 +562,8 @@ else
   "theme": "system",
   "models": {
     "fast": "$FAST_JSON",
-    "accurate": "$ACCURATE_JSON"
+    "accurate": "$ACCURATE_JSON",
+    "madlad": "$MADLAD_JSON"
   },
   "generation": {
     "max_length": 512,
