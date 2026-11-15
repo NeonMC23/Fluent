@@ -91,6 +91,22 @@ The workflow has run successfully on GitHub:
   directly from its bytes, including a real GUI smoke test and a detached
   signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
+- **Cycle 16 run (SMaLL-100 and remote catalogue):**
+  [43727254932](https://github.com/NeonMC23/Fluent/actions/runs/43727254932)
+  on `5200ab5a…`. All four jobs succeeded with the SMaLL-100 backend, the
+  98-language mapping, the validated remote catalogue, the GUI catalogue
+  refresh and the four-model Model Manager.
+- **Cycle 16 archive SHA-256:** Linux
+  `db1fcdaaf9071f43afac439640b9fe389af3dcb7a5a7a6764ff498a85bd74fb6`
+  (9,419,066 B), Windows
+  `e5c9188a1a9e394e5c649ea50383df88a072d2c2b997f011011828e82c744756`
+  (7,201,614 B), macOS
+  `e5d78d4d12988a715d814794acc74655b807fd598eae4596ba69c8e6aa909b02`
+  (7,942,940 B). CI remains unsigned until the Minisign secret is configured.
+  The locally built and Minisign-signed Linux archive from `5200ab5` is
+  byte-identical to the CI inner archive
+  (`db1fcdaaf9071f43afac439640b9fe389af3dcb7a5a7a6764ff498a85bd74fb6`), and the
+  verifier accepted the signature and manifest.
 - **Cycle 15 run (Model Manager):**
   [43710941404](https://github.com/NeonMC23/Fluent/actions/runs/43710941404)
   on `6f06329a…`. All four jobs succeeded with the native model manager,
@@ -326,8 +342,9 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - [ ] Model/package/licensing notices current.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [x] Cycle 15 CI run 43710941404 succeeded on `main` for all four jobs after
-  the Model Manager integration; inner archive checksums were published.
+- [x] Cycle 16 CI run 43727254932 succeeded on `main` for all four jobs after
+  the SMaLL-100 and remote-catalogue integration; inner archive checksums were
+  published. Cycle 15 run 43710941404 also passed.
 - [x] Unlimited output generated 600 real-model tokens and cancelled after 520
   in the gated integration test.
 - [ ] Artifact bytes independently downloaded and inspected (requires GitHub

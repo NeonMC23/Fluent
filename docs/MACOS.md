@@ -73,7 +73,7 @@ The CI workflow defines a native `macos-latest` job that runs
 `scripts/package-macos-archive.py`. It uploads the `fluent-macos` workflow
 artifact containing an unsigned `Fluent-<version>-macos-<arch>.zip` (14-day
 retention; the current runner is arm64). It executed successfully in GitHub
-Actions run `43710941404` (commit `6f06329`), including a plist/Mach-O
+Actions run `43727254932` (commit `5200ab5`), including a plist/Mach-O
 validation and a bundled GUI smoke test on the runner. Metal, Intel macOS,
 universal binaries, signing and notarization remain untested; this is not
 notarized Gatekeeper validation.
