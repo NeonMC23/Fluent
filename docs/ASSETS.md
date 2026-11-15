@@ -144,6 +144,7 @@ Captured from the actual running application on the canonical Linux host:
 | Model Manager, SMaLL-100 installed and verified | `docs/screenshots/model-manager-small.png` |
 | Model Manager, download confirmation and licence | `docs/screenshots/model-manager-confirm.png` |
 | Model Manager, live download progress, speed, ETA and cancel | `docs/screenshots/model-manager-download.png` |
+| Model Manager, cancelled download shown as Incomplete | `docs/screenshots/model-manager-cancelled.png` |
 | Language picker | `docs/screenshots/language-picker.png` |
 | Main interface, light theme | `docs/screenshots/main-light.png` |
 
