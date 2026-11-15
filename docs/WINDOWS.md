@@ -91,8 +91,8 @@ The CI workflow defines a native `windows-latest` job that runs
 `cargo test --workspace`, a release GUI build with the embedded icon/resource,
 and `scripts/package-windows.py`. It uploads the
 `fluent-<version>-windows-x86_64.zip` workflow artifact (14-day retention).
-It executed successfully in GitHub Actions run `43706890466` (commit
-`c143e27`), uploaded the ZIP artifact, and ran the packaged `fluent.exe`
+It executed successfully in GitHub Actions run `43710941404` (commit
+`6f06329`), uploaded the ZIP artifact, and ran the packaged `fluent.exe`
 `--version` and `--self-test`. The GUI-window smoke is SKIPPED because the
 hosted runner has no OpenGL 2.0+ context; this is not physical-device GUI
 validation.

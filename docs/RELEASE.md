@@ -92,16 +92,17 @@ The workflow has run successfully on GitHub:
   signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
 - **Cycle 15 run (Model Manager):**
-  [43706890466](https://github.com/NeonMC23/Fluent/actions/runs/43706890466)
-  on `c143e272…`. All four jobs succeeded with the native model manager,
-  registry manifests, downloader and custom storage UI.
+  [43710941404](https://github.com/NeonMC23/Fluent/actions/runs/43710941404)
+  on `6f06329a…`. All four jobs succeeded with the native model manager,
+  registry manifests, downloader, custom storage UI and stalled-read timeout.
+  The earlier Cycle 15 run 43706890466 also passed.
 - **Cycle 15 archive SHA-256:** Linux
-  `e9368aa73b24a0208189260d71744fe6e791b2d617bb4548548d0266ee055eda`
-  (9,354,727 B), Windows
-  `605ba2106b2f9c420c0f00a05c28f5f3d4c1a8557a2d456f0b382136c8bdd983`
-  (7,130,382 B), macOS
-  `2f0fcf9ce006ceaf9bf093ccc01c9660e8d92dabe531b6ab6e881e72269bba95`
-  (7,879,671 B). CI still reports unsigned until the Minisign secret is set.
+  `95e4fd923b4db762a86c7e8231d21d905d05f06f57a1b45e2df433957ab854c3`
+  (9,355,181 B), Windows
+  `3d36aa0a323a6cf98ee71bbdcf135caa7c32364035642cf89ea42d5f3ef5721e`
+  (7,130,370 B), macOS
+  `541417b441052b4c96b5accca94dae5208129134c2362b9f5eda2e172d2e570b`
+  (7,879,732 B). CI still reports unsigned until the Minisign secret is set.
 - **Cycle 14 run (quality/performance):**
   [43682638997](https://github.com/NeonMC23/Fluent/actions/runs/43682638997)
   on `d554f5d2…`. All four jobs succeeded with the NLLB CPU Q8 auto-precision
@@ -325,7 +326,7 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - [ ] Model/package/licensing notices current.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [x] Cycle 15 CI run 43706890466 succeeded on `main` for all four jobs after
+- [x] Cycle 15 CI run 43710941404 succeeded on `main` for all four jobs after
   the Model Manager integration; inner archive checksums were published.
 - [x] Unlimited output generated 600 real-model tokens and cancelled after 520
   in the gated integration test.
