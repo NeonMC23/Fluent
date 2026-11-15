@@ -726,6 +726,7 @@ fn run_case(
             output_limit: OutputLimit::Tokens(budget),
             num_beams: beams,
             early_stopping,
+            force_target_token: true,
         };
         let (tokens, stats) = model.generate_with_stats(
             tokenizer,

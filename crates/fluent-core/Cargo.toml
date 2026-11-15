@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "Local NLLB-200 translation engine written in pure Rust"
+description = "Local NLLB-200, MADLAD-400 and SMaLL-100 translation engine written in pure Rust"
 
 [dependencies]
 candle-core = "0.11"
@@ -18,6 +18,7 @@ serde_json = "1"
 thiserror = "2"
 rayon = "1"
 tokenizers = { version = "0.22", default-features = true }
+sentencepiece-rust = "0.1.1"
 whatlang = "0.18"
 directories = "5"
 

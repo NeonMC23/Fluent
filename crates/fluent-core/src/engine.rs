@@ -15,6 +15,7 @@ use crate::detect::{detect, Detection};
 use crate::model::madlad::{Madlad, MadladTokenizer};
 use crate::model::nllb::{GenerateOptions, Nllb};
 use crate::model::registry::{model_spec, Architecture};
+use crate::model::small100::Small100Tokenizer;
 use crate::model::Checkpoint;
 use crate::tokenizer::NllbTokenizer;
 use crate::{Error, Mode, OutputLimit, Result};
@@ -324,7 +325,9 @@ pub fn estimate_memory_for_mode(
     device: DeviceChoice,
 ) -> Result<MemoryEstimate> {
     match model_spec(mode).architecture {
-        Architecture::Nllb200 => estimate_memory_for_choice(model_dir, precision, device),
+        Architecture::Nllb200 | Architecture::Small100 => {
+            estimate_memory_for_choice(model_dir, precision, device)
+        }
         Architecture::T5 => estimate_madlad_memory(model_dir),
     }
 }
@@ -402,6 +405,10 @@ enum LoadedBackend {
         model: Box<Nllb>,
         tokenizer: Box<NllbTokenizer>,
     },
+    Small100 {
+        model: Box<Nllb>,
+        tokenizer: Box<Small100Tokenizer>,
+    },
     Madlad {
         model: Box<Madlad>,
         tokenizer: Box<MadladTokenizer>,
@@ -418,7 +425,7 @@ struct Loaded {
 impl Loaded {
     fn max_source_tokens(&self) -> Option<usize> {
         match &self.backend {
-            LoadedBackend::Nllb { .. } => None,
+            LoadedBackend::Nllb { .. } | LoadedBackend::Small100 { .. } => None,
             LoadedBackend::Madlad { model, .. } => Some(model.max_source_tokens()),
         }
     }
@@ -433,6 +440,10 @@ impl Loaded {
         match &self.backend {
             LoadedBackend::Nllb { tokenizer, .. } => {
                 tokenizer.encode_source(text, source_language, max_tokens)
+            }
+            LoadedBackend::Small100 { tokenizer, .. } => {
+                // SMaLL-100 conditions on the target language in the encoder.
+                tokenizer.encode_source(text, target_language, max_tokens)
             }
             LoadedBackend::Madlad { tokenizer, .. } => {
                 tokenizer.encode_source(text, target_language, max_tokens)
@@ -458,7 +469,23 @@ impl Loaded {
                     output_limit,
                     num_beams: num_beams.max(1),
                     early_stopping: Default::default(),
+                    force_target_token: true,
                 },
+                progress,
+                cancel,
+            ),
+            LoadedBackend::Small100 { model, tokenizer } => model.generate_with_tokens(
+                tokenizer.eos_id(),
+                tokenizer.eos_id(),
+                None,
+                source_ids,
+                GenerateOptions {
+                    output_limit,
+                    num_beams: num_beams.max(1),
+                    early_stopping: Default::default(),
+                    force_target_token: false,
+                },
+                &|ids| tokenizer.decode(ids),
                 progress,
                 cancel,
             ),
@@ -471,6 +498,7 @@ impl Loaded {
     fn decode(&self, ids: &[u32]) -> Result<String> {
         match &self.backend {
             LoadedBackend::Nllb { tokenizer, .. } => tokenizer.decode(ids),
+            LoadedBackend::Small100 { tokenizer, .. } => tokenizer.decode(ids),
             LoadedBackend::Madlad { tokenizer, .. } => tokenizer.decode(ids),
         }
     }
@@ -518,10 +546,28 @@ impl Engine {
         match model_spec(self.config.mode).architecture {
             Architecture::Nllb200 => self.load_nllb(progress, cancel),
             Architecture::T5 => self.load_madlad(progress, cancel),
+            Architecture::Small100 => self.load_small100(progress, cancel),
         }
     }
 
     fn load_nllb(&mut self, progress: &mut dyn FnMut(Progress), cancel: &AtomicBool) -> Result<()> {
+        self.load_m2m(progress, cancel, false)
+    }
+
+    fn load_small100(
+        &mut self,
+        progress: &mut dyn FnMut(Progress),
+        cancel: &AtomicBool,
+    ) -> Result<()> {
+        self.load_m2m(progress, cancel, true)
+    }
+
+    fn load_m2m(
+        &mut self,
+        progress: &mut dyn FnMut(Progress),
+        cancel: &AtomicBool,
+        small: bool,
+    ) -> Result<()> {
         let started = Instant::now();
 
         progress(Progress::new(
@@ -597,7 +643,17 @@ impl Engine {
             Some(0.92),
             "Loading tokenizer",
         ));
-        let tokenizer = NllbTokenizer::from_dir(&self.config.model_dir)?;
+        let backend = if small {
+            LoadedBackend::Small100 {
+                model: Box::new(model),
+                tokenizer: Box::new(Small100Tokenizer::from_dir(&self.config.model_dir)?),
+            }
+        } else {
+            LoadedBackend::Nllb {
+                model: Box::new(model),
+                tokenizer: Box::new(NllbTokenizer::from_dir(&self.config.model_dir)?),
+            }
+        };
 
         progress(Progress::new(
             ProgressStage::Finishing,
@@ -605,13 +661,16 @@ impl Engine {
             "Model ready",
         ));
 
+        let quantized = matches!(&backend, LoadedBackend::Nllb { model, .. } | LoadedBackend::Small100 { model, .. } if model.is_quantized());
+        let precision_label = if quantized {
+            format!("{} · Q8", dtype_label(dtype))
+        } else {
+            dtype_label(dtype)
+        };
         self.loaded = Some(Loaded {
-            backend: LoadedBackend::Nllb {
-                model: Box::new(model),
-                tokenizer: Box::new(tokenizer),
-            },
+            backend,
             device,
-            precision_label: dtype_label(dtype),
+            precision_label,
             load_time: started.elapsed(),
         });
         Ok(())

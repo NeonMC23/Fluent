@@ -7,11 +7,20 @@ versions until a release is explicitly published.
 
 ### Added
 
-- Native Model Manager with a three-model catalogue, download/repair,
+- Native Model Manager with a four-model catalogue, download/repair,
   SHA-256 verification, progress/cancellation, safe removal, storage usage and
   an optional custom storage root.
 - Central registry manifests with pinned repositories, revisions, file sizes
-  and SHA-256 values for NLLB-200 and MADLAD-400.
+  and SHA-256 values for NLLB-200, MADLAD-400 and SMaLL-100.
+- SMaLL-100 (330M, MIT) backend with a pure-Rust SentencePiece tokenizer,
+  target-language encoder conditioning, shallow-decoder generation, Q8 CPU
+  inference, cancellation and output limits.
+- Versioned remote model catalogue (`catalogue/models-v1.json`) with strict
+  schema validation, HTTPS-only URLs, a body limit, fail-closed behaviour and a
+  Model Manager refresh action. A committed catalogue test prevents drift from
+  the compiled registry.
+- 42 directed-pair FLORES-200 corpus for the seven required languages and a
+  measured comparison against NLLB-200 1.3B/3.3B and MADLAD-400.
 - Reproducible product-level benchmark harness (`examples/eval`), FLORES-200
   sample and Fluent-oriented review corpus, and chrF++/BLEU summarizer.
 - Cycle 14 long-generation tests: MADLAD 520 tokens, cancellation after 515,
@@ -20,7 +29,7 @@ versions until a release is explicitly published.
   SentencePiece-compatible tokenizer, target-language prefixes, curated
   language mapping, deterministic greedy decoding, output limits and
   cancellation.
-- Central model registry used by the GUI for NLLB and MADLAD names,
+- Central model registry used by the GUI for NLLB, MADLAD and SMaLL-100 names,
   architecture, storage, license and decoding capabilities.
 - Reproducible `scripts/fetch-madlad.py` acquisition with resumable downloads,
   disk checks and pinned SHA-256 verification.

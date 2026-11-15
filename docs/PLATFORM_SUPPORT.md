@@ -82,6 +82,25 @@ execution is still not physical-device validation.
   and a 512+ token MADLAD generation.
 - See [MADLAD.md](MADLAD.md) for acquisition, files and limitations.
 
+## SMaLL-100 (M2M-100 family)
+
+- **Architecture:** 12 encoder layers, 3 decoder layers, `d_model=1024`,
+  shared 128,112-entry vocabulary, 330M parameters.
+- **Device:** CPU Q8 is the validated path. The same backend compiles for
+  CUDA/Metal, but neither was validated in this cycle.
+- **Decoding:** beam search and greedy are supported; deterministic for a fixed
+  beam count and prompt.
+- **Languages:** 98 mappings between Fluent/NLLB codes and the M2M-100 short
+  codes. Breton and Western Frisian are not in NLLB's table; `__zh__` maps to
+  Simplified Chinese only.
+- **Measured on the canonical host:** see [BENCHMARKS.md](BENCHMARKS.md).
+  Roughly 1 s to load, ~0.4 GB resident after load, and ~5x faster generation
+  than NLLB 1.3B.
+- **Validated pairs:** all 42 directed pairs among English, French, German,
+  Spanish, Portuguese, Italian and Simplified Chinese. See
+  [BENCHMARKS.md](BENCHMARKS.md) and [SMALL100.md](SMALL100.md).
+- **Not executed:** physical Windows/macOS SMaLL-100 runs and CUDA/Metal.
+
 ## CPU and GPU behaviour
 
 - NLLB 1.3B and 3.3B both use CPU Q8 under Automatic precision. A measured

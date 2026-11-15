@@ -5,11 +5,11 @@ use std::time::{Duration, Instant};
 
 use eframe::egui;
 use fluent_core::{
-    available_bytes, directory_size, estimate_memory_for_mode, find_language, inspect_model,
-    install_model, languages, model_spec, popular_languages, remove_model, verify_model,
-    Architecture, DeviceChoice, EngineConfig, EngineStatus, InstallState, Language, Mode,
-    ModelInstallation, Precision, Progress, ProjectConfig, TaskProgress, TranslationRequest,
-    TranslationResult, MODELS,
+    available_bytes, directory_size, estimate_memory_for_mode, fetch_catalogue, find_language,
+    inspect_model, install_model, languages, model_spec, popular_languages, remove_model,
+    verify_model, Architecture, Catalogue, DeviceChoice, EngineConfig, EngineStatus, InstallState,
+    Language, Mode, ModelInstallation, Precision, Progress, ProjectConfig, TaskProgress,
+    TranslationRequest, TranslationResult, MODELS,
 };
 
 use crate::settings::{settings_path, OutputLengthSetting, Settings, ThemeChoice, ACCENTS};
@@ -35,11 +35,16 @@ struct ManagerTask {
     cancel: Arc<AtomicBool>,
 }
 
+struct CatalogueTask {
+    rx: mpsc::Receiver<Result<Catalogue, String>>,
+}
+
 fn mode_index(mode: Mode) -> usize {
     match mode {
         Mode::Fast => 0,
         Mode::Accurate => 1,
         Mode::Madlad => 2,
+        Mode::Small => 3,
     }
 }
 
@@ -84,11 +89,16 @@ pub struct FluentApp {
     manager_root_input: String,
     manager_task: Option<ManagerTask>,
     manager_progress: Option<TaskProgress>,
-    manager_reports: [Option<ModelInstallation>; 3],
+    manager_reports: [Option<ModelInstallation>; 4],
     manager_error: Option<String>,
     manager_notice: Option<(String, Instant)>,
     confirm_download: Option<Mode>,
     confirm_remove: Option<Mode>,
+
+    catalogue: Option<Catalogue>,
+    catalogue_task: Option<CatalogueTask>,
+    catalogue_error: Option<String>,
+    catalogue_refreshed: Option<Instant>,
 
     /// Non-interactive CI smoke test: close after N painted frames.
     smoke_frames: Option<u32>,
@@ -133,11 +143,15 @@ impl FluentApp {
             manager_root_input: String::new(),
             manager_task: None,
             manager_progress: None,
-            manager_reports: [None, None, None],
+            manager_reports: [None, None, None, None],
             manager_error: None,
             manager_notice: None,
             confirm_download: None,
             confirm_remove: None,
+            catalogue: None,
+            catalogue_task: None,
+            catalogue_error: None,
+            catalogue_refreshed: None,
             smoke_frames: None,
         }
     }
@@ -292,6 +306,47 @@ impl FluentApp {
         self.manager_error = None;
     }
 
+    fn refresh_catalogue(&mut self, ctx: &egui::Context) {
+        if self.catalogue_task.is_some() {
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        let thread_ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = fetch_catalogue(None).map_err(|error| error.to_string());
+            let _ = tx.send(result);
+            thread_ctx.request_repaint();
+        });
+        self.catalogue_task = Some(CatalogueTask { rx });
+        self.catalogue_error = None;
+    }
+
+    fn poll_catalogue(&mut self, ctx: &egui::Context) {
+        let Some(task) = self.catalogue_task.as_ref() else {
+            return;
+        };
+        match task.rx.try_recv() {
+            Ok(Ok(catalogue)) => {
+                self.catalogue = Some(catalogue);
+                self.catalogue_task = None;
+                self.catalogue_error = None;
+                self.catalogue_refreshed = Some(Instant::now());
+                ctx.request_repaint();
+            }
+            Ok(Err(error)) => {
+                self.catalogue_task = None;
+                self.catalogue_error = Some(error);
+                ctx.request_repaint();
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.catalogue_task = None;
+                self.catalogue_error = Some("catalogue task ended unexpectedly".to_string());
+                ctx.request_repaint();
+            }
+        }
+    }
+
     fn poll_manager(&mut self, ctx: &egui::Context) {
         let Some(task) = self.manager_task.as_ref() else {
             return;
@@ -403,7 +458,7 @@ impl FluentApp {
             self.settings.models_root.clear();
             self.settings.save();
             self.status = None;
-            self.manager_reports = [None, None, None];
+            self.manager_reports = [None, None, None, None];
             self.manager_notice = Some((
                 "Using the model paths from config.json".to_string(),
                 Instant::now(),
@@ -444,7 +499,7 @@ impl FluentApp {
         self.settings.save();
         self.status = None;
         self.result = None;
-        self.manager_reports = [None, None, None];
+        self.manager_reports = [None, None, None, None];
         self.manager_error = None;
         self.manager_notice = Some((
             "Storage folder set. Existing models were not moved.".to_string(),
@@ -789,7 +844,7 @@ impl FluentApp {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 widgets::section_label(ui, &palette, "Mode");
-                for mode in [Mode::Madlad, Mode::Accurate, Mode::Fast] {
+                for mode in [Mode::Small, Mode::Madlad, Mode::Accurate, Mode::Fast] {
                     let selected = self.settings.mode == mode;
                     let fill = if selected {
                         palette.accent
@@ -1844,6 +1899,7 @@ impl FluentApp {
         let mut install_mode = None;
         let mut remove_mode = None;
         let mut cancel_task = false;
+        let mut refresh_catalogue = false;
 
         let response = egui::Modal::new(egui::Id::unique("fluent_model_manager"))
             .frame(popup_frame(ctx, &palette))
@@ -1951,6 +2007,43 @@ impl FluentApp {
 
                         ui.add_space(10.0);
                         widgets::divider(ui, &palette);
+                        widgets::section_label(ui, &palette, "Catalogue");
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            if widgets::ghost_button(ui, &palette, "Refresh catalogue").clicked() {
+                                refresh_catalogue = true;
+                            }
+                            let status = if self.catalogue_task.is_some() {
+                                "Refreshing…".to_string()
+                            } else if let Some(catalogue) = &self.catalogue {
+                                let listed = MODELS
+                                    .iter()
+                                    .filter(|spec| catalogue.contains(spec.mode))
+                                    .count();
+                                let age = self
+                                    .catalogue_refreshed
+                                    .map(|at| format!(" · refreshed {}s ago", at.elapsed().as_secs()))
+                                    .unwrap_or_default();
+                                format!("schema v{} · {listed}/{} models listed{age}",
+                                    catalogue.schema_version, MODELS.len())
+                            } else {
+                                "Using the built-in model metadata".to_string()
+                            };
+                            ui.label(
+                                egui::RichText::new(status).size(11.0).color(palette.muted),
+                            );
+                        });
+                        if let Some(error) = &self.catalogue_error {
+                            ui.add_space(4.0);
+                            widgets::error_banner(
+                                ui,
+                                &palette,
+                                &format!("Catalogue refresh failed; installed models still work. {error}"),
+                            );
+                        }
+
+                        ui.add_space(10.0);
+                        widgets::divider(ui, &palette);
                         widgets::section_label(ui, &palette, "Models");
                         ui.add_space(6.0);
 
@@ -2009,6 +2102,29 @@ impl FluentApp {
                                             spec.architecture.label(),
                                             palette.accent,
                                         );
+                                        if let Some(catalogue) = &self.catalogue {
+                                            if let Some(entry) = catalogue
+                                                .models
+                                                .iter()
+                                                .find(|entry| entry.id == spec.id)
+                                            {
+                                                if entry.deprecated {
+                                                    widgets::badge(
+                                                        ui,
+                                                        &palette,
+                                                        "Deprecated",
+                                                        palette.danger,
+                                                    );
+                                                } else {
+                                                    widgets::badge(
+                                                        ui,
+                                                        &palette,
+                                                        "Catalogue",
+                                                        palette.success,
+                                                    );
+                                                }
+                                            }
+                                        }
                                         ui.with_layout(
                                             egui::Layout::right_to_left(egui::Align::Center),
                                             |ui| {
@@ -2223,6 +2339,9 @@ impl FluentApp {
         }
         if unload {
             self.unload_model();
+        }
+        if refresh_catalogue {
+            self.refresh_catalogue(ctx);
         }
         if cancel_task {
             self.cancel_manager_task();
@@ -2546,6 +2665,7 @@ impl eframe::App for FluentApp {
 
         let ctx = ui.ctx().clone();
         self.poll_manager(&ctx);
+        self.poll_catalogue(&ctx);
         self.drain_events();
 
         let key = (self.settings.theme, self.settings.accent);

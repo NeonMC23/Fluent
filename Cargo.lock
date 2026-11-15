@@ -1508,6 +1508,7 @@ dependencies = [
  "directories",
  "fs2",
  "rayon",
+ "sentencepiece-rust",
  "serde",
  "serde_json",
  "sha2",
@@ -3952,6 +3953,12 @@ name = "send_wrapper"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
+
+[[package]]
+name = "sentencepiece-rust"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60f271394c88f9c091ea275db6ed526566bb40a232e64dfe702c66cf47c3dee6"
 
 [[package]]
 name = "seq-macro"

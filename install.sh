@@ -554,6 +554,7 @@ else
     FAST_JSON="$(json_escape "$MODELS_DIR/nllb-200-1.3b")"
     ACCURATE_JSON="$(json_escape "$MODELS_DIR/nllb-200-3.3b")"
     MADLAD_JSON="$(json_escape "$MODELS_DIR/madlad400-3b-mt")"
+    SMALL_JSON="$(json_escape "$MODELS_DIR/small100")"
     cat > "$TMP_CONFIG" <<EOF
 {
   "default_source_language": "auto",
@@ -563,7 +564,8 @@ else
   "models": {
     "fast": "$FAST_JSON",
     "accurate": "$ACCURATE_JSON",
-    "madlad": "$MADLAD_JSON"
+    "madlad": "$MADLAD_JSON",
+    "small": "$SMALL_JSON"
   },
   "generation": {
     "max_length": 512,
@@ -651,6 +653,7 @@ if [ "$DO_MODELS" -eq 1 ]; then
 else
     ensure_dir "$MODELS_DIR/nllb-200-1.3b"
     ensure_dir "$MODELS_DIR/nllb-200-3.3b"
+    ensure_dir "$MODELS_DIR/small100"
     echo "Model installation skipped (--skip-models)."
 fi
 

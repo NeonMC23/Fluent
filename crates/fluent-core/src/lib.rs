@@ -22,10 +22,14 @@ pub use engine::{
     Progress, ProgressStage, TranslationRequest, TranslationResult,
 };
 pub use languages::{find_language, languages, popular_languages};
+pub use model::catalogue::{
+    fetch as fetch_catalogue, Catalogue, CatalogueFile, CatalogueMatch, CatalogueModel,
+};
 pub use model::model_manager::{
     available_bytes, directory_size, inspect_model, install_model, model_dir, remove_model,
     verify_model, InstallState, ModelInstallation, TaskProgress, TaskStage,
 };
+pub use model::registry::model_spec_by_id;
 pub use model::registry::{language_list, model_spec, Architecture, ModelFile, ModelSpec, MODELS};
 pub use tokenizer::NllbTokenizer;
 
@@ -100,6 +104,9 @@ pub enum Error {
     #[error("configuration: {0}")]
     Config(String),
 
+    #[error("model catalogue: {0}")]
+    Catalogue(String),
+
     #[error("engine error: {0}")]
     Candle(#[from] candle_core::Error),
 
@@ -141,6 +148,7 @@ pub enum Mode {
     Fast,
     Accurate,
     Madlad,
+    Small,
 }
 
 impl Mode {
@@ -149,6 +157,7 @@ impl Mode {
             Self::Fast => "fast",
             Self::Accurate => "accurate",
             Self::Madlad => "madlad",
+            Self::Small => "small",
         }
     }
 
@@ -157,6 +166,7 @@ impl Mode {
             Self::Fast => "Fast",
             Self::Accurate => "Accurate",
             Self::Madlad => "MADLAD",
+            Self::Small => "Small",
         }
     }
 
@@ -165,6 +175,7 @@ impl Mode {
             Self::Fast => "NLLB-200 1.3B",
             Self::Accurate => "NLLB-200 3.3B",
             Self::Madlad => "MADLAD-400 3B MT",
+            Self::Small => "SMaLL-100",
         }
     }
 
@@ -187,6 +198,7 @@ impl std::str::FromStr for Mode {
             "fast" | "1.3b" => Ok(Self::Fast),
             "accurate" | "3.3b" => Ok(Self::Accurate),
             "madlad" | "madlad400" | "madlad-400-3b-mt" | "3b" => Ok(Self::Madlad),
+            "small" | "small100" | "small-100" | "330m" => Ok(Self::Small),
             other => Err(Error::Config(format!("unknown translation mode: {other}"))),
         }
     }
@@ -205,6 +217,8 @@ mod tests {
         assert_eq!(" 3.3b ".parse::<Mode>().unwrap(), Mode::Accurate);
         assert_eq!("madlad".parse::<Mode>().unwrap(), Mode::Madlad);
         assert_eq!("MADLAD400".parse::<Mode>().unwrap(), Mode::Madlad);
+        assert_eq!("small".parse::<Mode>().unwrap(), Mode::Small);
+        assert_eq!("SMALL100".parse::<Mode>().unwrap(), Mode::Small);
         assert!("medium".parse::<Mode>().is_err());
     }
 
@@ -214,5 +228,6 @@ mod tests {
         assert_eq!(Mode::Accurate.as_str(), "accurate");
         assert_eq!(Mode::Fast.label(), "Fast");
         assert_eq!(Mode::Accurate.model_label(), "NLLB-200 3.3B");
+        assert_eq!(Mode::Small.model_label(), "SMaLL-100");
     }
 }

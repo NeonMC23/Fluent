@@ -257,13 +257,7 @@ pub fn install_model(
         .map(|(file, _, part)| file.size.saturating_sub(*part))
         .sum();
     let free = available_space(dir)?;
-    if remaining.saturating_add(DISK_MARGIN) > free {
-        return Err(Error::Other(format!(
-            "not enough disk space: need at least {} MB, only {} MB free",
-            remaining.saturating_add(DISK_MARGIN) / (1024 * 1024),
-            free / (1024 * 1024)
-        )));
-    }
+    check_disk_space(remaining, free)?;
 
     for (index, (file, target, part_size)) in plan.iter().enumerate() {
         if cancel.load(Ordering::Relaxed) {
@@ -345,6 +339,18 @@ pub fn available_bytes(path: &Path) -> Result<u64> {
 
 pub fn model_dir(root: &Path, mode: Mode) -> PathBuf {
     root.join(model_spec(mode).default_dir)
+}
+
+fn check_disk_space(required: u64, free: u64) -> Result<()> {
+    let needed = required.saturating_add(DISK_MARGIN);
+    if needed > free {
+        return Err(Error::Other(format!(
+            "not enough disk space: need at least {} MB, only {} MB free",
+            needed / (1024 * 1024),
+            free / (1024 * 1024)
+        )));
+    }
+    Ok(())
 }
 
 fn part_path(path: &Path) -> PathBuf {
@@ -480,12 +486,16 @@ fn download_url(
     // Large checkpoints can legitimately take many minutes, so there is no
     // global deadline. Connect/response and per-read inactivity limits still
     // prevent a stalled connection from hanging the manager indefinitely.
-    let agent: ureq::Agent = ureq::Agent::config_builder()
+    // Production URLs are constructed as HTTPS and therefore enforce HTTPS
+    // across redirects. The only HTTP caller is the local test server.
+    let mut builder = ureq::Agent::config_builder()
         .timeout_connect(Some(std::time::Duration::from_secs(30)))
         .timeout_recv_response(Some(std::time::Duration::from_secs(30)))
-        .timeout_per_read(Some(std::time::Duration::from_secs(60)))
-        .build()
-        .into();
+        .timeout_per_read(Some(std::time::Duration::from_secs(60)));
+    if url.starts_with("https://") {
+        builder = builder.https_only(true);
+    }
+    let agent: ureq::Agent = builder.build().into();
     let mut request = agent.get(url);
     if part_size > 0 {
         request = request.header("Range", &format!("bytes={part_size}-"));
@@ -672,6 +682,13 @@ mod tests {
             "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
         );
         fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn insufficient_disk_space_is_rejected_before_downloading() {
+        let error = check_disk_space(1024, 1024).unwrap_err();
+        assert!(error.to_string().contains("not enough disk space"));
+        assert!(check_disk_space(0, DISK_MARGIN).is_ok());
     }
 
     #[test]

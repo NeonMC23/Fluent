@@ -1,10 +1,13 @@
+pub mod catalogue;
 pub mod checkpoint;
 pub mod madlad;
 pub mod model_manager;
 pub mod nllb;
 pub mod quant;
 pub mod registry;
+pub mod small100;
 
+pub use catalogue::{Catalogue, CatalogueFile, CatalogueMatch, CatalogueModel};
 pub use checkpoint::Checkpoint;
 pub use madlad::{Madlad, MadladTokenizer};
 pub use model_manager::{

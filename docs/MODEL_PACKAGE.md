@@ -4,6 +4,11 @@ This is the contract between a user-supplied NLLB-200 model directory and the
 Fluent engine. It describes what is implemented today; it is not a download
 specification.
 
+MADLAD-400 uses a different GGUF/tokenizer contract documented in
+[MADLAD.md](MADLAD.md). SMaLL-100 uses `vocab.json` plus
+`sentencepiece.bpe.model` and `model.safetensors`; see [SMALL100.md](SMALL100.md).
+This page covers NLLB-200 only.
+
 ## 1. Directory layout
 
 Fluent never bundles or downloads a model. Each model directory must contain:

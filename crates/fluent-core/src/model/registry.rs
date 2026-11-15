@@ -1,6 +1,7 @@
 //! Central model registry and capability metadata.
 
 use crate::model::madlad::{self, MadladLanguage};
+use crate::model::small100;
 use crate::{find_language, languages, Language, Mode};
 
 /// Model families with distinct inference implementations.
@@ -8,13 +9,33 @@ use crate::{find_language, languages, Language, Mode};
 pub enum Architecture {
     Nllb200,
     T5,
+    Small100,
 }
 
 impl Architecture {
+    /// Identifier used by the remote catalogue.
+    pub fn catalogue_id(self) -> &'static str {
+        match self {
+            Self::Nllb200 => "nllb200",
+            Self::T5 => "t5",
+            Self::Small100 => "small100",
+        }
+    }
+
+    pub fn from_catalogue_id(id: &str) -> Option<Self> {
+        match id {
+            "nllb200" => Some(Self::Nllb200),
+            "t5" => Some(Self::T5),
+            "small100" => Some(Self::Small100),
+            _ => None,
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Nllb200 => "NLLB-200",
             Self::T5 => "T5",
+            Self::Small100 => "SMaLL-100",
         }
     }
 }
@@ -31,6 +52,8 @@ pub struct ModelFile {
 #[derive(Debug, Clone, Copy)]
 pub struct ModelSpec {
     pub mode: Mode,
+    /// Stable identifier used by the remote catalogue and settings.
+    pub id: &'static str,
     pub name: &'static str,
     pub architecture: Architecture,
     pub parameters: &'static str,
@@ -174,9 +197,43 @@ const MADLAD_FILES: &[ModelFile] = &[
     },
 ];
 
+const SMALL100_FILES: &[ModelFile] = &[
+    ModelFile {
+        name: "config.json",
+        size: 890,
+        sha256: "26fd3989cea6037d432c480f5181d05c088a613394d0361edc6605a6a1058715",
+    },
+    ModelFile {
+        name: "tokenizer_config.json",
+        size: 1_867,
+        sha256: "d5a67f279887133e8eb8b9749fd1b6b5831bb1a040fcd6ac820296041f303ba2",
+    },
+    ModelFile {
+        name: "special_tokens_map.json",
+        size: 1_559,
+        sha256: "009ea667e0ca903c10dac22cf7ae3a3a0b173ff33f8c64154fddd8c043805622",
+    },
+    ModelFile {
+        name: "vocab.json",
+        size: 3_708_092,
+        sha256: "b6e77e474aeea8f441363aca7614317c06381f3eacfe10fb9856d5081d1074cc",
+    },
+    ModelFile {
+        name: "sentencepiece.bpe.model",
+        size: 2_423_393,
+        sha256: "d8f7c76ed2a5e0822be39f0a4f95a55eb19c78f4593ce609e2edbc2aea4d380a",
+    },
+    ModelFile {
+        name: "model.safetensors",
+        size: 1_330_973_772,
+        sha256: "dd3b845a36ea4ed90437fd0b9b477e30c21f144d3658679fd5c945e3c96b0fbc",
+    },
+];
+
 pub const MODELS: &[ModelSpec] = &[
     ModelSpec {
         mode: Mode::Fast,
+        id: "nllb-200-1.3b",
         name: "NLLB-200 1.3B",
         architecture: Architecture::Nllb200,
         parameters: "1.3B",
@@ -191,6 +248,7 @@ pub const MODELS: &[ModelSpec] = &[
     },
     ModelSpec {
         mode: Mode::Accurate,
+        id: "nllb-200-3.3b",
         name: "NLLB-200 3.3B",
         architecture: Architecture::Nllb200,
         parameters: "3.3B",
@@ -205,6 +263,7 @@ pub const MODELS: &[ModelSpec] = &[
     },
     ModelSpec {
         mode: Mode::Madlad,
+        id: "madlad400-3b-mt",
         name: "MADLAD-400 3B MT",
         architecture: Architecture::T5,
         parameters: "3B",
@@ -217,7 +276,26 @@ pub const MODELS: &[ModelSpec] = &[
         revision: "fa184c675da0b5c9e1c8694fccd4e12e2d422094",
         files: MADLAD_FILES,
     },
+    ModelSpec {
+        mode: Mode::Small,
+        id: "small100",
+        name: "SMaLL-100",
+        architecture: Architecture::Small100,
+        parameters: "330M",
+        storage: "1.4 GB FP32 · Q8 CPU",
+        license: "MIT",
+        default_dir: "small100",
+        description: "Lightweight · 98 mapped languages · fast CPU translation",
+        supports_beams: true,
+        repo: "alirezamsh/small100",
+        revision: "8ab680e26a596d2e3d2d2d17ae0f68df1037328c",
+        files: SMALL100_FILES,
+    },
 ];
+
+pub fn model_spec_by_id(id: &str) -> Option<&'static ModelSpec> {
+    MODELS.iter().find(|spec| spec.id == id)
+}
 
 pub fn model_spec(mode: Mode) -> &'static ModelSpec {
     MODELS
@@ -230,6 +308,7 @@ pub fn supports_language(mode: Mode, code: &str) -> bool {
     match model_spec(mode).architecture {
         Architecture::Nllb200 => find_language(code).is_some(),
         Architecture::T5 => madlad::supports_language(code),
+        Architecture::Small100 => small100::supports_language(code),
     }
 }
 
@@ -538,16 +617,62 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registry_has_the_three_models() {
-        assert_eq!(MODELS.len(), 3);
+    fn registry_has_the_four_models() {
+        assert_eq!(MODELS.len(), 4);
         assert_eq!(model_spec(Mode::Fast).architecture, Architecture::Nllb200);
         assert_eq!(
             model_spec(Mode::Accurate).architecture,
             Architecture::Nllb200
         );
         assert_eq!(model_spec(Mode::Madlad).architecture, Architecture::T5);
+        assert_eq!(model_spec(Mode::Small).architecture, Architecture::Small100);
         assert!(!model_spec(Mode::Madlad).supports_beams);
         assert!(model_spec(Mode::Fast).supports_beams);
+        assert!(model_spec(Mode::Small).supports_beams);
+    }
+
+    #[test]
+    fn model_ids_and_directories_are_unique() {
+        let mut ids = std::collections::HashSet::new();
+        let mut dirs = std::collections::HashSet::new();
+        for spec in MODELS {
+            assert!(ids.insert(spec.id), "duplicate id {}", spec.id);
+            assert!(
+                dirs.insert(spec.default_dir),
+                "duplicate dir {}",
+                spec.default_dir
+            );
+            assert!(!spec.files.is_empty(), "{} has no files", spec.id);
+            assert!(spec.download_bytes() > 0);
+            assert_eq!(model_spec_by_id(spec.id).map(|s| s.mode), Some(spec.mode));
+        }
+        assert!(model_spec_by_id("unknown").is_none());
+    }
+
+    #[test]
+    fn small100_advertises_the_required_languages() {
+        for language in [
+            "eng_Latn", "fra_Latn", "deu_Latn", "spa_Latn", "por_Latn", "ita_Latn", "zho_Hans",
+        ] {
+            assert!(supports_language(Mode::Small, language), "{language}");
+        }
+        assert_eq!(language_list(Mode::Small).len(), 98);
+        assert!(!supports_language(Mode::Small, "zho_Hant"));
+    }
+
+    #[test]
+    fn catalogue_backend_ids_round_trip() {
+        for architecture in [
+            Architecture::Nllb200,
+            Architecture::T5,
+            Architecture::Small100,
+        ] {
+            assert_eq!(
+                Architecture::from_catalogue_id(architecture.catalogue_id()),
+                Some(architecture)
+            );
+        }
+        assert_eq!(Architecture::from_catalogue_id("python"), None);
     }
 
     #[test]

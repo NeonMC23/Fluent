@@ -105,7 +105,7 @@ fn parse_args() -> Result<Args, String> {
             }
             "-h" | "--help" => {
                 println!(
-                    "usage: eval --mode fast|accurate|madlad --model DIR [--corpus FILE] \
+                    "usage: eval --mode fast|accurate|madlad|small --model DIR [--corpus FILE] \
                      [--out FILE] [--reps N] [--limit N] [--beams N] [--max-length N]"
                 );
                 std::process::exit(0);
@@ -383,6 +383,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         "model": {
             "mode": args.mode.as_str(),
+            "id": fluent_core::model_spec(args.mode).id,
+            "architecture": fluent_core::model_spec(args.mode).architecture.label(),
             "label": args.mode.model_label(),
             "dir": args.model.display().to_string(),
             "files": file_info(&args.model),

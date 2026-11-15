@@ -18,7 +18,7 @@ fn existing_models_verify_when_requested() {
     };
     let cancel = AtomicBool::new(false);
     let mut checked = 0;
-    for mode in [Mode::Fast, Mode::Accurate, Mode::Madlad] {
+    for mode in [Mode::Fast, Mode::Accurate, Mode::Madlad, Mode::Small] {
         let dir = model_dir(&root, mode);
         if !dir.is_dir() {
             eprintln!("skipping {}: directory not found", dir.display());

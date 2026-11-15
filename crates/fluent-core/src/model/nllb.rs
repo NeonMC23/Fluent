@@ -1155,12 +1155,47 @@ impl Nllb {
         progress: &mut dyn FnMut(GenerationProgress),
         cancel: &AtomicBool,
     ) -> Result<Vec<u32>> {
+        let target_id = if options.force_target_token {
+            Some(tokenizer.lang_id(target_language)?)
+        } else {
+            None
+        };
         let mut timers = GenerationTimers::default();
         self.generate_impl(
-            tokenizer,
+            tokenizer.eos_id(),
+            tokenizer.stop_eos_id(),
+            target_id,
             source_ids,
-            target_language,
             options,
+            &|ids| tokenizer.decode(ids),
+            progress,
+            cancel,
+            &mut timers,
+        )
+    }
+
+    /// Generates with explicit token ids, used by the SMaLL-100 backend whose
+    /// tokenizer is not an [`NllbTokenizer`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn generate_with_tokens(
+        &self,
+        eos_id: u32,
+        stop_eos_id: u32,
+        target_id: Option<u32>,
+        source_ids: &[u32],
+        options: GenerateOptions,
+        decode: &dyn Fn(&[u32]) -> Result<String>,
+        progress: &mut dyn FnMut(GenerationProgress),
+        cancel: &AtomicBool,
+    ) -> Result<Vec<u32>> {
+        let mut timers = GenerationTimers::default();
+        self.generate_impl(
+            eos_id,
+            stop_eos_id,
+            target_id,
+            source_ids,
+            options,
+            decode,
             progress,
             cancel,
             &mut timers,
@@ -1182,12 +1217,19 @@ impl Nllb {
         progress: &mut dyn FnMut(GenerationProgress),
         cancel: &AtomicBool,
     ) -> Result<(Vec<u32>, GenerationStats)> {
+        let target_id = if options.force_target_token {
+            Some(tokenizer.lang_id(target_language)?)
+        } else {
+            None
+        };
         let mut timers = GenerationTimers::default();
         let tokens = self.generate_impl(
-            tokenizer,
+            tokenizer.eos_id(),
+            tokenizer.stop_eos_id(),
+            target_id,
             source_ids,
-            target_language,
             options,
+            &|ids| tokenizer.decode(ids),
             progress,
             cancel,
             &mut timers,
@@ -1198,10 +1240,12 @@ impl Nllb {
     #[allow(clippy::too_many_arguments)]
     fn generate_impl(
         &self,
-        tokenizer: &NllbTokenizer,
+        eos_id: u32,
+        stop_eos_id: u32,
+        target_id: Option<u32>,
         source_ids: &[u32],
-        target_language: &str,
         options: GenerateOptions,
+        decode: &dyn Fn(&[u32]) -> Result<String>,
         progress: &mut dyn FnMut(GenerationProgress),
         cancel: &AtomicBool,
         timers: &mut GenerationTimers,
@@ -1250,19 +1294,23 @@ impl Nllb {
         timers.cross_prepare += started.elapsed();
         let prefill_started = Instant::now();
 
-        // Step 0: start token (eos), logits ignored. The head is skipped
-        // entirely: its output would be discarded and it reads the full
-        // 256k-entry shared vocabulary matrix.
-        let eos = Tensor::new(&[tokenizer.eos_id()], device)?.unsqueeze(0)?;
-        let _ = self.decode_hidden(&eos, &mut cache, timers)?;
-        if cancel.load(AtomicOrdering::Relaxed) {
-            return Err(Error::Cancelled);
-        }
+        // Step 0: start token (`</s>`). For NLLB the logits are discarded and
+        // a forced target-language token follows in step 1, so the expensive
+        // vocabulary head is skipped. SMaLL-100 has no forced token, so the
+        // first real logits come directly from the start token.
+        let eos = Tensor::new(&[eos_id], device)?.unsqueeze(0)?;
+        let first_logits = if let Some(target_id) = target_id {
+            let _ = self.decode_hidden(&eos, &mut cache, timers)?;
+            if cancel.load(AtomicOrdering::Relaxed) {
+                return Err(Error::Cancelled);
+            }
 
-        // Step 1: the target language is forced as the first generated token.
-        let target_id = tokenizer.lang_id(target_language)?;
-        let target = Tensor::new(&[target_id], device)?.unsqueeze(0)?;
-        let first_logits = self.decode_step(&target, &mut cache, timers)?;
+            // Step 1: the target language is forced as the first generated token.
+            let target = Tensor::new(&[target_id], device)?.unsqueeze(0)?;
+            self.decode_step(&target, &mut cache, timers)?
+        } else {
+            self.decode_step(&eos, &mut cache, timers)?
+        };
         timers.prefill += prefill_started.elapsed();
 
         let repeat_started = Instant::now();
@@ -1274,7 +1322,7 @@ impl Nllb {
         let mut rows = prepare_logits(&first_logits, beams, timers)?;
         timers.search_logits += first_rows_started.elapsed();
 
-        let eos_id = tokenizer.stop_eos_id();
+        let eos_id = stop_eos_id;
         let mut completed: Vec<(Vec<u32>, f64)> = Vec::new();
         let mut steps = 0usize;
 
@@ -1333,9 +1381,7 @@ impl Nllb {
                 .max_by(|(_, a), (_, b)| a.total_cmp(b))
                 .map(|(index, _)| index)
                 .unwrap_or(0);
-            let preview = tokenizer
-                .decode(&sequences[preview_index])
-                .unwrap_or_default();
+            let preview = decode(&sequences[preview_index]).unwrap_or_default();
             progress(GenerationProgress {
                 generated: steps,
                 max: if window.unlimited { 0 } else { max_new },
@@ -1851,6 +1897,10 @@ pub struct GenerateOptions {
     pub output_limit: OutputLimit,
     pub num_beams: usize,
     pub early_stopping: EarlyStopping,
+    /// NLLB/M2M-100 force the target language token as the first generated
+    /// token. SMaLL-100 prepends it to the encoder input instead, so the
+    /// decoder starts directly from `</s>`.
+    pub force_target_token: bool,
 }
 
 impl Default for GenerateOptions {
@@ -1859,6 +1909,7 @@ impl Default for GenerateOptions {
             output_limit: OutputLimit::Tokens(256),
             num_beams: 4,
             early_stopping: EarlyStopping::default(),
+            force_target_token: true,
         }
     }
 }
@@ -2754,6 +2805,7 @@ mod tests {
                     output_limit: OutputLimit::Tokens(600),
                     num_beams: 1,
                     early_stopping: EarlyStopping::default(),
+                    force_target_token: true,
                 },
                 &mut |_| {},
                 &cancel,
@@ -2777,6 +2829,7 @@ mod tests {
                     output_limit: OutputLimit::UntilEos,
                     num_beams: 1,
                     early_stopping: EarlyStopping::default(),
+                    force_target_token: true,
                 },
                 &mut |generation| {
                     seen = seen.max(generation.generated);

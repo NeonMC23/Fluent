@@ -15,6 +15,7 @@ pub struct ProjectConfig {
     pub fast_model: PathBuf,
     pub accurate_model: PathBuf,
     pub madlad_model: PathBuf,
+    pub small_model: PathBuf,
     pub max_length: usize,
     /// Generated-token policy. `Auto` derives a finite budget from the
     /// encoded source; `Tokens(n)` uses a finite ceiling; `UntilEos` removes
@@ -31,6 +32,7 @@ impl Default for ProjectConfig {
             fast_model: base_dir.join("models/nllb-200-1.3b"),
             accurate_model: base_dir.join("models/nllb-200-3.3b"),
             madlad_model: base_dir.join("models/madlad400-3b-mt"),
+            small_model: base_dir.join("models/small100"),
             base_dir,
             default_source_language: "auto".to_string(),
             default_target_language: "eng_Latn".to_string(),
@@ -58,6 +60,7 @@ struct RawModels {
     fast: Option<String>,
     accurate: Option<String>,
     madlad: Option<String>,
+    small: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -136,6 +139,9 @@ impl ProjectConfig {
             if let Some(madlad) = models.madlad {
                 config.madlad_model = resolve_model_path(&base_dir, &madlad);
             }
+            if let Some(small) = models.small {
+                config.small_model = resolve_model_path(&base_dir, &small);
+            }
         }
         if let Some(generation) = raw.generation {
             if let Some(max_length) = generation.max_length {
@@ -177,6 +183,20 @@ impl ProjectConfig {
                 }
             }
         }
+        if !config.small_model.is_dir() {
+            let fallback = base_dir.join("models/small100");
+            if fallback.is_dir() {
+                config.small_model = fallback;
+            }
+        }
+        if !config.small_model.is_dir() {
+            if let Some(dirs) = directories::ProjectDirs::from("io", "fluent", "Fluent") {
+                let fallback = dirs.data_dir().join("models/small100");
+                if fallback.is_dir() {
+                    config.small_model = fallback;
+                }
+            }
+        }
 
         Ok(config)
     }
@@ -186,6 +206,7 @@ impl ProjectConfig {
             Mode::Fast => &self.fast_model,
             Mode::Accurate => &self.accurate_model,
             Mode::Madlad => &self.madlad_model,
+            Mode::Small => &self.small_model,
         }
     }
 

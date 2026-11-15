@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "Fluent — local NLLB-200 translator with a native egui interface"
+description = "Fluent — local multilingual translator with a native egui interface"
 
 [[bin]]
 name = "fluent"

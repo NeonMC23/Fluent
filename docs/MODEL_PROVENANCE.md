@@ -28,6 +28,29 @@ MADLAD is a separate model family and is not covered by the NLLB table below.
 
 This is an engineering record, not legal advice.
 
+## SMaLL-100 (Cycle 16)
+
+SMaLL-100 is a separate M2M-100 family model.
+
+- Source: `alirezamsh/small100`, pinned revision
+  `8ab680e26a596d2e3d2d2d17ae0f68df1037328c`.
+- Model card license: **MIT**.
+- Files used: `config.json`, `tokenizer_config.json`,
+  `special_tokens_map.json`, `vocab.json`, `sentencepiece.bpe.model` and
+  `model.safetensors`.
+- The custom `tokenization_small100.py` was read to reproduce its language
+  tokens, id offsets and target-language prefix exactly; no Python is used at
+  runtime.
+- The weights and tokenizer are **not committed or packaged**; they are
+  user-supplied outside Git and downloaded only after explicit confirmation.
+- The registry pins every size and SHA-256. `sentencepiece-rust` (Apache-2.0,
+  pure Rust) performs segmentation.
+- Fluent's source remains MIT; the SMaLL-100 model licence applies to the
+  model assets, not to Fluent's code.
+- Paper: Mohammadshahi et al., EMNLP 2022.
+
+This is an engineering record, not legal advice.
+
 ## 1. What was committed at the Cycle 6 baseline
 
 `git ls-files models` listed:

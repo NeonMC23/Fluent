@@ -4,7 +4,7 @@
 
 _Development version 0.2.0 · last published 0.1.0_
 
-A native, local-first translation application powered by Meta's NLLB-200 models — built in Rust for Linux, Windows, and macOS.
+A native, local-first translation application powered by NLLB-200, MADLAD-400 and SMaLL-100 — built in Rust for Linux, Windows, and macOS.
 
 Translate across **190+ languages and dialects** with a clean desktop interface, selectable translation modes, and optional GPU acceleration.
 
@@ -27,8 +27,8 @@ Translate across **190+ languages and dialects** with a clean desktop interface,
 | Feature | Description |
 | --- | --- |
 | 🌍 **190+ languages** | NLLB-200 covers a wide range of languages and dialects. |
-| 🧠 **Local AI inference** | Run NLLB-200 or MADLAD-400 locally, without a server or cloud API. |
-| 🧬 **Two model families** | Choose NLLB-200 for broad coverage or MADLAD-400 for T5 translation. |
+| 🧠 **Local AI inference** | Run NLLB-200, MADLAD-400 or SMaLL-100 locally, without a server or cloud API. |
+| 🧬 **Three model families** | Choose NLLB-200 for broad coverage, MADLAD-400 for T5 translation, or SMaLL-100 for a fast 330M CPU model. |
 | 📦 **Model Manager** | Detect, download, verify, load and safely remove models from the desktop app. |
 | ⚡ **Fast mode** | Use the smaller 1.3B model for lighter workloads. |
 | 🎯 **Accurate mode** | Choose the larger 3.3B model for translation quality; CPU auto uses Q8. |
@@ -49,7 +49,7 @@ Translate across **190+ languages and dialects** with a clean desktop interface,
 - On Linux, X11 or Wayland development libraries and an OpenGL 3.3-capable driver when building from source.
 - On Windows and macOS, see the platform guides linked below. Linux is the validated target; Windows and macOS have not been runtime-tested.
 
-The installer builds the desktop application, but **does not download model weights**. You must provide the supported model files separately. NLLB licensing is documented in [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md); MADLAD acquisition, the pinned q4_k file and Apache-2.0 licensing are documented in [docs/MADLAD.md](docs/MADLAD.md).
+The installer builds the desktop application, but **does not download model weights**. You must provide the supported model files separately, or use the native Model Manager after installation. NLLB licensing is documented in [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md); MADLAD acquisition, the pinned q4_k file and Apache-2.0 licensing are documented in [docs/MADLAD.md](docs/MADLAD.md); the lightweight SMaLL-100 model, its MIT licence and its 98-language mapping are documented in [docs/SMALL100.md](docs/SMALL100.md).
 
 ### 1. Clone the repository
 
@@ -83,21 +83,23 @@ configuration and models, and never deletes user data. See
 
 ### 3. Add the models
 
-Fluent supports three translation choices across two model families:
+Fluent supports four translation choices across three model families:
 
 | Mode | Model | Approximate storage | Intended use |
 | --- | --- | ---: | --- |
 | ⚡ **Fast** | `facebook/nllb-200-1.3B` | 5.2 GB | Lower-memory systems |
 | 🎯 **Accurate** | `facebook/nllb-200-3.3B` | 17.5 GB | Systems with more memory or GPU resources |
 | 🧬 **MADLAD** | `google/madlad400-3b-mt` q4_k | 1.7 GB | CPU T5 translation |
+| 🪶 **Small** | `alirezamsh/small100` | 1.4 GB | Fast CPU translation with a 330M model |
 
 > **Model licenses:** Meta releases the NLLB-200 weights under
-> **CC BY-NC 4.0 (non-commercial)**. MADLAD-400 is **Apache-2.0**. Fluent's
-> MIT license covers the application code only. Fluent does not bundle or
-> redistribute model weights. See
-> [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md) and
-> [docs/MADLAD.md](docs/MADLAD.md). Cycle 14 CPU, quality and memory
-> measurements are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+> **CC BY-NC 4.0 (non-commercial)**. MADLAD-400 is **Apache-2.0**. SMaLL-100 is
+> released under the **MIT** licence by its authors. Fluent's MIT license covers
+> the application code only. Fluent does not bundle or redistribute model
+> weights. See [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md),
+> [docs/MADLAD.md](docs/MADLAD.md) and [docs/SMALL100.md](docs/SMALL100.md).
+> CPU, quality and memory measurements are in
+> [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 This repository intentionally contains **no** model weights, tokenizer, or
 model configuration files. Place each model's files in the corresponding
@@ -116,7 +118,7 @@ directory:
     └── model-q4k.gguf
 ```
 
-The native **Model Manager** can download and verify all three models. Open
+The native **Model Manager** can download and verify all four models. Open
 **Models** in the application header (or **Settings → Manage models…**), choose
 a model, review its license and download size, and confirm. Existing model
 directories are detected without moving or downloading them again. See
@@ -270,7 +272,8 @@ Example:
   "models": {
     "fast": "/home/you/.local/share/fluent/models/nllb-200-1.3b",
     "accurate": "/home/you/.local/share/fluent/models/nllb-200-3.3b",
-    "madlad": "/home/you/.local/share/fluent/models/madlad400-3b-mt"
+    "madlad": "/home/you/.local/share/fluent/models/madlad400-3b-mt",
+    "small": "/home/you/.local/share/fluent/models/small100"
   },
   "generation": {
     "max_length": 512,
@@ -460,8 +463,10 @@ the unresolved tokenizer-redistribution question.
 - [Windows build guide](docs/WINDOWS.md)
 - [macOS build guide](docs/MACOS.md)
 - [Model Manager, storage and safe removal](docs/MODEL_MANAGER.md)
+- [Remote catalogue schema and maintainer workflow](docs/CATALOGUE.md)
+- [SMaLL-100 setup, languages and licence](docs/SMALL100.md)
 - [MADLAD-400 setup, languages and measurements](docs/MADLAD.md)
-- [Cycle 14 quality and performance benchmarks](docs/BENCHMARKS.md)
+- [Quality and performance benchmarks (Cycle 14 and Cycle 16)](docs/BENCHMARKS.md)
 - [Model backend architecture decision](docs/ADR-001-model-backends.md)
 - [Model package specification](docs/MODEL_PACKAGE.md)
 - [Model provenance and licensing](docs/MODEL_PROVENANCE.md)

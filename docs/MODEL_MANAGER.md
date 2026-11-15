@@ -1,6 +1,6 @@
 # Model Manager
 
-Fluent can discover, download, verify, load, unload and remove its three
+Fluent can discover, download, verify, load, unload and remove its four
 supported models from the **Model Manager** in the application header (or
 **Settings → Manage models…**).
 
@@ -14,10 +14,35 @@ application, installer, portable archive or CI artifacts.
 | NLLB-200 1.3B | NLLB-200 | 5.2 GB | ~5.5 GB | CC-BY-NC-4.0 | CPU Q8; CUDA/Metal if built |
 | NLLB-200 3.3B | NLLB-200 | 17.5 GB | ~17.6 GB | CC-BY-NC-4.0 | CPU Q8; CUDA/Metal if built |
 | MADLAD-400 3B MT | T5 | 1.7 GB | ~1.7 GB | Apache-2.0 | CPU q4_k greedy only |
+| SMaLL-100 | M2M-100 (12/3) | 1.4 GB | ~1.4 GB | MIT | CPU Q8; CUDA/Metal if built |
 
 The catalogue is defined once in `crates/fluent-core/src/model/registry.rs`.
 Required files, sizes, SHA-256 values, repository and pinned revision are in
 that registry. The GUI, verifier and downloader consume the same definitions.
+
+## Remote catalogue
+
+The **Catalogue** row in the Model Manager fetches
+`catalogue/models-v1.json` from the official Fluent repository. The document is
+versioned (`schema_version: 1`), strict and fail-closed:
+
+- HTTPS only, with a 256 KiB body limit and bounded connect/read timeouts.
+- Unknown schema versions, unknown backends, unsafe file names, non-HTTPS
+  URLs, invalid SHA-256 values and malformed entries are rejected.
+- Every entry must agree with the compiled registry: id, backend, pinned
+  revision, licence and the exact file manifest (name, size, SHA-256, total
+  size and pinned Hugging Face URL). A mismatch fails the whole refresh.
+- A `minimum_app_version` newer than the running Fluent is rejected with a
+  clear message instead of silently ignoring fields the build does not know.
+- A failed refresh never disables installed models; Fluent falls back to the
+  built-in metadata.
+
+This guarantees that a remote document can never point Fluent at arbitrary
+weights or introduce a backend the binary does not implement. Adding a genuinely
+new model therefore still requires a Fluent update that implements its backend
+and registers it locally; the catalogue is a refreshable, tamper-evident mirror
+of that registry, not an executable plugin mechanism. The schema and maintainer
+workflow are documented in [CATALOGUE.md](CATALOGUE.md).
 
 ## States
 
@@ -133,6 +158,7 @@ Model pages: [NLLB-200 1.3B](https://huggingface.co/facebook/nllb-200-1.3B),
 | Symptom | Action |
 |---|---|
 | Incomplete | Click **Repair**; only missing/invalid files are requested |
+| Catalogue refresh failed | Installed models keep working; check the network and retry |
 | Needs repair | Click **Verify**, then **Repair** |
 | Download interrupted | Click **Download** again; the `.part` file resumes |
 | Not enough disk space | Free space or choose a different storage folder |
