@@ -57,8 +57,7 @@ fn downloaded_chat_model_verifies_when_requested() {
         .unwrap_or_else(|_| "qwen2.5-0.5b-instruct".to_string());
     let spec = chat_model_spec(&id).expect("known chat model id");
     let cancel = AtomicBool::new(false);
-    let report =
-        verify_chat_model(spec, &dir, &mut |_| {}, &cancel).expect("chat verification");
+    let report = verify_chat_model(spec, &dir, &mut |_| {}, &cancel).expect("chat verification");
     println!(
         "{}: {:?}, {} bytes, verified={}, missing={}, bad={}",
         spec.id,
