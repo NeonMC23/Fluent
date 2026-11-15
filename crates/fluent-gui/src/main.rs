@@ -140,7 +140,14 @@ fn run_self_test() -> i32 {
         ("chat-model", &config.chat_model),
     ] {
         if path.is_dir() {
-            println!("{label}: present ({})", path.display());
+            let entries = std::fs::read_dir(path)
+                .map(|entries| entries.flatten().count())
+                .unwrap_or(0);
+            if entries > 0 {
+                println!("{label}: present ({}, {entries} entries)", path.display());
+            } else {
+                println!("{label}: empty directory ({})", path.display());
+            }
         } else {
             println!("{label}: not installed ({})", path.display());
         }
