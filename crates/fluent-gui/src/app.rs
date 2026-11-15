@@ -969,10 +969,14 @@ impl FluentApp {
 
     fn chat_ready_label(&self) -> (egui::Color32, String) {
         if self.chat_available() {
-            (
-                self.palette.success,
-                format!("Ready · {} · CPU", self.chat_spec().name),
-            )
+            if self.chat_loaded {
+                (
+                    self.palette.success,
+                    format!("Ready · {} · CPU", self.chat_spec().name),
+                )
+            } else {
+                (self.palette.faint, "Chat model not loaded".to_string())
+            }
         } else {
             (self.palette.faint, "Chat model not installed".to_string())
         }
@@ -2935,7 +2939,7 @@ impl FluentApp {
                                 clear_storage = true;
                             }
                         });
-                        let free = available_bytes(&root).ok();
+                        let free = available_bytes_for(&root);
                         let installed: u64 = MODELS
                             .iter()
                             .map(|spec| directory_size(&self.model_dir_for(spec.mode)))
@@ -3567,7 +3571,7 @@ impl FluentApp {
                 self.chat_dir_for(spec),
             ),
         };
-        let free = available_bytes(&self.storage_root()).ok().unwrap_or(0);
+        let free = available_bytes_for(&self.storage_root()).unwrap_or(0);
         let mut close = false;
         let mut start = false;
         let _ = egui::Modal::new(egui::Id::unique("fluent_confirm_download"))
@@ -4098,6 +4102,15 @@ impl eframe::App for FluentApp {
             ctx.request_repaint_after(Duration::from_millis(200));
         }
     }
+}
+
+/// Free space for a path that may not exist yet. Uses the nearest existing
+/// ancestor so first-run storage guidance is meaningful before the directory
+/// is created.
+fn available_bytes_for(path: &Path) -> Option<u64> {
+    path.ancestors()
+        .find(|ancestor| ancestor.exists())
+        .and_then(|ancestor| available_bytes(ancestor).ok())
 }
 
 fn path_is_in_git_repo(path: &Path) -> bool {
