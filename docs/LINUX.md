@@ -86,18 +86,29 @@ Environment equivalents: `FLUENT_APP_DIR`, `FLUENT_BIN_DIR`,
 
 ## Models
 
-Fluent does not download or bundle NLLB, and this repository commits no NLLB
-assets. Put the complete checkpoint, configuration, and tokenizer files in:
+Fluent bundles no model weights. The application includes a native Model
+Manager that can download and verify translation and chat models on request;
+no model is downloaded automatically or before explicit confirmation.
+
+Models are stored outside the application directory, by default:
 
 ```text
-~/.local/share/fluent/models/nllb-200-1.3b/
-~/.local/share/fluent/models/nllb-200-3.3b/
+~/.local/share/fluent/models/
+├── nllb-200-1.3b/
+├── nllb-200-3.3b/
+├── madlad400-3b-mt/
+├── small100/
+└── qwen2.5-1.5b-instruct/
 ```
 
-Each directory needs `config.json`, `tokenizer.json`, and a real checkpoint
-(`pytorch_model.bin`, `model.safetensors`, or complete shards plus an index).
-The installer rejects placeholder or incomplete directories and never
-overwrites a working model. See [MODEL_PACKAGE.md](MODEL_PACKAGE.md) for the exact contract.
+Use **Models** in the header (or **Settings → Manage models…**) to install,
+verify, load or remove them. To use an existing NLLB directory, put
+`config.json`, `tokenizer.json` and a real checkpoint
+(`pytorch_model.bin`, `model.safetensors`, or complete shards plus an index) in
+that directory, or point `config.json` at it. The Model Manager never
+overwrites a working installation during verification. See
+[MODEL_PACKAGE.md](MODEL_PACKAGE.md), [MODEL_MANAGER.md](MODEL_MANAGER.md) and
+[CHAT.md](CHAT.md) for the exact contracts.
 
 If you already have a `~/.fluent/models` directory from the previous
 single-directory installer, the new installer uses it as a read-only source

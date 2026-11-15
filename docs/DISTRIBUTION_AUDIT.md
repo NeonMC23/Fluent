@@ -1,5 +1,12 @@
 # Distribution Audit — Cycles 6–7
 
+> **Historical snapshot.** Current release, platform, signing and model-manager
+> status is maintained in [RELEASE.md](RELEASE.md) and
+> [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md). Items 4–6 in section 6 below
+> describe the Cycle 6–7 state and have since been addressed: the official
+> turquoise mark exists, the native Model Manager is implemented, and a locally
+> signed Linux release candidate is verified.
+
 Status: **Linux source and portable archive validated against a glibc 2.35
 baseline; NLLB assets removed from HEAD; Windows and macOS CI definitions exist
 but have not run; public Git-history release still blocked by assets retained in

@@ -165,8 +165,11 @@ Transitive dependencies keep their own licenses; a full `cargo-deny` /
 - **The weights remain CC-BY-NC-4.0 and are never bundled.** Users obtain them
   separately and must comply with the non-commercial terms. Commercial use
   requires a separate license from Meta.
-- **No downloader exists.** The safe acquisition contract is documented in
-  [MODEL_PACKAGE.md](MODEL_PACKAGE.md); it is not implemented.
+- **A native Model Manager now exists.** It downloads only the pinned files
+  after explicit confirmation, resumes interrupted transfers, verifies exact
+  sizes and SHA-256, and refuses to replace a valid installation. See
+  [MODEL_MANAGER.md](MODEL_MANAGER.md). The original acquisition contract is in
+  [MODEL_PACKAGE.md](MODEL_PACKAGE.md).
 
 ## 7. Downloads and copies during Cycle 7
 
