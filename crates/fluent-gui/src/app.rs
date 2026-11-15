@@ -8,7 +8,7 @@ use fluent_core::{
     available_bytes, directory_size, estimate_memory_for_mode, fetch_catalogue, find_language,
     inspect_model, install_model, languages, model_spec, popular_languages, remove_model,
     verify_model, Architecture, Catalogue, DeviceChoice, EngineConfig, EngineStatus, InstallState,
-    Language, Mode, ModelInstallation, Precision, Progress, ProjectConfig, TaskProgress,
+    Language, Mode, ModelInstallation, Precision, Progress, ProjectConfig, TaskProgress, TaskStage,
     TranslationRequest, TranslationResult, MODELS,
 };
 
@@ -2061,14 +2061,23 @@ impl FluentApp {
                                 .manager_task
                                 .as_ref()
                                 .filter(|task| task.mode == mode);
+                            let active_stage = self
+                                .manager_progress
+                                .as_ref()
+                                .filter(|progress| progress.mode == mode)
+                                .map(|progress| progress.stage);
                             let state_label = if loaded {
                                 "Loaded".to_string()
                             } else if loading {
                                 "Loading".to_string()
                             } else if let Some(task) = active_task {
-                                match task.op {
-                                    ManagerOp::Install => "Downloading".to_string(),
-                                    ManagerOp::Verify => "Verifying".to_string(),
+                                if active_stage == Some(TaskStage::Verifying) {
+                                    "Verifying".to_string()
+                                } else {
+                                    match task.op {
+                                        ManagerOp::Install => "Downloading".to_string(),
+                                        ManagerOp::Verify => "Verifying".to_string(),
+                                    }
                                 }
                             } else if installation.verified && installation.state == InstallState::Installed {
                                 "Installed · verified".to_string()
@@ -2198,10 +2207,12 @@ impl FluentApp {
                                             egui::ProgressBar::new(fraction.clamp(0.0, 1.0))
                                                 .text(format!(
                                                     "{} · {} / {}",
-                                                    match task.op {
-                                                        ManagerOp::Install => "Downloading",
-                                                        ManagerOp::Verify => "Verifying",
-                                                    },
+                                                    progress
+                                                        .map(|p| p.stage.label())
+                                                        .unwrap_or(match task.op {
+                                                            ManagerOp::Install => "Downloading",
+                                                            ManagerOp::Verify => "Verifying",
+                                                        }),
                                                     human_bytes(
                                                         progress
                                                             .map(|p| p.completed_bytes)
