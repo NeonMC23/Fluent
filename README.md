@@ -26,8 +26,9 @@ Translate across **190+ languages and dialects** with a clean desktop interface,
 
 | Feature | Description |
 | --- | --- |
-| 🌍 **190+ languages** | Translate between a wide range of languages and dialects. |
-| 🧠 **Local AI inference** | Run NLLB-200 models directly on your computer. |
+| 🌍 **190+ languages** | NLLB-200 covers a wide range of languages and dialects. |
+| 🧠 **Local AI inference** | Run NLLB-200 or MADLAD-400 locally, without a server or cloud API. |
+| 🧬 **Two model families** | Choose NLLB-200 for broad coverage or MADLAD-400 for T5 translation. |
 | ⚡ **Fast mode** | Use the smaller 1.3B model for lighter workloads. |
 | 🎯 **Accurate mode** | Choose the larger 3.3B model for translation quality. |
 | 🔎 **Automatic detection** | Detect the source language automatically. |
@@ -47,7 +48,7 @@ Translate across **190+ languages and dialects** with a clean desktop interface,
 - On Linux, X11 or Wayland development libraries and an OpenGL 3.3-capable driver when building from source.
 - On Windows and macOS, see the platform guides linked below. Linux is the validated target; Windows and macOS have not been runtime-tested.
 
-The installer builds the desktop application, but **does not download model weights**. You must provide the supported model files separately. See [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md) for the NLLB license terms.
+The installer builds the desktop application, but **does not download model weights**. You must provide the supported model files separately. NLLB licensing is documented in [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md); MADLAD acquisition, the pinned q4_k file and Apache-2.0 licensing are documented in [docs/MADLAD.md](docs/MADLAD.md).
 
 ### 1. Clone the repository
 
@@ -81,22 +82,24 @@ configuration and models, and never deletes user data. See
 
 ### 3. Add the models
 
-Fluent supports two translation engines:
+Fluent supports three translation choices across two model families:
 
-| Mode | Model | Approximate weights | Intended use |
+| Mode | Model | Approximate storage | Intended use |
 | --- | --- | ---: | --- |
 | ⚡ **Fast** | `facebook/nllb-200-1.3B` | 5.2 GB | Lower-memory systems |
 | 🎯 **Accurate** | `facebook/nllb-200-3.3B` | 17.5 GB | Systems with more memory or GPU resources |
+| 🧬 **MADLAD** | `google/madlad400-3b-mt` q4_k | 1.7 GB | CPU T5 translation |
 
-> **Model license:** Meta releases the NLLB-200 weights under
-> **CC BY-NC 4.0 (non-commercial)**. Fluent's MIT license covers the
-> application code only. Fluent does not bundle or redistribute model
-> weights. Check the license before using Fluent for commercial work. See
-> [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md), including the
-> unresolved tokenizer-asset question.
+> **Model licenses:** Meta releases the NLLB-200 weights under
+> **CC BY-NC 4.0 (non-commercial)**. MADLAD-400 is **Apache-2.0**. Fluent's
+> MIT license covers the application code only. Fluent does not bundle or
+> redistribute model weights. See
+> [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md) and
+> [docs/MADLAD.md](docs/MADLAD.md).
 
-This repository intentionally contains **no** NLLB weights, tokenizer, or model
-configuration files. Place each model's files in the corresponding directory:
+This repository intentionally contains **no** model weights, tokenizer, or
+model configuration files. Place each model's files in the corresponding
+directory:
 
 ```text
 ~/.local/share/fluent/models/
@@ -104,7 +107,17 @@ configuration files. Place each model's files in the corresponding directory:
 │   ├── config.json
 │   ├── tokenizer.json
 │   └── pytorch_model.bin   (or safetensors / sharded checkpoint)
-└── nllb-200-3.3b/
+├── nllb-200-3.3b/
+└── madlad400-3b-mt/
+    ├── config.json
+    ├── tokenizer.json
+    └── model-q4k.gguf
+```
+
+MADLAD can be fetched reproducibly with:
+
+```bash
+python3 scripts/fetch-madlad.py
 ```
 
 Each model directory must contain `config.json`, `tokenizer.json`, and the
@@ -242,7 +255,8 @@ Example:
 {
   "models": {
     "fast": "/home/you/.local/share/fluent/models/nllb-200-1.3b",
-    "accurate": "/home/you/.local/share/fluent/models/nllb-200-3.3b"
+    "accurate": "/home/you/.local/share/fluent/models/nllb-200-3.3b",
+    "madlad": "/home/you/.local/share/fluent/models/madlad400-3b-mt"
   },
   "generation": {
     "max_length": 512,
@@ -261,7 +275,7 @@ Generated output is controlled by the **Output limit** setting in Settings or by
 
 - **Automatic** (default): derives a finite budget from the input (`min(512, source_tokens * 2 + 16)`) so short sentences finish quickly. This preserves the previous behavior.
 - **Custom limit**: uses `"max_new_tokens": N` as a finite ceiling, even if the model has not emitted EOS. Requests are capped by the model’s positional capacity.
-- **No limit**: set `"unlimited_output": true`. Fluent imposes no token ceiling and generates until EOS, cancellation, an inference error, or the model's positional capacity. For NLLB's 1024-position table this is about 1022 generated tokens after the two prompt tokens. Long outputs require more memory and time; it is not infinite hardware capacity.
+- **No limit**: set `"unlimited_output": true`. Fluent imposes no token ceiling and generates until EOS, cancellation, an inference error, or the model's capacity. For NLLB's 1024-position table this is about 1022 generated tokens after the two prompt tokens; MADLAD has no fixed positional cap, so memory and time are the practical limits. Long outputs require more memory and time; it is not infinite hardware capacity.
 
 Existing configuration files without these fields remain on **Automatic**. The GUI persists the selected mode in `settings.json`.
 
@@ -431,6 +445,8 @@ the unresolved tokenizer-redistribution question.
 - [Linux installation](docs/LINUX.md)
 - [Windows build guide](docs/WINDOWS.md)
 - [macOS build guide](docs/MACOS.md)
+- [MADLAD-400 setup, languages and measurements](docs/MADLAD.md)
+- [Model backend architecture decision](docs/ADR-001-model-backends.md)
 - [Model package specification](docs/MODEL_PACKAGE.md)
 - [Model provenance and licensing](docs/MODEL_PROVENANCE.md)
 - [Branding assets and icon integration](docs/ASSETS.md)

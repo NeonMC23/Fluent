@@ -7,6 +7,14 @@ versions until a release is explicitly published.
 
 ### Added
 
+- MADLAD-400-3B-MT (T5) backend with the pinned Apache-2.0 q4_k GGUF,
+  SentencePiece-compatible tokenizer, target-language prefixes, curated
+  language mapping, deterministic greedy decoding, output limits and
+  cancellation.
+- Central model registry used by the GUI for NLLB and MADLAD names,
+  architecture, storage, license and decoding capabilities.
+- Reproducible `scripts/fetch-madlad.py` acquisition with resumable downloads,
+  disk checks and pinned SHA-256 verification.
 - Official Fluent branding in the application header and platform icons.
 - Linux desktop entry and icon installation as part of the per-user installer.
 - Portable Linux archive with deterministic packaging metadata and SHA-256.

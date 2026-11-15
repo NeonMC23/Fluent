@@ -8,6 +8,26 @@ No model weights were downloaded, copied, packaged, or committed during Cycle 7.
 The real 1.3B weights used for validation remained at their original read-only
 location outside the repository.
 
+## MADLAD-400-3B-MT (Cycle 13)
+
+MADLAD is a separate model family and is not covered by the NLLB table below.
+
+- Source: `google/madlad400-3b-mt`, pinned revision
+  `fa184c675da0b5c9e1c8694fccd4e12e2d422094`.
+- Model card license: **Apache-2.0**.
+- Files used: `config.json`, tokenizer metadata, `tokenizer.json`,
+  `spiece.model`, and the repository's `model-q4k.gguf`.
+- The weights and tokenizer are **not committed or packaged**; they are
+  user-supplied outside Git.
+- `scripts/fetch-madlad.py` pins sizes and SHA-256 values in
+  `scripts/madlad-files.json`.
+- The Fluent source remains MIT; Apache-2.0 applies to the MADLAD assets, not
+  to Fluent's source code.
+- Dependency licenses include Candle (`MIT OR Apache-2.0`), the `tokenizers`
+  crate (Apache-2.0), and the other crates listed by `cargo metadata`.
+
+This is an engineering record, not legal advice.
+
 ## 1. What was committed at the Cycle 6 baseline
 
 `git ls-files models` listed:

@@ -11,6 +11,7 @@ CI definitions, CI execution and actual GUI runtime validation.
 | Linux AArch64 | No | No | No | No | No |
 | Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43658280679) | **Partial**: self-test on runner; GUI skipped (no OpenGL) | Portable ZIP; no installer |
 | macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43658280679) | **Yes on CI runner** (bundle GUI smoke) | `.app` ZIP; unsigned; Intel not produced |
+| MADLAD-400 3B (T5, q4_k GGUF) | **Yes** on Linux x86-64 CPU | Pending Cycle 13 CI | Pending Cycle 13 CI | **Yes** (Linux real-model engine test) | User-supplied GGUF; CPU only |
 
 The current fully green `main` run is `43658280679` (`8186e04`), including
 packaged application smoke tests, output-limit tests and artifact verification. Earlier successful runs are
@@ -63,6 +64,22 @@ execution is still not physical-device validation.
   and notarization remain unvalidated.
 - See [MACOS.md](MACOS.md) for the CPU-only/Metal build commands and remaining
   bundle work.
+
+## MADLAD-400 (T5)
+
+- **Architecture:** T5 encoder-decoder, q4_k GGUF, 32 encoder/decoder layers.
+- **Device:** CPU only; explicit CUDA/Metal selection is rejected rather than
+  silently ignored.
+- **Decoding:** deterministic greedy; beam search is an NLLB-only capability.
+- **Languages:** 72 verified FLORES-200 mappings whose `<2xx>` prefixes exist
+  in the official tokenizer. NLLB keeps its full language table.
+- **Measured on the canonical host:** 1.89 s load, 2.72 GB peak RSS,
+  ~2.4 generated tokens/s, 1.4–2.2 s to first output, 1.70 GB storage.
+- **Validated pairs:** English→French, French→English, English→German,
+  English→Spanish, English→Japanese, English→Arabic and English→Swahili.
+- **Not executed:** physical Windows/macOS MADLAD runs, CUDA/Metal for MADLAD,
+  and a 512+ token MADLAD generation.
+- See [MADLAD.md](MADLAD.md) for acquisition, files and limitations.
 
 ## CPU and GPU behaviour
 

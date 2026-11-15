@@ -117,11 +117,15 @@ Captured from the actual running application on the canonical Linux host:
 | Main interface, dark theme | `src/image1.png` |
 | Settings page, dark theme, output limit | `docs/screenshots/settings.png` |
 | Settings page, light theme | `docs/screenshots/settings-light.png` |
+| Settings page, MADLAD selected | `docs/screenshots/settings-madlad.png` |
+| MADLAD CPU/greedy/output controls | `docs/screenshots/settings-madlad-output.png` |
+| MADLAD filtered target-language picker | `docs/screenshots/language-picker-madlad.png` |
 | Language picker | `docs/screenshots/language-picker.png` |
 | Main interface, light theme | `docs/screenshots/main-light.png` |
 
 The settings screenshots use a disposable container home directory so no user
-paths or private text are exposed; they show the newest Output limit control. The main preview was captured with neutral sample
+paths or private text are exposed; they show the three-model selector, MADLAD
+runtime capabilities and the Output limit control. The main preview was captured with neutral sample
 text. These are documentation captures, not mockups.
 
 ## 6. Platform output requirements

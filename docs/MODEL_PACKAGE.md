@@ -121,7 +121,8 @@ placeholder guard, not a substitute for checkpoint validation.
 
 ## 6. Constraints and unsupported cases
 
-- Only NLLB-200/M2M100 checkpoints are supported; there is no generic
+- This contract covers NLLB-200/M2M100. MADLAD uses a separate T5/GGUF layout
+  documented in [MADLAD.md](MADLAD.md); there is no generic
   Hugging Face model loader.
 - Source sequences are limited to 1024 positions by the model’s position table
   and Fluent’s clamp. Longer text is truncated explicitly and reported.
