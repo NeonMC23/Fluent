@@ -7,14 +7,14 @@ CI definitions, CI execution and actual GUI runtime validation.
 
 | Platform | Local build | CI job defined | CI executed | GUI runtime validated | Distribution artifact |
 |---|---|---|---|---|---|
-| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum + smoke) | **Yes** (run 43682638997) | **Yes** (Nobara host + Ubuntu 22.04 container + Xvfb) | Portable tar.gz |
+| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum + smoke) | **Yes** (run 43706890466) | **Yes** (Nobara host + Ubuntu 22.04 container + Xvfb) | Portable tar.gz |
 | Linux AArch64 | No | No | No | No | No |
-| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43682638997) | **Partial**: self-test on runner; GUI skipped (no OpenGL) | Portable ZIP; no installer |
-| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43682638997) | **Yes on CI runner** (bundle GUI smoke) | `.app` ZIP; unsigned; Intel not produced |
-| MADLAD-400 3B (T5, q4_k GGUF) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43682638997) | **Yes** (Linux real-model engine test + GUI inspection) | User-supplied GGUF; CPU only |
+| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43706890466) | **Partial**: self-test on runner; GUI skipped (no OpenGL) | Portable ZIP; no installer |
+| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43706890466) | **Yes on CI runner** (bundle GUI smoke) | `.app` ZIP; unsigned; Intel not produced |
+| MADLAD-400 3B (T5, q4_k GGUF) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43706890466) | **Yes** (Linux real-model engine test + GUI inspection) | User-supplied GGUF; CPU only |
 
-The current fully green `main` run is `43682638997` (`d554f5d`), including
-MADLAD/T5 compilation, packaged application smoke tests, output-limit tests,
+The current fully green `main` run is `43706890466` (`c143e27`), including
+MADLAD/T5 compilation, packaged application smoke tests, the Model Manager,
 benchmark harness compilation and artifact verification. Earlier successful runs are
 `43605074905`, `43606018556`, `43606646499` and `43620495032`. GitHub-runner
 execution is still not physical-device validation.
@@ -48,7 +48,7 @@ execution is still not physical-device validation.
 
 - The workflow runs `cargo test --workspace`, a release GUI build, the portable
   ZIP, and executes the packaged `fluent.exe --version` / `--self-test`.
-- Run `43682638997` passed those checks. GitHub's hosted Windows runner has no
+- Run `43706890466` passed those checks. GitHub's hosted Windows runner has no
   OpenGL 2.0+ context, so the temporary GUI-window smoke is SKIPPED there.
   This is still not physical-device GUI validation.
 - No installer, Start Menu integration, DLL inventory, CUDA build, or
@@ -60,7 +60,7 @@ execution is still not physical-device validation.
 - The workflow runs `cargo test --workspace`, a release GUI build, `.app`
   staging, plist/Mach-O validation and a bundled GUI smoke test on
   `macos-latest`.
-- Run `43682638997` passed all of those steps, so the arm64 `.app` is runtime
+- Run `43706890466` passed all of those steps, so the arm64 `.app` is runtime
   validated on the CI runner. Metal, Intel macOS, universal binaries, signing
   and notarization remain unvalidated.
 - See [MACOS.md](MACOS.md) for the CPU-only/Metal build commands and remaining

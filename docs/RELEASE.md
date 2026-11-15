@@ -91,6 +91,17 @@ The workflow has run successfully on GitHub:
   directly from its bytes, including a real GUI smoke test and a detached
   signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
+- **Cycle 15 run (Model Manager):**
+  [43706890466](https://github.com/NeonMC23/Fluent/actions/runs/43706890466)
+  on `c143e272…`. All four jobs succeeded with the native model manager,
+  registry manifests, downloader and custom storage UI.
+- **Cycle 15 archive SHA-256:** Linux
+  `e9368aa73b24a0208189260d71744fe6e791b2d617bb4548548d0266ee055eda`
+  (9,354,727 B), Windows
+  `605ba2106b2f9c420c0f00a05c28f5f3d4c1a8557a2d456f0b382136c8bdd983`
+  (7,130,382 B), macOS
+  `2f0fcf9ce006ceaf9bf093ccc01c9660e8d92dabe531b6ab6e881e72269bba95`
+  (7,879,671 B). CI still reports unsigned until the Minisign secret is set.
 - **Cycle 14 run (quality/performance):**
   [43682638997](https://github.com/NeonMC23/Fluent/actions/runs/43682638997)
   on `d554f5d2…`. All four jobs succeeded with the NLLB CPU Q8 auto-precision
@@ -314,8 +325,8 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - [ ] Model/package/licensing notices current.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [x] Cycle 14 CI run 43682638997 succeeded on `main` for all four jobs after
-  the quality/performance changes; inner archive checksums were published.
+- [x] Cycle 15 CI run 43706890466 succeeded on `main` for all four jobs after
+  the Model Manager integration; inner archive checksums were published.
 - [x] Unlimited output generated 600 real-model tokens and cancelled after 520
   in the gated integration test.
 - [ ] Artifact bytes independently downloaded and inspected (requires GitHub
