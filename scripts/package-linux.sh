@@ -145,8 +145,8 @@ cat > "$STAGE/README.txt" <<EOF
 Fluent $VERSION - portable Linux/$ARCH build
 ================================================
 
-This archive contains the application only. It does NOT contain NLLB-200
-models, tokenizer files, configuration, user data or installer scripts.
+This archive contains the application only. It does NOT contain model weights,
+tokenizer files, configuration, user data or installer scripts.
 
 Runtime requirements
 --------------------
@@ -170,30 +170,30 @@ Install / run
        tar -xzf $NAME.tar.gz
        cd $NAME
 
-2. Put your model directories next to this README:
-
-       models/nllb-200-1.3b/
-           config.json
-           tokenizer.json
-           pytorch_model.bin      (or safetensors / sharded checkpoint)
-       models/nllb-200-3.3b/
-           ...
-
-   Fluent does not download these files. Their license is CC-BY-NC-4.0;
-   see the project documentation. Only config.json, tokenizer.json and a
-   complete checkpoint are required.
-
-3. Run from this directory:
+2. Run from this directory:
 
        ./bin/fluent
 
-   The application searches for config.json next to the executable, in its
-   parent, in the platform configuration directory, and in the current
-   directory. With no config.json, it uses ./models/nllb-200-1.3b and
-   ./models/nllb-200-3.3b relative to the current directory.
+3. Install models with the built-in Model Manager:
 
-To use models stored elsewhere, create a config.json in this directory or set
-FLUENT_CONFIG to its absolute path. Example model entries:
+       Models (header) or Settings -> Manage models...
+
+   Choose a translation or chat model, review its licence and download size,
+   and confirm. Downloads are resumable and verified with SHA-256 before the
+   model is reported as installed. Models are stored outside the application
+   directory (default: ~/.local/share/fluent/models).
+
+   Translation models:
+     NLLB-200 1.3B / 3.3B   CC-BY-NC-4.0
+     MADLAD-400 3B          Apache-2.0
+     SMaLL-100              MIT
+
+   Chat models:
+     Qwen2.5 1.5B Instruct  Apache-2.0
+     Qwen2.5 0.5B Instruct  Apache-2.0
+
+   To use an existing model directory instead, create config.json in this
+   directory or set FLUENT_CONFIG to its absolute path. Example entries:
 
        "models": {
          "fast": "/absolute/path/nllb-200-1.3b",
@@ -203,14 +203,16 @@ FLUENT_CONFIG to its absolute path. Example model entries:
          "chat": "/absolute/path/qwen2.5-1.5b-instruct"
        }
 
-The GUI starts without a model; the first translation reports an actionable
-missing-model error with the expected directory.
+   Fluent starts without models. The Model Manager and first-run guidance show
+   what to install; a translation or chat request without the required model
+   reports an actionable error.
 
 Licenses
 --------
-The application source is MIT-licensed (see LICENSE). NLLB-200 model and
-tokenizer assets are not included and remain subject to Meta's CC-BY-NC-4.0
-terms. See MODEL_PROVENANCE.md in the Fluent source repository.
+The application source is MIT-licensed (see LICENSE). Model weights are not
+included. NLLB-200 is CC-BY-NC-4.0; MADLAD-400 is Apache-2.0; SMaLL-100 is MIT;
+Qwen2.5 Instruct is Apache-2.0. See MODEL_PROVENANCE.md in the Fluent source
+repository. Fluent's MIT licence does not relicense model assets.
 
 Verification
 ------------

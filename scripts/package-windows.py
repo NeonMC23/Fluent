@@ -45,31 +45,48 @@ def main() -> None:
     readme = f"""Fluent {args.version} - Windows {args.arch} portable build
 ==============================================================
 
-This ZIP contains the application only. It does NOT contain NLLB-200 models,
+This ZIP contains the application only. It does NOT contain model weights,
 tokenizer files, configuration, user data or an installer.
 
 Run
 ---
 1. Extract the ZIP to a folder of your choice.
-2. Place model directories next to fluent.exe:
-
-       models/nllb-200-1.3b/
-           config.json
-           tokenizer.json
-           pytorch_model.bin   (or safetensors / sharded checkpoint)
-       models/nllb-200-3.3b/
-           ...
-
-   Fluent does not download models. Their license is CC-BY-NC-4.0; see the
-   project documentation. Only config.json, tokenizer.json and a complete
-   checkpoint are required.
-
-3. Run:
+2. Run:
 
        fluent.exe
 
-The GUI starts without a model and reports an actionable missing-model error
-on the first translation.
+3. Install models with the built-in Model Manager:
+
+       Models (header) or Settings -> Manage models...
+
+   Choose a translation or chat model, review its licence and download size,
+   and confirm. Downloads are resumable and verified with SHA-256 before the
+   model is reported as installed. Models are stored outside the application
+   folder (default under your per-user application data directory).
+
+   Translation models:
+     NLLB-200 1.3B / 3.3B   CC-BY-NC-4.0
+     MADLAD-400 3B          Apache-2.0
+     SMaLL-100              MIT
+
+   Chat models:
+     Qwen2.5 1.5B Instruct  Apache-2.0
+     Qwen2.5 0.5B Instruct  Apache-2.0
+
+   To use an existing model directory instead, create config.json next to
+   fluent.exe or set FLUENT_CONFIG to its absolute path. Example entries:
+
+       "models": {
+         "fast": "C:/models/nllb-200-1.3b",
+         "accurate": "C:/models/nllb-200-3.3b",
+         "madlad": "C:/models/madlad400-3b-mt",
+         "small": "C:/models/small100",
+         "chat": "C:/models/qwen2.5-1.5b-instruct"
+       }
+
+   Fluent starts without models. The Model Manager and first-run guidance show
+   what to install; a translation or chat request without the required model
+   reports an actionable error.
 
 Verification
 ------------
@@ -83,8 +100,9 @@ project public key.
 
 License
 -------
-The Fluent source is MIT-licensed. NLLB-200 model/tokenizer assets are not
-included and remain subject to Meta's terms.
+The Fluent source is MIT-licensed. Model weights are not included. NLLB-200 is
+CC-BY-NC-4.0; MADLAD-400 is Apache-2.0; SMaLL-100 is MIT; Qwen2.5 Instruct is
+Apache-2.0. Fluent's MIT licence does not relicense model assets.
 """
     staging = archive.with_suffix(".zip.tmp")
     with zipfile.ZipFile(staging, "w", zipfile.ZIP_DEFLATED) as zf:
