@@ -7,17 +7,17 @@ CI definitions, CI execution and actual GUI runtime validation.
 
 | Platform | Local build | CI job defined | CI executed | GUI runtime validated | Distribution artifact |
 |---|---|---|---|---|---|
-| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum + smoke) | **Yes** (run 43727254932) | **Yes** (Nobara host + Ubuntu 22.04 container + Xvfb) | Portable tar.gz |
+| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum + smoke) | **Yes** (run 43747547053) | **Yes** (Nobara host + Ubuntu 22.04 container + Xvfb) | Portable tar.gz |
 | Linux AArch64 | No | No | No | No | No |
-| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43727254932) | **Partial**: self-test on runner; GUI skipped (no OpenGL) | Portable ZIP; no installer |
-| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43727254932) | **Yes on CI runner** (bundle GUI smoke) | `.app` ZIP; unsigned; Intel not produced |
-| MADLAD-400 3B (T5, q4_k GGUF) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43727254932) | **Yes** (Linux real-model engine test + GUI inspection) | User-supplied GGUF; CPU only |
-| SMaLL-100 (M2M-100, 330M) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43727254932) | **Yes** (Linux real-model engine test + GUI download/verify) | User-supplied safetensors; CPU validated |
+| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43747547053) | **Partial**: self-test on runner; GUI skipped (no OpenGL) | Portable ZIP; no installer |
+| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43747547053) | **Yes on CI runner** (bundle GUI smoke) | `.app` ZIP; unsigned; Intel not produced |
+| MADLAD-400 3B (T5, q4_k GGUF) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43747547053) | **Yes** (Linux real-model engine test + GUI inspection) | User-supplied GGUF; CPU only |
+| SMaLL-100 (M2M-100, 330M) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43747547053) | **Yes** (Linux real-model engine test + GUI download/verify) | User-supplied safetensors; CPU validated |
 
-The current fully green `main` run is `43727254932` (`5200ab5`), including
+The current fully green `main` run is `43747547053` (`23a7c94`), including
 MADLAD/T5 and SMaLL-100 compilation, packaged application smoke tests, the
-Model Manager, the remote catalogue, benchmark harness compilation and artifact
-verification. Earlier successful runs are
+Model Manager, the remote catalogue, the unified mark-based icons, the language
+capability registry, benchmark harness compilation and artifact verification. Earlier successful runs are
 `43605074905`, `43606018556`, `43606646499` and `43620495032`. GitHub-runner
 execution is still not physical-device validation.
 

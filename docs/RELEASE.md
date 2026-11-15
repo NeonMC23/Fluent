@@ -91,6 +91,21 @@ The workflow has run successfully on GitHub:
   directly from its bytes, including a real GUI smoke test and a detached
   signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
+- **Cycle 17 run (branding, model identity and language accuracy):**
+  [43747547053](https://github.com/NeonMC23/Fluent/actions/runs/43747547053)
+  on `23a7c944…`. All four jobs succeeded with the canonical turquoise F mark,
+  explicit model names, the 202-language NLLB correction and the per-model
+  language capability registry.
+- **Cycle 17 archive SHA-256:** Linux
+  `c425e87012ee84a44a2513d53ad9ac4832057ee2daad430e35cc7138370b1016`
+  (9,395,169 B), Windows
+  `5fb92fc9e0faa646361631b8bf5e949f8d0bc3b8d01aa4d165fc7e870b1d63e5`
+  (7,259,029 B), macOS
+  `03d5b9ff9292ef1a3b72dc95a330953cf907baf0a52694332f3d333f0d112dd2`
+  (7,607,140 B). CI remains unsigned until the Minisign secret is configured.
+  The locally built and Minisign-signed Linux archive is byte-identical to the
+  CI inner archive (`c425e87012ee84a44a2513d53ad9ac4832057ee2daad430e35cc7138370b1016`),
+  and the verifier accepted the signature and manifest.
 - **Cycle 16 run (SMaLL-100 and remote catalogue):**
   [43727254932](https://github.com/NeonMC23/Fluent/actions/runs/43727254932)
   on `5200ab5a…`. All four jobs succeeded with the SMaLL-100 backend, the
@@ -342,9 +357,9 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - [ ] Model/package/licensing notices current.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [x] Cycle 16 CI run 43727254932 succeeded on `main` for all four jobs after
-  the SMaLL-100 and remote-catalogue integration; inner archive checksums were
-  published. Cycle 15 run 43710941404 also passed.
+- [x] Cycle 17 CI run 43747547053 succeeded on `main` for all four jobs after
+  the branding, model-identity and language-capability integration; inner
+  archive checksums were published. Cycle 16 run 43727254932 also passed.
 - [x] Unlimited output generated 600 real-model tokens and cancelled after 520
   in the gated integration test.
 - [ ] Artifact bytes independently downloaded and inspected (requires GitHub
