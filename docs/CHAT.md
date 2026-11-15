@@ -130,12 +130,13 @@ cargo run --release -p fluent-core --example chat_eval -- \
   --id qwen2.5-1.5b-instruct --out /tmp/chat.json
 ```
 
-| Model | Load | RSS after load | Peak RSS | TTFT | Generation |
+| Model | Load | RSS after load | Peak RSS | TTFT (short prompt) | Decode rate |
 |---|---:|---:|---:|---:|---:|
-| Qwen2.5 1.5B Q4_K_M | 1.9 s | 1.95 GB | 2.02 GB | 3.1–4.9 s | 4–7 tok/s |
+| Qwen2.5 1.5B Q4_K_M | 1.9 s | 1.95 GB | 2.02 GB | 3.3–4.9 s | 4–7 tok/s |
 | Qwen2.5 0.5B Q4_0 | 1.0 s | 0.94 GB | 0.96 GB | 2.6–3.2 s | 5–8 tok/s |
 
-TTFT and tok/s include prefill, which dominates short prompts. A 300-token
+End-to-end throughput is lower for short replies because prefill dominates: a
+7-token answer measured 1.2–1.9 tok/s including the prompt. A ~300-token
 follow-up takes ~13–17 s to prefill on this CPU. The 1.5B model is about 4×
 slower than the 0.5B model for the same prompt.
 

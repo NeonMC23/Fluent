@@ -246,9 +246,11 @@ the final path-remapping build
 [43710941404](https://github.com/NeonMC23/Fluent/actions/runs/43710941404)
 (`6f06329`), the Cycle 16 SMaLL-100/catalogue run
 [43727254932](https://github.com/NeonMC23/Fluent/actions/runs/43727254932)
-(`5200ab5`), and the Cycle 17 branding/language run
+(`5200ab5`), the Cycle 17 branding/language run
 [43747547053](https://github.com/NeonMC23/Fluent/actions/runs/43747547053)
-(`23a7c94`): Linux, Windows, macOS and the aggregate release candidate all
+(`23a7c94`), and the Cycle 18 local-chat release-candidate run
+[43768080004](https://github.com/NeonMC23/Fluent/actions/runs/43768080004)
+(`5a7f96a`): Linux, Windows, macOS and the aggregate release candidate all
 passed. The Linux artifact is an application-only tar.gz;
 Windows is a portable ZIP; macOS is an `.app` ZIP whose filename records the
 runner architecture (the current `macos-latest` matrix produces arm64). Models

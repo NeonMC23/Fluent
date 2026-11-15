@@ -91,6 +91,20 @@ The workflow has run successfully on GitHub:
   directly from its bytes, including a real GUI smoke test and a detached
   signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
+- **Cycle 18 run (local chat and release candidate):**
+  [43768080004](https://github.com/NeonMC23/Fluent/actions/runs/43768080004)
+  on `5a7f96ac…`. All four jobs succeeded with the local Qwen2.5 chat engine,
+  chat model manager, Translate/Chat navigation and the final product polish.
+- **Cycle 18 release-candidate archive SHA-256:** Linux
+  `cf71eb133534fb9d4f5ca20a9443390ea5dd16dbfed6213e5f12850d3f513532`
+  (9,725,454 B), Windows
+  `efd11701edc140a17f93975817f830aa8db73e91feb150fd76b987c309602072`
+  (7,618,260 B), macOS
+  `d9e9dde99b27c98c58cf7cee861b7096c5f41a6e805f72e14b02da6177c118d6`
+  (7,905,622 B). CI is still **unsigned**; the combined
+  `fluent-release-candidate` artifact is the release candidate payload. The
+  locally built and Minisign-signed Linux archive is byte-identical to the CI
+  inner archive and passed signature/manifest verification.
 - **Cycle 17 run (branding, model identity and language accuracy):**
   [43747547053](https://github.com/NeonMC23/Fluent/actions/runs/43747547053)
   on `23a7c944…`. All four jobs succeeded with the canonical turquoise F mark,
@@ -352,14 +366,25 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - [ ] SHA-256 files generated from actual archives.
 - [x] Minisign public key committed (`B504F2189BB21013`).
 - [ ] `MINISIGN_SECRET_KEY` configured and signatures verified (owner action).
-- [ ] Windows Authenticode decision documented.
-- [ ] macOS signing/notarization decision documented.
-- [ ] Model/package/licensing notices current.
+- [x] Windows Authenticode decision documented: no production certificate or
+  signing configuration is available; the ZIP is unsigned and no SmartScreen
+  reputation is claimed.
+- [x] macOS signing/notarization decision documented: no Developer ID or Apple
+  notarization credentials are available; the `.app` ZIP is unsigned and
+  Gatekeeper may require a manual bypass.
+- [x] Model/package/licensing notices current, including Apache-2.0 Qwen2.5
+  and the separation of Fluent's MIT source licence from model licences.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [x] Cycle 17 CI run 43747547053 succeeded on `main` for all four jobs after
-  the branding, model-identity and language-capability integration; inner
-  archive checksums were published. Cycle 16 run 43727254932 also passed.
+- [x] Cycle 18 CI run 43768080004 succeeded on `main` for all four jobs after
+  the local-chat and release-candidate integration; inner archive checksums
+  were published. Cycle 17 run 43747547053 also passed.
+- [x] Local chat real-model tests cover English, French, follow-up context,
+  streaming, cancellation, reload and context truncation.
+- [x] Translation regression: SMaLL-100 42-case outputs are identical to
+  Cycle 16; NLLB, MADLAD and SMaLL real-model tests pass.
+- [x] SHA-256 files and `release-manifest.json` generated for the Linux
+  candidate; CI publishes the aggregate manifest/checksums.
 - [x] Unlimited output generated 600 real-model tokens and cancelled after 520
   in the gated integration test.
 - [ ] Artifact bytes independently downloaded and inspected (requires GitHub
