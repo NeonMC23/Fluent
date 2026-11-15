@@ -22,7 +22,11 @@ pub use engine::{
     Progress, ProgressStage, TranslationRequest, TranslationResult,
 };
 pub use languages::{find_language, languages, popular_languages};
-pub use model::registry::{language_list, model_spec, Architecture, ModelSpec, MODELS};
+pub use model::model_manager::{
+    available_bytes, directory_size, inspect_model, install_model, model_dir, remove_model,
+    verify_model, InstallState, ModelInstallation, TaskProgress, TaskStage,
+};
+pub use model::registry::{language_list, model_spec, Architecture, ModelFile, ModelSpec, MODELS};
 pub use tokenizer::NllbTokenizer;
 
 /// Requested output-length policy.

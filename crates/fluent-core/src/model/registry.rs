@@ -19,7 +19,15 @@ impl Architecture {
     }
 }
 
-/// User-visible metadata for one selectable model.
+/// One required model file, pinned by size and SHA-256.
+#[derive(Debug, Clone, Copy)]
+pub struct ModelFile {
+    pub name: &'static str,
+    pub size: u64,
+    pub sha256: &'static str,
+}
+
+/// User-visible and acquisition metadata for one selectable model.
 #[derive(Debug, Clone, Copy)]
 pub struct ModelSpec {
     pub mode: Mode,
@@ -31,7 +39,140 @@ pub struct ModelSpec {
     pub default_dir: &'static str,
     pub description: &'static str,
     pub supports_beams: bool,
+    pub repo: &'static str,
+    pub revision: &'static str,
+    pub files: &'static [ModelFile],
 }
+
+impl ModelSpec {
+    pub fn download_bytes(self) -> u64 {
+        self.files.iter().map(|file| file.size).sum()
+    }
+}
+
+const NLLB13_FILES: &[ModelFile] = &[
+    ModelFile {
+        name: "config.json",
+        size: 808,
+        sha256: "6918d76e923d6b372a14b8d1d837f27b809bd009943c4ebe943f8e34b2226233",
+    },
+    ModelFile {
+        name: "tokenizer.json",
+        size: 17_331_176,
+        sha256: "e316b82de11d0f951f370943b3c438311629547285129b0b81dadabd01bca665",
+    },
+    ModelFile {
+        name: "tokenizer_config.json",
+        size: 564,
+        sha256: "d1aa8c3697d3e35674f97b5b7e9c99d22b010f528e80140257d97316be90d044",
+    },
+    ModelFile {
+        name: "special_tokens_map.json",
+        size: 3548,
+        sha256: "992bd4ed610d644d6823081937bcc91bb8878dd556cea4ae5327f2480361330e",
+    },
+    ModelFile {
+        name: "sentencepiece.bpe.model",
+        size: 4_852_054,
+        sha256: "14bb8dfb35c0ffdea7bc01e56cea38b9e3d5efcdcb9c251d6b40538e1aab555a",
+    },
+    ModelFile {
+        name: "pytorch_model.bin",
+        size: 5_482_882_236,
+        sha256: "8a134f26de3677e0b7c47d3e98c199fdb4c85a8c6577448d861af4ff24e2ad3f",
+    },
+];
+
+const NLLB33_FILES: &[ModelFile] = &[
+    ModelFile {
+        name: "config.json",
+        size: 808,
+        sha256: "24027fbba45b65c168cc22f5afa3561476691e0e9a06286e1430ffff74e418eb",
+    },
+    ModelFile {
+        name: "tokenizer.json",
+        size: 17_331_176,
+        sha256: "e316b82de11d0f951f370943b3c438311629547285129b0b81dadabd01bca665",
+    },
+    ModelFile {
+        name: "tokenizer_config.json",
+        size: 564,
+        sha256: "d1aa8c3697d3e35674f97b5b7e9c99d22b010f528e80140257d97316be90d044",
+    },
+    ModelFile {
+        name: "special_tokens_map.json",
+        size: 3548,
+        sha256: "992bd4ed610d644d6823081937bcc91bb8878dd556cea4ae5327f2480361330e",
+    },
+    ModelFile {
+        name: "sentencepiece.bpe.model",
+        size: 4_852_054,
+        sha256: "14bb8dfb35c0ffdea7bc01e56cea38b9e3d5efcdcb9c251d6b40538e1aab555a",
+    },
+    ModelFile {
+        name: "pytorch_model.bin.index.json",
+        size: 90_035,
+        sha256: "c1290129b7a4156bfeb180501a37729dafddec3233d58e52ab0465eb03bf5ead",
+    },
+    ModelFile {
+        name: "pytorch_model-00001-of-00003.bin",
+        size: 6_933_375_959,
+        sha256: "06aec913c891950ff0c59bd018c1b46dc95be6e106c36df87d13175418b3972c",
+    },
+    ModelFile {
+        name: "pytorch_model-00002-of-00003.bin",
+        size: 8_545_249_147,
+        sha256: "1c5a44acb0287e905a62a506cf3e5af37956607f4c667d891ec069aa276be0be",
+    },
+    ModelFile {
+        name: "pytorch_model-00003-of-00003.bin",
+        size: 2_098_840_299,
+        sha256: "2cf744009996251567d7972f4436d65cf94380c5ddd8f524cb878e090b27bb50",
+    },
+];
+
+const MADLAD_FILES: &[ModelFile] = &[
+    ModelFile {
+        name: "config.json",
+        size: 749,
+        sha256: "cad399cab799b99409a6ec2d90d72552257c2bb752861261d2016691e0643e7c",
+    },
+    ModelFile {
+        name: "generation_config.json",
+        size: 142,
+        sha256: "0849b38987568ccfe4ebefc22bbda1cec4bee01c345e93bfab207d4692b0a1d5",
+    },
+    ModelFile {
+        name: "tokenizer_config.json",
+        size: 830,
+        sha256: "641fc660745306dfb935f666a68f8bc10a44c39241cfb357be518fda8c09662d",
+    },
+    ModelFile {
+        name: "special_tokens_map.json",
+        size: 414,
+        sha256: "7f79f1d5063d56c4b980eec0692f3c7429bdef335071d34e566bd00fd4b5e3e0",
+    },
+    ModelFile {
+        name: "added_tokens.json",
+        size: 4,
+        sha256: "d914176fd50bd7f565700006a31aa97b79d3ad17cee20c8e5ff2061d5cb74817",
+    },
+    ModelFile {
+        name: "tokenizer.json",
+        size: 16_629_031,
+        sha256: "a2799ccc696b752ba00c34f58726bfe253a04921ceb6cfc620400f560474790b",
+    },
+    ModelFile {
+        name: "spiece.model",
+        size: 4_427_844,
+        sha256: "ef11ac9a22c7503492f56d48dce53be20e339b63605983e9f27d2cd0e0f3922c",
+    },
+    ModelFile {
+        name: "model-q4k.gguf",
+        size: 1_654_597_280,
+        sha256: "ea6e5531a3e95213c7f0635988d119e078a655c09306e47851e15d4c0c3f9c37",
+    },
+];
 
 pub const MODELS: &[ModelSpec] = &[
     ModelSpec {
@@ -44,6 +185,9 @@ pub const MODELS: &[ModelSpec] = &[
         default_dir: "nllb-200-1.3b",
         description: "Fast local translation · recommended on CPU",
         supports_beams: true,
+        repo: "facebook/nllb-200-1.3B",
+        revision: "b0de46b488af0cf31749cd8da5ed3171e11b2309",
+        files: NLLB13_FILES,
     },
     ModelSpec {
         mode: Mode::Accurate,
@@ -55,6 +199,9 @@ pub const MODELS: &[ModelSpec] = &[
         default_dir: "nllb-200-3.3b",
         description: "Higher quality · GPU or lots of RAM",
         supports_beams: true,
+        repo: "facebook/nllb-200-3.3B",
+        revision: "1a07f7d195896b2114afcb79b7b57ab512e7b43e",
+        files: NLLB33_FILES,
     },
     ModelSpec {
         mode: Mode::Madlad,
@@ -66,6 +213,9 @@ pub const MODELS: &[ModelSpec] = &[
         default_dir: "madlad400-3b-mt",
         description: "T5-based · 450+ languages · CPU greedy decoding",
         supports_beams: false,
+        repo: "google/madlad400-3b-mt",
+        revision: "fa184c675da0b5c9e1c8694fccd4e12e2d422094",
+        files: MADLAD_FILES,
     },
 ];
 

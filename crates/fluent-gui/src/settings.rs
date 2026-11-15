@@ -86,6 +86,9 @@ pub struct Settings {
     pub output_length: OutputLengthSetting,
     /// Finite output ceiling used when `output_length` is `Limited`.
     pub max_new_tokens: usize,
+    /// Optional override for the model storage root. Empty uses the paths in
+    /// `config.json`; setting it does not move existing files.
+    pub models_root: String,
     /// Last entered text, restored on startup.
     pub last_source: String,
 }
@@ -104,6 +107,7 @@ impl Default for Settings {
             max_length: 512,
             output_length: OutputLengthSetting::Automatic,
             max_new_tokens: 512,
+            models_root: String::new(),
             last_source: String::new(),
         }
     }
@@ -152,6 +156,7 @@ impl Settings {
         if self.device.is_empty() {
             self.device = "auto".to_string();
         }
+        self.models_root = self.models_root.trim().to_string();
     }
 
     /// Maps the persisted GUI choice to the inference-engine policy.
@@ -307,6 +312,18 @@ mod tests {
             serde_json::from_str(r#"{"output_length":"something-new","num_beams":3}"#).unwrap();
         assert_eq!(parsed.output_length, OutputLengthSetting::Automatic);
         assert_eq!(parsed.num_beams, 3);
+    }
+
+    #[test]
+    fn model_storage_root_is_optional_and_persists() {
+        let mut settings = Settings::default();
+        assert!(settings.models_root.is_empty());
+        settings.models_root = " /data/models ".to_string();
+        settings.sanitize();
+        assert_eq!(settings.models_root, "/data/models");
+        let raw = serde_json::to_string(&settings).unwrap();
+        let parsed: Settings = serde_json::from_str(&raw).unwrap();
+        assert_eq!(parsed.models_root, "/data/models");
     }
 
     #[test]

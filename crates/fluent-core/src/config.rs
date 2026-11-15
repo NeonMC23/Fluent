@@ -169,6 +169,14 @@ impl ProjectConfig {
                 config.madlad_model = fallback;
             }
         }
+        if !config.madlad_model.is_dir() {
+            if let Some(dirs) = directories::ProjectDirs::from("io", "fluent", "Fluent") {
+                let fallback = dirs.data_dir().join("models/madlad400-3b-mt");
+                if fallback.is_dir() {
+                    config.madlad_model = fallback;
+                }
+            }
+        }
 
         Ok(config)
     }
@@ -264,6 +272,7 @@ mod tests {
         let dir = temp_dir("relative");
         fs::create_dir_all(dir.join("models/nllb-200-1.3b")).unwrap();
         fs::create_dir_all(dir.join("models/nllb-200-3.3b")).unwrap();
+        fs::create_dir_all(dir.join("models/madlad400-3b-mt")).unwrap();
         fs::write(
             dir.join("config.json"),
             r#"{
