@@ -260,7 +260,7 @@ parent, the platform configuration directory, then the current directory.
 Generated output is controlled by the **Output limit** setting in Settings or by `config.json`:
 
 - **Automatic** (default): derives a finite budget from the input (`min(512, source_tokens * 2 + 16)`) so short sentences finish quickly. This preserves the previous behavior.
-- **Custom limit**: uses `"max_new_tokens": N` as a finite ceiling, even if the model has not emitted EOS.
+- **Custom limit**: uses `"max_new_tokens": N` as a finite ceiling, even if the model has not emitted EOS. Requests are capped by the model’s positional capacity.
 - **No limit**: set `"unlimited_output": true`. Fluent imposes no token ceiling and generates until EOS, cancellation, an inference error, or the model's positional capacity. For NLLB's 1024-position table this is about 1022 generated tokens after the two prompt tokens. Long outputs require more memory and time; it is not infinite hardware capacity.
 
 Existing configuration files without these fields remain on **Automatic**. The GUI persists the selected mode in `settings.json`.
