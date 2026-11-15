@@ -29,6 +29,7 @@ Translate across **190+ languages and dialects** with a clean desktop interface,
 | 🌍 **190+ languages** | NLLB-200 covers a wide range of languages and dialects. |
 | 🧠 **Local AI inference** | Run NLLB-200 or MADLAD-400 locally, without a server or cloud API. |
 | 🧬 **Two model families** | Choose NLLB-200 for broad coverage or MADLAD-400 for T5 translation. |
+| 📦 **Model Manager** | Detect, download, verify, load and safely remove models from the desktop app. |
 | ⚡ **Fast mode** | Use the smaller 1.3B model for lighter workloads. |
 | 🎯 **Accurate mode** | Choose the larger 3.3B model for translation quality; CPU auto uses Q8. |
 | 🔎 **Automatic detection** | Detect the source language automatically. |
@@ -115,7 +116,13 @@ directory:
     └── model-q4k.gguf
 ```
 
-MADLAD can be fetched reproducibly with:
+The native **Model Manager** can download and verify all three models. Open
+**Models** in the application header (or **Settings → Manage models…**), choose
+a model, review its license and download size, and confirm. Existing model
+directories are detected without moving or downloading them again. See
+[docs/MODEL_MANAGER.md](docs/MODEL_MANAGER.md).
+
+The MADLAD command-line acquisition remains available as an optional fallback:
 
 ```bash
 python3 scripts/fetch-madlad.py
@@ -450,6 +457,7 @@ the unresolved tokenizer-redistribution question.
 - [Linux installation](docs/LINUX.md)
 - [Windows build guide](docs/WINDOWS.md)
 - [macOS build guide](docs/MACOS.md)
+- [Model Manager, storage and safe removal](docs/MODEL_MANAGER.md)
 - [MADLAD-400 setup, languages and measurements](docs/MADLAD.md)
 - [Cycle 14 quality and performance benchmarks](docs/BENCHMARKS.md)
 - [Model backend architecture decision](docs/ADR-001-model-backends.md)

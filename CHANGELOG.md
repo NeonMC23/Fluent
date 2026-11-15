@@ -7,6 +7,11 @@ versions until a release is explicitly published.
 
 ### Added
 
+- Native Model Manager with a three-model catalogue, download/repair,
+  SHA-256 verification, progress/cancellation, safe removal, storage usage and
+  an optional custom storage root.
+- Central registry manifests with pinned repositories, revisions, file sizes
+  and SHA-256 values for NLLB-200 and MADLAD-400.
 - Reproducible product-level benchmark harness (`examples/eval`), FLORES-200
   sample and Fluent-oriented review corpus, and chrF++/BLEU summarizer.
 - Cycle 14 long-generation tests: MADLAD 520 tokens, cancellation after 515,

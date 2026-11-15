@@ -23,6 +23,12 @@ Python are required.
 
 ## Download and storage
 
+The preferred route is the native **Model Manager** (Models in the header).
+It uses the same pinned manifest, resumes downloads, verifies SHA-256 and
+shows progress. See [MODEL_MANAGER.md](MODEL_MANAGER.md).
+
+The command-line fallback is:
+
 ```bash
 python3 scripts/fetch-madlad.py
 ```

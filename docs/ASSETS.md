@@ -120,6 +120,9 @@ Captured from the actual running application on the canonical Linux host:
 | Settings page, MADLAD selected | `docs/screenshots/settings-madlad.png` |
 | MADLAD CPU/greedy/output controls | `docs/screenshots/settings-madlad-output.png` |
 | MADLAD filtered target-language picker | `docs/screenshots/language-picker-madlad.png` |
+| Model Manager, storage and installed models | `docs/screenshots/model-manager.png` |
+| Model Manager, MADLAD card and actions | `docs/screenshots/model-manager-madlad.png` |
+| Model Manager, custom storage and download actions | `docs/screenshots/model-manager-download.png` |
 | Language picker | `docs/screenshots/language-picker.png` |
 | Main interface, light theme | `docs/screenshots/main-light.png` |
 
