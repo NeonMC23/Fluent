@@ -244,7 +244,8 @@ Example:
   },
   "generation": {
     "max_length": 512,
-    "num_beams": 4
+    "num_beams": 4,
+    "unlimited_output": false
   }
 }
 ```
@@ -252,7 +253,15 @@ Example:
 The application searches `FLUENT_CONFIG`, the executable directory and its
 parent, the platform configuration directory, then the current directory.
 
-`max_length` is the maximum number of **source** tokens; longer input is truncated explicitly and flagged in the interface. The number of **generated** tokens is derived from the encoded input (`min(512, source_tokens * 2 + 16)`) so short sentences finish quickly. An optional `"max_new_tokens"` entry overrides that automatic budget.
+`max_length` is the maximum number of **source** tokens; longer input is truncated explicitly and flagged in the interface.
+
+Generated output is controlled by the **Output limit** setting in Settings or by `config.json`:
+
+- **Automatic** (default): derives a finite budget from the input (`min(512, source_tokens * 2 + 16)`) so short sentences finish quickly. This preserves the previous behavior.
+- **Custom limit**: uses `"max_new_tokens": N` as a finite ceiling, even if the model has not emitted EOS.
+- **No limit**: set `"unlimited_output": true`. Fluent imposes no token ceiling and generates until EOS, cancellation, an inference error, or the model's positional capacity. For NLLB's 1024-position table this is about 1022 generated tokens after the two prompt tokens. Long outputs require more memory and time; it is not infinite hardware capacity.
+
+Existing configuration files without these fields remain on **Automatic**. The GUI persists the selected mode in `settings.json`.
 
 ## 🚀 GPU Acceleration
 

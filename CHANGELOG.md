@@ -17,6 +17,11 @@ versions until a release is explicitly published.
 - Committed production Minisign public key (`B504F2189BB21013`); private key
   stays outside the repository and is not yet configured as a CI secret.
 - Non-interactive `--version`, `--self-test` and `--smoke-test-gui` modes.
+- Output-length selector with Automatic, Custom limit, and No limit modes.
+  No limit generates until EOS, cancellation, or the model's positional
+  capacity; the CPU KV cache grows geometrically for long generations.
+- Real-model test generated 600 tokens (beyond the previous 512 ceiling) and
+  verified cancellation after 520 tokens in unlimited mode.
 - Cross-platform archive/manifest/signature verifier
   (`scripts/verify-artifacts.py`) that checks actual bytes, executable formats,
   architectures, checksums and detached signatures.

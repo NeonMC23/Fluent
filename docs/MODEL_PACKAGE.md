@@ -54,7 +54,7 @@ Optional fields and defaults:
 
 | Field | Default | Notes |
 |---|---|---|
-| `max_position_embeddings` | 1024 | Source limit is also bounded by the Fluent `max_length` setting (≤ 1024) |
+| `max_position_embeddings` | 1024 | Bounds source positions and generated output; `No limit` stops here if EOS never arrives |
 | `pad_token_id` | 1 | Used for position-table construction |
 | `eos_token_id` | 2 | Must match the tokenizer’s `</s>` for generation |
 | `decoder_start_token_id` | 2 | Read for compatibility; the engine follows the NLLB prefix convention |
