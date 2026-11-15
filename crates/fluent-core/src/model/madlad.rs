@@ -78,6 +78,8 @@ pub struct MadladTokenizer {
     inner: HfTokenizer,
     eos_id: u32,
     pad_id: u32,
+    #[cfg(test)]
+    stop_eos_override: Option<u32>,
 }
 
 impl MadladTokenizer {
@@ -112,11 +114,26 @@ impl MadladTokenizer {
             inner,
             eos_id,
             pad_id,
+            #[cfg(test)]
+            stop_eos_override: None,
         })
     }
 
     pub fn eos_id(&self) -> u32 {
         self.eos_id
+    }
+
+    pub fn stop_eos_id(&self) -> u32 {
+        #[cfg(test)]
+        if let Some(id) = self.stop_eos_override {
+            return id;
+        }
+        self.eos_id
+    }
+
+    #[cfg(test)]
+    pub(crate) fn disable_stop_eos_for_test(&mut self) {
+        self.stop_eos_override = Some(u32::MAX);
     }
 
     pub fn pad_id(&self) -> u32 {
@@ -327,7 +344,7 @@ impl Madlad {
                     "MADLAD produced invalid logits (no finite token)".to_string(),
                 ));
             };
-            if next == tokenizer.eos_id() {
+            if next == tokenizer.stop_eos_id() {
                 break;
             }
             tokens.push(next);
@@ -438,6 +455,119 @@ mod tests {
         );
         assert_eq!(*ids.last().unwrap(), tokenizer.eos_id());
         assert!(ids.len() > 2);
+    }
+
+    fn rss_mb(key: &str) -> Option<u64> {
+        let text = std::fs::read_to_string("/proc/self/status").ok()?;
+        let line = text.lines().find(|line| line.starts_with(key))?;
+        let kb: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
+        Some(kb / 1024)
+    }
+
+    #[test]
+    fn real_model_exceeds_512_tokens_and_cancels_unlimited() {
+        let Some(dir) = model_dir() else {
+            eprintln!("skipping: set FLUENT_MADLAD_MODEL to run long-generation tests");
+            return;
+        };
+        let cancel = AtomicBool::new(false);
+        let mut model = Madlad::load(&dir, &cancel, &mut |_| {}).expect("load MADLAD");
+        let (source_ids, _) = {
+            let tokenizer = MadladTokenizer::from_dir(&dir).expect("tokenizer");
+            tokenizer
+                .encode_source("The library opens at eight.", "fra_Latn", 128)
+                .expect("encode")
+        };
+
+        let mut tokenizer = MadladTokenizer::from_dir(&dir).expect("long tokenizer");
+        tokenizer.disable_stop_eos_for_test();
+        let started = std::time::Instant::now();
+        let finite = model
+            .generate(
+                &tokenizer,
+                &source_ids,
+                OutputLimit::Tokens(520),
+                &mut |_| {},
+                &cancel,
+            )
+            .expect("520-token generation");
+        println!(
+            "long finite output={} tokens in {:.1?} peak={:?} MB",
+            finite.len(),
+            started.elapsed(),
+            rss_mb("VmHWM:")
+        );
+        assert!(
+            finite.len() > 512,
+            "expected >512 tokens, got {}",
+            finite.len()
+        );
+
+        let mut tokenizer = MadladTokenizer::from_dir(&dir).expect("unlimited tokenizer");
+        tokenizer.disable_stop_eos_for_test();
+        let cancel = AtomicBool::new(false);
+        let mut seen = 0usize;
+        let started = std::time::Instant::now();
+        let error = model
+            .generate(
+                &tokenizer,
+                &source_ids,
+                OutputLimit::UntilEos,
+                &mut |generation| {
+                    seen = seen.max(generation.generated);
+                    if generation.generated >= 515 {
+                        cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                },
+                &cancel,
+            )
+            .expect_err("unlimited generation should be cancelled");
+        println!(
+            "unlimited cancelled after {seen} tokens in {:.1?} peak={:?} MB",
+            started.elapsed(),
+            rss_mb("VmHWM:")
+        );
+        assert!(matches!(error, Error::Cancelled));
+        assert!(seen > 512, "cancellation arrived before 512 tokens: {seen}");
+
+        // A fresh tokenizer with the real EOS id must still translate after
+        // the cancelled long run, proving no tokenizer/model state corruption.
+        let tokenizer = MadladTokenizer::from_dir(&dir).expect("normal tokenizer");
+        let (source_ids, _) = tokenizer
+            .encode_source("The library opens at eight.", "eng_Latn", 128)
+            .expect("encode");
+        let output = model
+            .generate(
+                &tokenizer,
+                &source_ids,
+                OutputLimit::Tokens(64),
+                &mut |_| {},
+                &AtomicBool::new(false),
+            )
+            .expect("translation after cancellation");
+        let text = tokenizer.decode(&output).unwrap_or_default();
+        assert!(
+            !text.trim().is_empty(),
+            "post-cancellation output was empty"
+        );
+        println!("post-cancellation translation: {text}");
+
+        drop(model);
+        println!("after drop: rss={:?} MB", rss_mb("VmRSS:"));
+        let cancel = AtomicBool::new(false);
+        let mut reloaded = Madlad::load(&dir, &cancel, &mut |_| {}).expect("reload after long run");
+        let output = reloaded
+            .generate(
+                &tokenizer,
+                &source_ids,
+                OutputLimit::Tokens(64),
+                &mut |_| {},
+                &cancel,
+            )
+            .expect("translation after reload");
+        let text = tokenizer.decode(&output).unwrap_or_default();
+        assert!(!text.trim().is_empty(), "reloaded output was empty");
+        println!("post-reload translation: {text}");
     }
 
     #[test]
