@@ -208,9 +208,11 @@ the final path-remapping build
 [43606646499](https://github.com/NeonMC23/Fluent/actions/runs/43606646499)
 (`af7dbca`), the Cycle 11 packaged-smoke run
 [43621221912](https://github.com/NeonMC23/Fluent/actions/runs/43621221912)
-(`09a71e9`), and the Cycle 12 `main` run
+(`09a71e9`), the Cycle 12 `main` run
 [43658280679](https://github.com/NeonMC23/Fluent/actions/runs/43658280679)
-(`8186e04`): Linux, Windows, macOS and the aggregate release candidate all
+(`8186e04`), and the Cycle 13 MADLAD run
+[43666915254](https://github.com/NeonMC23/Fluent/actions/runs/43666915254)
+(`e5fda1f`): Linux, Windows, macOS and the aggregate release candidate all
 passed. The Linux artifact is an application-only tar.gz;
 Windows is a portable ZIP; macOS is an `.app` ZIP whose filename records the
 runner architecture (the current `macos-latest` matrix produces arm64). Models

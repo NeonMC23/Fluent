@@ -91,6 +91,20 @@ The workflow has run successfully on GitHub:
   directly from its bytes, including a real GUI smoke test and a detached
   signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
+- **Cycle 13 run (MADLAD):**
+  [43666915254](https://github.com/NeonMC23/Fluent/actions/runs/43666915254)
+  on `e5fda1fb…`. All four jobs succeeded after adding the Candle T5 backend:
+  Linux, Windows and macOS built and ran their packaged checks, and the
+  release-integrity job verified the archives and manifest.
+- **Cycle 13 archive SHA-256:** Linux
+  `f47f7a44b7b5b9cb9e387c8ef6e381ad648031fd54e5b71b3977016ab568732b`
+  (8,341,621 B), Windows
+  `f357f4ae2d8bd870c96bb90d8a1eda82769251dfa9afdf1f75942171ae19dbee`
+  (6,128,430 B), macOS
+  `e70faf638fb1dc868a5a9c48e2e96416fc7265ef3191fb36d6ae3871499d5330`
+  (6,967,983 B). The Linux archive is byte-identical to the locally built and
+  Minisign-signed candidate; CI still correctly reports `unsigned` because the
+  Actions secret is not configured.
 - **Cycle 12 run (current `main`):**
   [43658280679](https://github.com/NeonMC23/Fluent/actions/runs/43658280679)
   on `8186e04f…`. All four jobs succeeded, including the new output-limit
@@ -288,8 +302,8 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - [ ] Model/package/licensing notices current.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [x] Cycle 12 CI run 43658280679 succeeded on `main` for all four jobs; inner
-  archive checksums were published by the run.
+- [x] Cycle 13 CI run 43666915254 succeeded on `main` for all four jobs after
+  the MADLAD integration; inner archive checksums were published by the run.
 - [x] Unlimited output generated 600 real-model tokens and cancelled after 520
   in the gated integration test.
 - [ ] Artifact bytes independently downloaded and inspected (requires GitHub
