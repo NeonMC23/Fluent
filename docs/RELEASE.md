@@ -91,6 +91,20 @@ The workflow has run successfully on GitHub:
   directly from its bytes, including a real GUI smoke test and a detached
   signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
+- **Cycle 12 run (current `main`):**
+  [43658280679](https://github.com/NeonMC23/Fluent/actions/runs/43658280679)
+  on `8186e04f…`. All four jobs succeeded, including the new output-limit
+  tests, Linux/macOS GUI smoke tests, Windows packaged self-test, artifact
+  verification and checksum publication.
+- **Cycle 12 archive SHA-256:** Linux
+  `a833d2a4e439a5f37af8268b842aa88a47509fbe23fa3e91d804343d1bf43614`
+  (7,930,772 B), Windows
+  `946395a4cb43882c6b5001dc9b92f45cdc4fa06a0be111f16427de8b94bf4454`
+  (5,697,155 B), macOS
+  `e89ba066724bdee66796badbb0c0441fe2786f60e05ddfe084efdf74352830f7`
+  (6,605,287 B). The Linux archive is byte-identical to the locally built and
+  Minisign-signed candidate, so its detached signature verifies; CI itself
+  still reports `signing=unsigned` because the Actions secret is not set.
 - **Cycle 11 final run:**
   [43621221912](https://github.com/NeonMC23/Fluent/actions/runs/43621221912)
   on `09a71e94…`. All four jobs succeeded. Linux and macOS ran the packaged
@@ -274,8 +288,10 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - [ ] Model/package/licensing notices current.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [x] Current cycle CI run 43621221912 succeeded for all four jobs; inner
+- [x] Cycle 12 CI run 43658280679 succeeded on `main` for all four jobs; inner
   archive checksums were published by the run.
+- [x] Unlimited output generated 600 real-model tokens and cancelled after 520
+  in the gated integration test.
 - [ ] Artifact bytes independently downloaded and inspected (requires GitHub
   authentication).
 - [ ] Release published/tagged only after explicit owner authorization.
