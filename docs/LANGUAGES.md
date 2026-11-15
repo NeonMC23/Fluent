@@ -144,6 +144,8 @@ code end to end.
 - `tests/language_coverage.rs`: static lists, Chinese behaviour, SMaLL mapping
   uniqueness, and gated real-tokenizer coverage for all four backends.
 - `engine.rs`: unsupported source/target rejected before a model load.
-- GUI: picker filtering by selected model and the startup clamp.
+- GUI: picker filtering by selected model and the startup clamp were validated
+  in the running Linux application; the clamping logic itself is covered by the
+  `resolve_language_selection` unit tests.
 - Real inference: `tests/small100.rs`, `tests/madlad.rs`,
   `tests/reliability.rs`, plus the Cycle 16 42-pair benchmark.
