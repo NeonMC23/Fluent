@@ -209,10 +209,12 @@ impl Small100Tokenizer {
             )));
         }
         let lang_ids = load_language_ids(dir, language_base)?;
-        if lang_ids.is_empty() {
-            return Err(Error::Tokenizer(
-                "tokenizer_config.json has no language tokens".to_string(),
-            ));
+        if lang_ids.len() != LANGUAGES.len() {
+            return Err(Error::Tokenizer(format!(
+                "tokenizer_config.json exposes {} of the {} mapped SMaLL-100 languages",
+                lang_ids.len(),
+                LANGUAGES.len()
+            )));
         }
 
         Ok(Self {

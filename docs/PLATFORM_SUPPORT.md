@@ -103,6 +103,23 @@ execution is still not physical-device validation.
   [BENCHMARKS.md](BENCHMARKS.md) and [SMALL100.md](SMALL100.md).
 - **Not executed:** physical Windows/macOS SMaLL-100 runs and CUDA/Metal.
 
+## Branding assets
+
+The canonical application symbol is the turquoise F mark
+(`src/logo/fluent-mark.png`), extracted from the immutable `logo.png` master.
+The GUI header, window icon, Linux launcher PNG, Windows `.ico` and macOS
+`.icns` are all generated from that mark by
+`scripts/generate-branding-assets.py`. Structural validation runs without
+Pillow (`scripts/verify-branding-assets.py`); byte-for-byte reproducibility is
+checked with `--check` where Pillow is available. See [ASSETS.md](ASSETS.md).
+
+## Language coverage
+
+The selector, engine and catalogue use the same capability registry. Actual
+counts are NLLB-200 1.3B/3.3B: 202; MADLAD-400 3B: 72; SMaLL-100: 98. See
+[LANGUAGES.md](LANGUAGES.md) for mappings, Chinese variants and the NLLB
+204→202 correction.
+
 ## CPU and GPU behaviour
 
 - NLLB 1.3B and 3.3B both use CPU Q8 under Automatic precision. A measured

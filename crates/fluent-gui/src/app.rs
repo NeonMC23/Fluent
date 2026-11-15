@@ -6,10 +6,11 @@ use std::time::{Duration, Instant};
 use eframe::egui;
 use fluent_core::{
     available_bytes, directory_size, estimate_memory_for_mode, fetch_catalogue, find_language,
-    inspect_model, install_model, languages, model_spec, popular_languages, remove_model,
-    verify_model, Architecture, Catalogue, DeviceChoice, EngineConfig, EngineStatus, InstallState,
-    Language, Mode, ModelInstallation, Precision, Progress, ProjectConfig, TaskProgress, TaskStage,
-    TranslationRequest, TranslationResult, MODELS,
+    inspect_model, install_model, language_list, languages, model_spec, popular_languages,
+    remove_model, resolve_language_selection, verify_model, Architecture, Catalogue, DeviceChoice,
+    EngineConfig, EngineStatus, InstallState, Language, Mode, ModelInstallation, Precision,
+    Progress, ProjectConfig, TaskProgress, TaskStage, TranslationRequest, TranslationResult,
+    MODELS,
 };
 
 use crate::settings::{settings_path, OutputLengthSetting, Settings, ThemeChoice, ACCENTS};
@@ -84,6 +85,7 @@ pub struct FluentApp {
     picker: Option<PickerTarget>,
     picker_search: String,
     picker_focus: bool,
+    model_picker_open: bool,
 
     model_manager_open: bool,
     manager_root_input: String,
@@ -106,7 +108,38 @@ pub struct FluentApp {
 
 impl FluentApp {
     pub fn new(cc: &eframe::CreationContext<'_>, project: ProjectConfig) -> Self {
-        let settings = Settings::load(&project);
+        let mut settings = Settings::load(&project);
+        // A settings file can outlive a model change. Clamp a saved pair that
+        // the selected backend no longer supports before the first paint.
+        let selection = resolve_language_selection(
+            settings.mode,
+            &settings.source_language,
+            &settings.target_language,
+        );
+        let startup_notice = selection.adjusted.then(|| {
+            (
+                format!(
+                    "Language selection adjusted for {}: source {}, target {}.",
+                    settings.mode.model_label(),
+                    if selection.source == "auto" {
+                        "Automatic detection".to_string()
+                    } else {
+                        find_language(&selection.source)
+                            .map(|language| language.name.to_string())
+                            .unwrap_or_else(|| selection.source.clone())
+                    },
+                    find_language(&selection.target)
+                        .map(|language| language.name.to_string())
+                        .unwrap_or_else(|| selection.target.clone())
+                ),
+                Instant::now(),
+            )
+        });
+        settings.source_language = selection.source;
+        settings.target_language = selection.target;
+        if startup_notice.is_some() {
+            settings.save();
+        }
         let palette = theme::apply(&cc.egui_ctx, settings.theme, settings.accent);
         let worker = WorkerHandle::spawn(cc.egui_ctx.clone());
         let source_text = settings.last_source.clone();
@@ -127,7 +160,7 @@ impl FluentApp {
             result: None,
             preview: String::new(),
             error: None,
-            notice: None,
+            notice: startup_notice,
             copied_at: None,
             busy: false,
             loading: false,
@@ -139,6 +172,7 @@ impl FluentApp {
             picker: None,
             picker_search: String::new(),
             picker_focus: false,
+            model_picker_open: false,
             model_manager_open: false,
             manager_root_input: String::new(),
             manager_task: None,
@@ -843,32 +877,22 @@ impl FluentApp {
             });
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                widgets::section_label(ui, &palette, "Mode");
-                for mode in [Mode::Small, Mode::Madlad, Mode::Accurate, Mode::Fast] {
-                    let selected = self.settings.mode == mode;
-                    let fill = if selected {
-                        palette.accent
-                    } else {
-                        palette.card_alt
-                    };
-                    let color = if selected {
-                        palette.on_accent
-                    } else {
-                        palette.muted
-                    };
-                    let response = ui.add(
-                        egui::Button::new(
-                            egui::RichText::new(mode.label()).size(12.5).color(color),
-                        )
-                        .fill(fill)
-                        .stroke(egui::Stroke::new(1.0, palette.border))
-                        .corner_radius(egui::CornerRadius::same(255))
-                        .min_size(egui::vec2(68.0, 30.0)),
-                    );
-                    if response.clicked() && !selected && !self.busy {
-                        self.select_mode(mode);
+                ui.vertical(|ui| {
+                    widgets::section_label(ui, &palette, "Model");
+                    let spec = model_spec(self.settings.mode);
+                    if widgets::model_button(
+                        ui,
+                        &palette,
+                        spec.name,
+                        spec.description,
+                        280.0,
+                        !self.busy,
+                    )
+                    .clicked()
+                    {
+                        self.model_picker_open = true;
                     }
-                }
+                });
             });
         });
     }
@@ -879,30 +903,36 @@ impl FluentApp {
             return;
         }
         self.settings.mode = mode;
-        let mut adjusted = false;
-        if self.settings.source_language != "auto"
-            && !mode.supports_language(&self.settings.source_language)
-        {
-            self.settings.source_language = "auto".to_string();
-            adjusted = true;
-        }
-        if !mode.supports_language(&self.settings.target_language) {
-            self.settings.target_language = ["eng_Latn", "fra_Latn"]
-                .into_iter()
-                .find(|code| mode.supports_language(code))
-                .unwrap_or("eng_Latn")
-                .to_string();
-            adjusted = true;
-        }
-        if adjusted {
+        let selection = resolve_language_selection(
+            mode,
+            &self.settings.source_language,
+            &self.settings.target_language,
+        );
+        if selection.adjusted {
+            self.settings.source_language = selection.source;
+            self.settings.target_language = selection.target;
             self.notice = Some((
-                format!("Language selection adjusted for {}.", mode.model_label()),
+                format!(
+                    "Language selection adjusted for {}: source {}, target {}.",
+                    mode.model_label(),
+                    self.language_label(&self.settings.source_language),
+                    self.language_label(&self.settings.target_language)
+                ),
                 Instant::now(),
             ));
         }
         self.result = None;
         self.status = None;
         self.settings.save();
+    }
+
+    fn language_label(&self, code: &str) -> String {
+        if code == "auto" {
+            return "Automatic detection".to_string();
+        }
+        find_language(code)
+            .map(|language| language.name.to_string())
+            .unwrap_or_else(|| code.to_string())
     }
 
     fn open_picker(&mut self, target: PickerTarget) {
@@ -2500,6 +2530,162 @@ impl FluentApp {
     // Language picker
     // ------------------------------------------------------------------
 
+    fn model_picker_modal(&mut self, ctx: &egui::Context) {
+        if !self.model_picker_open {
+            return;
+        }
+        let palette = self.palette;
+        let mut close = false;
+        let mut chosen = None;
+
+        let screen = ctx.content_rect();
+        let response = egui::Modal::new(egui::Id::unique("fluent_model_picker"))
+            .frame(popup_frame(ctx, &palette))
+            .show(ctx, |ui| {
+                ui.set_width(620.0_f32.min((screen.width() - 48.0).max(360.0)));
+                ui.set_max_height(screen.height() * 0.86);
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("Translation model")
+                            .size(21.0)
+                            .strong()
+                            .color(palette.text),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new("✕").size(16.0).color(palette.muted),
+                                )
+                                .frame(false),
+                            )
+                            .clicked()
+                        {
+                            close = true;
+                        }
+                    });
+                });
+                widgets::hint(
+                    ui,
+                    &palette,
+                    "The selected model determines which languages are available.",
+                );
+                ui.add_space(6.0);
+                widgets::divider(ui, &palette);
+                ui.add_space(6.0);
+
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .max_height(screen.height() * 0.66)
+                    .show(ui, |ui| {
+                        for spec in MODELS {
+                            let selected = self.settings.mode == spec.mode;
+                            let installed = self.installation_for(spec.mode);
+                            let loaded = self
+                                .status
+                                .as_ref()
+                                .is_some_and(|status| status.mode == spec.mode);
+                            let fill = if selected {
+                                palette.accent_soft
+                            } else {
+                                palette.card_alt
+                            };
+                            let stroke = egui::Stroke::new(
+                                if selected { 1.5 } else { 1.0 },
+                                if selected {
+                                    palette.accent
+                                } else {
+                                    palette.border
+                                },
+                            );
+                            let languages = language_list(spec.mode).len();
+                            let card = egui::Frame::NONE
+                                .fill(fill)
+                                .stroke(stroke)
+                                .corner_radius(egui::CornerRadius::same(12))
+                                .inner_margin(egui::Margin::same(12))
+                                .show(ui, |ui| {
+                                    ui.set_min_width(ui.available_width());
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(spec.name)
+                                                .size(15.0)
+                                                .strong()
+                                                .color(if selected {
+                                                    palette.accent
+                                                } else {
+                                                    palette.text
+                                                }),
+                                        );
+                                        widgets::badge(
+                                            ui,
+                                            &palette,
+                                            spec.architecture.label(),
+                                            palette.accent,
+                                        );
+                                        if loaded {
+                                            widgets::badge(ui, &palette, "Loaded", palette.success);
+                                        } else if installed.state == InstallState::Installed {
+                                            widgets::badge(
+                                                ui,
+                                                &palette,
+                                                "Installed",
+                                                palette.success,
+                                            );
+                                        } else {
+                                            widgets::badge(
+                                                ui,
+                                                &palette,
+                                                "Not installed",
+                                                palette.warning,
+                                            );
+                                        }
+                                    });
+                                    ui.label(
+                                        egui::RichText::new(spec.description)
+                                            .size(12.0)
+                                            .color(palette.muted),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "{} · {} · {} · {} languages · {}",
+                                            spec.parameters,
+                                            spec.storage,
+                                            spec.license,
+                                            languages,
+                                            if spec.supports_beams {
+                                                "beam search"
+                                            } else {
+                                                "greedy decoding"
+                                            }
+                                        ))
+                                        .size(11.0)
+                                        .color(palette.faint),
+                                    );
+                                })
+                                .response
+                                .interact(egui::Sense::click())
+                                .on_hover_cursor(egui::CursorIcon::PointingHand);
+                            if card.clicked() && !selected && !self.busy {
+                                chosen = Some(spec.mode);
+                            }
+                            ui.add_space(8.0);
+                        }
+                    });
+            });
+
+        if response.should_close() {
+            close = true;
+        }
+        if close {
+            self.model_picker_open = false;
+        }
+        if let Some(mode) = chosen {
+            self.model_picker_open = false;
+            self.select_mode(mode);
+        }
+    }
+
     fn picker_modal(&mut self, ctx: &egui::Context) {
         let Some(target) = self.picker else {
             return;
@@ -2565,7 +2751,6 @@ impl FluentApp {
                         &palette,
                         "Automatic detection",
                         "Detect the language from the text",
-                        "auto",
                         active,
                     )
                     .clicked()
@@ -2721,6 +2906,7 @@ impl eframe::App for FluentApp {
             .show(ui, |ui| self.main_area(ui));
 
         self.settings_modal(&ctx);
+        self.model_picker_modal(&ctx);
         self.model_manager_modal(&ctx);
         self.confirm_download_modal(&ctx);
         self.confirm_remove_modal(&ctx);
@@ -2771,7 +2957,6 @@ fn picker_language_row(
         palette,
         language.name,
         language.native,
-        language.code,
         current == language.code,
     )
     .clicked()
@@ -2782,7 +2967,6 @@ fn picker_row(
     palette: &Palette,
     name: &str,
     native: &str,
-    code: &str,
     selected: bool,
 ) -> egui::Response {
     let width = ui.available_width();
@@ -2798,18 +2982,7 @@ fn picker_row(
 
     let inner = rect.shrink2(egui::vec2(10.0, 0.0));
     let clip = ui.clip_rect();
-    let code_width = 72.0_f32.min(inner.width() * 0.35);
-    let left_rect = egui::Rect::from_min_max(
-        inner.min,
-        egui::pos2(
-            (inner.right() - code_width - 8.0).max(inner.left()),
-            inner.bottom(),
-        ),
-    );
-    let code_rect = egui::Rect::from_min_max(
-        egui::pos2((inner.right() - code_width).max(inner.left()), inner.top()),
-        inner.max,
-    );
+    let left_rect = inner;
 
     let mut left = ui.new_child(
         egui::UiBuilder::new()
@@ -2837,19 +3010,6 @@ fn picker_row(
                 .truncate(),
         );
     }
-
-    let mut right = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(code_rect)
-            .layout(egui::Layout::right_to_left(egui::Align::Center)),
-    );
-    right.set_clip_rect(clip.intersect(code_rect));
-    right.label(
-        egui::RichText::new(code)
-            .monospace()
-            .size(10.5)
-            .color(palette.faint),
-    );
 
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }

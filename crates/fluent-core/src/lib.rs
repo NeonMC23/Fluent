@@ -30,7 +30,10 @@ pub use model::model_manager::{
     verify_model, InstallState, ModelInstallation, TaskProgress, TaskStage,
 };
 pub use model::registry::model_spec_by_id;
-pub use model::registry::{language_list, model_spec, Architecture, ModelFile, ModelSpec, MODELS};
+pub use model::registry::{
+    language_list, model_spec, resolve_language_selection, Architecture, LanguageSelection,
+    ModelFile, ModelSpec, MODELS,
+};
 pub use tokenizer::NllbTokenizer;
 
 /// Requested output-length policy.
@@ -163,10 +166,10 @@ impl Mode {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Fast => "Fast",
-            Self::Accurate => "Accurate",
-            Self::Madlad => "MADLAD",
-            Self::Small => "Small",
+            Self::Fast => "NLLB-200 1.3B",
+            Self::Accurate => "NLLB-200 3.3B",
+            Self::Madlad => "MADLAD-400 3B",
+            Self::Small => "SMaLL-100",
         }
     }
 
@@ -174,7 +177,7 @@ impl Mode {
         match self {
             Self::Fast => "NLLB-200 1.3B",
             Self::Accurate => "NLLB-200 3.3B",
-            Self::Madlad => "MADLAD-400 3B MT",
+            Self::Madlad => "MADLAD-400 3B",
             Self::Small => "SMaLL-100",
         }
     }
@@ -226,8 +229,9 @@ mod tests {
     fn mode_labels_are_stable() {
         assert_eq!(Mode::Fast.as_str(), "fast");
         assert_eq!(Mode::Accurate.as_str(), "accurate");
-        assert_eq!(Mode::Fast.label(), "Fast");
+        assert_eq!(Mode::Fast.label(), "NLLB-200 1.3B");
         assert_eq!(Mode::Accurate.model_label(), "NLLB-200 3.3B");
+        assert_eq!(Mode::Madlad.model_label(), "MADLAD-400 3B");
         assert_eq!(Mode::Small.model_label(), "SMaLL-100");
     }
 }

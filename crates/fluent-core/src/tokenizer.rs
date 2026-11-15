@@ -40,6 +40,18 @@ impl NllbTokenizer {
         let bos_id = inner.token_to_id("<s>").unwrap_or(0);
         let unk_id = inner.token_to_id("<unk>").unwrap_or(3);
 
+        // The registry advertises the full 202-language table. Fail at load if
+        // the installed tokenizer cannot represent one of those codes, rather
+        // than offering a language that later fails at translation time.
+        for language in crate::languages::languages() {
+            if inner.token_to_id(language.code).is_none() {
+                return Err(Error::Tokenizer(format!(
+                    "the NLLB tokenizer is missing the {} language token",
+                    language.code
+                )));
+            }
+        }
+
         Ok(Self {
             inner,
             eos_id,

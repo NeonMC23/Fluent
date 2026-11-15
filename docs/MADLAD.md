@@ -72,7 +72,7 @@ Add it to `config.json` if it is not in a conventional location:
 ## Select and use it
 
 1. Open **Settings**.
-2. Select **MADLAD-400 3B MT** under Translation model.
+2. Select **MADLAD-400 3B** under Translation model.
 3. Click **Load now**, or translate directly; the model loads on first use.
 4. Choose a target language from the language picker. The picker shows only
    the verified MADLAD target languages.

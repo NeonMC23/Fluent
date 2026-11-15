@@ -43,7 +43,7 @@ The GUI consumes that registry and does not branch on internal weight formats.
 - MADLAD is CPU-only through the GGUF q4k path; CUDA/Metal are not advertised.
 - MADLAD uses deterministic greedy decoding. Beam search remains an NLLB
   capability and the GUI disables it for MADLAD instead of silently ignoring it.
-- NLLB keeps its full 204-language list. MADLAD exposes only a curated,
+- NLLB keeps its full 202-language list. MADLAD exposes only a curated,
   tokenizer-verified language subset; unsupported selections fail explicitly.
 - The model acquisition script stores GGUF and tokenizer files outside Git.
 - Adding `candle-transformers` is accepted for its tested quantized T5
@@ -72,3 +72,21 @@ The backend is exposed as `LoadedBackend::Small100 { Nllb, Small100Tokenizer }`
 so the NLLB variant and its tests remain byte-for-byte unchanged. Language
 coverage is a curated 98-language mapping between Fluent/NLLB codes and the
 M2M-100 short codes; Breton and Western Frisian are absent from NLLB's table.
+
+## Cycle 17 addition: capability registry and display identity
+
+Three product-level decisions were made in Cycle 17:
+
+1. **One capability API.** `registry::supports_language`, `language_list` and
+   `resolve_language_selection` are the only language-availability checks used
+   by the GUI, engine and catalogue. The NLLB table was corrected from 204 to
+   the 202 language tokens actually present in the tokenizer; load-time checks
+   reject an installed tokenizer that is missing an advertised code.
+2. **Explicit display identity.** The main selector, Model Manager, settings,
+   status bar and CLI use the real model names (NLLB-200 1.3B, NLLB-200 3.3B,
+   MADLAD-400 3B, SMaLL-100). Internal `fast`/`accurate`/`madlad`/`small`
+   identifiers, config keys and directories are unchanged for compatibility.
+3. **One brand symbol.** The turquoise F mark already used in the header is the
+   canonical application symbol. Window, Linux, Windows and macOS icons are
+   derived from that exact crop. The full logo and banner masters remain
+   untouched but are no longer used as icons.

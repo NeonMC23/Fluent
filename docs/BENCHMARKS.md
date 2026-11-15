@@ -222,7 +222,7 @@ prefix compatibility, not uniformly high quality. Alias mappings include
 `tgl_Latn→<2fil>`, `als_Latn→<2sq>`, `zsm_Latn→<2ms>`, `lvs_Latn→<2lv>`,
 `azj_Latn→<2az>`, and `nob_Latn→<2no>`.
 
-NLLB retains its full 204-language list; MADLAD exposes only the curated 72.
+NLLB retains its full 202-language list; MADLAD exposes only the curated 72.
 Unsupported selections are explicitly rejected and the GUI filters the picker.
 
 ## 9. Limitations

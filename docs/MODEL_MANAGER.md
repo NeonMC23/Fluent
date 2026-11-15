@@ -13,8 +13,8 @@ application, installer, portable archive or CI artifacts.
 |---|---|---:|---:|---|---|
 | NLLB-200 1.3B | NLLB-200 | 5.2 GB | ~5.5 GB | CC-BY-NC-4.0 | CPU Q8; CUDA/Metal if built |
 | NLLB-200 3.3B | NLLB-200 | 17.5 GB | ~17.6 GB | CC-BY-NC-4.0 | CPU Q8; CUDA/Metal if built |
-| MADLAD-400 3B MT | T5 | 1.7 GB | ~1.7 GB | Apache-2.0 | CPU q4_k greedy only |
-| SMaLL-100 | M2M-100 (12/3) | 1.4 GB | ~1.4 GB | MIT | CPU Q8; CUDA/Metal if built |
+| MADLAD-400 3B | T5 | 1.7 GB | ~1.7 GB | Apache-2.0 | CPU q4_k greedy only |
+| SMaLL-100 | M2M-100 (12/3) | 1.3 GB | 1.34 GB | MIT | CPU Q8; CUDA/Metal if built |
 
 The catalogue is defined once in `crates/fluent-core/src/model/registry.rs`.
 Required files, sizes, SHA-256 values, repository and pinned revision are in

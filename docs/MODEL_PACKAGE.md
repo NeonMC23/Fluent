@@ -39,8 +39,8 @@ The default install layout is:
 ~/.local/share/fluent/models/nllb-200-3.3b/
 ```
 
-`config.json` (the Fluent configuration, not the model config) maps the Fast and
-Accurate modes to directories. `--models-src DIR` tells the installer where to
+`config.json` (the Fluent configuration, not the model config) maps the
+NLLB-200 1.3B and 3.3B models to directories. `--models-src DIR` tells the installer where to
 find `<DIR>/nllb-200-1.3b/` and `<DIR>/nllb-200-3.3b/`.
 
 ## 2. `config.json`

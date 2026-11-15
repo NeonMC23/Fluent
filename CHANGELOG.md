@@ -7,6 +7,33 @@ versions until a release is explicitly published.
 
 ### Added
 
+- Canonical turquoise F mark used for the GUI header, window icon, Linux
+  launcher icon, Windows executable/window icon and macOS bundle/dock icon.
+  All platform variants derive reproducibly from the immutable logo master.
+- Explicit model identities in the main selector, Model Manager, settings,
+  status bar and CLI: NLLB-200 1.3B, NLLB-200 3.3B, MADLAD-400 3B and
+  SMaLL-100, each with a short positioning description.
+- Central language-capability reconciliation (`resolve_language_selection`)
+  that filters both selectors, clamps saved settings on startup and switches,
+  and rejects unsupported codes in the engine before a model load.
+- NLLB-200 language table corrected from 204 advertised codes to the 202
+  language tokens actually present in the tokenizer. `sat_Olck`, `arb_Latn`
+  and `min_Arab` are not supported by NLLB-200; `sat_Beng` is.
+- Load-time validation that installed NLLB, MADLAD and SMaLL-100 tokenizers
+  cover every advertised language.
+- Language-capability regression tests, including a gated real-tokenizer
+  coverage test for all four models.
+
+### Changed
+
+- Language buttons and picker rows show human-readable names and native names
+  instead of internal `xxx_Yyyy` codes.
+- The main model control is a compact selector with a descriptive list; the
+  old generic Fast/Accurate/MADLAD buttons are gone.
+- Branding generation now supports `--check` for byte-for-byte reproducibility.
+
+### Added
+
 - Native Model Manager with a four-model catalogue, download/repair,
   SHA-256 verification, progress/cancellation, safe removal, storage usage and
   an optional custom storage root.

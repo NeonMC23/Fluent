@@ -94,16 +94,25 @@ pub fn language_button(
     let (main, sub) = match code {
         Some(code) => {
             let language = fluent_core::find_language(code);
-            (
-                language.map(|l| l.name).unwrap_or(code).to_string(),
-                if automatic {
-                    format!("Automatic detection · {code}")
-                } else {
-                    code.to_string()
-                },
-            )
+            let name = language.map(|l| l.name).unwrap_or(code).to_string();
+            let native = language.map(|l| l.native).unwrap_or("");
+            let sub = if automatic {
+                "Automatic detection".to_string()
+            } else if !native.is_empty() && native != name {
+                native.to_string()
+            } else {
+                String::new()
+            };
+            (name, sub)
         }
-        None => (label.to_string(), String::new()),
+        None => (
+            label.to_string(),
+            if automatic {
+                "Detect from the text".to_string()
+            } else {
+                String::new()
+            },
+        ),
     };
 
     let text = if sub.is_empty() {
@@ -176,4 +185,40 @@ pub fn info_banner(ui: &mut Ui, palette: &Palette, message: &str) {
         .show(ui, |ui| {
             ui.label(RichText::new(message).size(12.5).color(palette.text));
         });
+}
+
+/// Compact model selector: full model identity + short positioning hint.
+pub fn model_button(
+    ui: &mut Ui,
+    palette: &Palette,
+    title: &str,
+    subtitle: &str,
+    width: f32,
+    enabled: bool,
+) -> Response {
+    let text = if subtitle.is_empty() {
+        RichText::new(title).color(palette.text).size(14.5)
+    } else {
+        RichText::new(format!("{title}\n{subtitle}"))
+            .color(palette.text)
+            .size(13.5)
+    };
+    let button = egui::Button::new(text)
+        .fill(palette.card_alt)
+        .stroke(egui::Stroke::new(1.0, palette.border))
+        .corner_radius(CornerRadius::same(11))
+        .min_size(egui::vec2(width, 44.0));
+    let response = ui
+        .add_enabled(enabled, button)
+        .on_hover_text("Choose the translation model");
+    let rect = response.rect;
+    let center = egui::pos2(rect.right() - 16.0, rect.center().y);
+    ui.painter().text(
+        center,
+        egui::Align2::CENTER_CENTER,
+        "▾",
+        egui::FontId::proportional(11.0),
+        palette.muted,
+    );
+    response
 }

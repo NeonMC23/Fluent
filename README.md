@@ -26,12 +26,13 @@ Translate across **190+ languages and dialects** with a clean desktop interface,
 
 | Feature | Description |
 | --- | --- |
-| 🌍 **190+ languages** | NLLB-200 covers a wide range of languages and dialects. |
+| 🌍 **200+ languages** | NLLB-200 covers 202 language and script variants. |
 | 🧠 **Local AI inference** | Run NLLB-200, MADLAD-400 or SMaLL-100 locally, without a server or cloud API. |
 | 🧬 **Three model families** | Choose NLLB-200 for broad coverage, MADLAD-400 for T5 translation, or SMaLL-100 for a fast 330M CPU model. |
+| 🌐 **Accurate language lists** | The source and target pickers show only the languages the selected model can actually translate. |
 | 📦 **Model Manager** | Detect, download, verify, load and safely remove models from the desktop app. |
-| ⚡ **Fast mode** | Use the smaller 1.3B model for lighter workloads. |
-| 🎯 **Accurate mode** | Choose the larger 3.3B model for translation quality; CPU auto uses Q8. |
+| ⚡ **NLLB-200 1.3B** | Balanced CPU translation with a 1.3B-parameter model. |
+| 🎯 **NLLB-200 3.3B** | Higher-quality, resource-intensive translation; CPU auto uses Q8. |
 | 🔎 **Automatic detection** | Detect the source language automatically. |
 | 🖥️ **Native desktop UI** | A responsive interface built with Rust and egui. |
 | 🎨 **Customizable appearance** | Light, dark, and system themes, plus accent colors. |
@@ -85,12 +86,12 @@ configuration and models, and never deletes user data. See
 
 Fluent supports four translation choices across three model families:
 
-| Mode | Model | Approximate storage | Intended use |
+| Model | Upstream | Approximate storage | Intended use |
 | --- | --- | ---: | --- |
-| ⚡ **Fast** | `facebook/nllb-200-1.3B` | 5.2 GB | Lower-memory systems |
-| 🎯 **Accurate** | `facebook/nllb-200-3.3B` | 17.5 GB | Systems with more memory or GPU resources |
-| 🧬 **MADLAD** | `google/madlad400-3b-mt` q4_k | 1.7 GB | CPU T5 translation |
-| 🪶 **Small** | `alirezamsh/small100` | 1.4 GB | Fast CPU translation with a 330M model |
+| ⚡ **NLLB-200 1.3B** | `facebook/nllb-200-1.3B` | 5.2 GB | Balanced CPU translation |
+| 🎯 **NLLB-200 3.3B** | `facebook/nllb-200-3.3B` | 17.5 GB | Higher-quality, resource-intensive translation |
+| 🧬 **MADLAD-400 3B** | `google/madlad400-3b-mt` q4_k | 1.7 GB | Alternative multilingual translation model |
+| 🪶 **SMaLL-100** | `alirezamsh/small100` | 1.3 GB | Lightweight and fast |
 
 > **Model licenses:** Meta releases the NLLB-200 weights under
 > **CC BY-NC 4.0 (non-commercial)**. MADLAD-400 is **Apache-2.0**. SMaLL-100 is
@@ -465,6 +466,7 @@ the unresolved tokenizer-redistribution question.
 - [Windows build guide](docs/WINDOWS.md)
 - [macOS build guide](docs/MACOS.md)
 - [Model Manager, storage and safe removal](docs/MODEL_MANAGER.md)
+- [Language support and the capability registry](docs/LANGUAGES.md)
 - [Remote catalogue schema and maintainer workflow](docs/CATALOGUE.md)
 - [SMaLL-100 setup, languages and licence](docs/SMALL100.md)
 - [MADLAD-400 setup, languages and measurements](docs/MADLAD.md)

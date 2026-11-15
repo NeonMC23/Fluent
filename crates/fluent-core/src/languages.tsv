@@ -39,7 +39,6 @@ ajp_Arab	South Levantine Arabic	South Levantine Arabic	0
 aka_Latn	Akan	Akan	0	
 amh_Ethi	Amharic	Amharic	0	
 apc_Arab	North Levantine Arabic	North Levantine Arabic	0	
-arb_Latn	Modern Standard Arabic (Romanized)	Modern Standard Arabic (Romanized)	0	
 ars_Arab	Najdi Arabic	Najdi Arabic	0	
 ary_Arab	Moroccan Arabic	Moroccan Arabic	0	
 arz_Arab	Egyptian Arabic	Egyptian Arabic	0	
@@ -129,7 +128,6 @@ mag_Deva	Magahi	Magahi	0
 mai_Deva	Maithili	Maithili	0	
 mal_Mlym	Malayalam	Malayalam	0	
 mar_Deva	Marathi	Marathi	0	
-min_Arab	Minangkabau (Arabic script)	Minangkabau (Arabic script)	0	
 min_Latn	Minangkabau (Latin script)	Minangkabau (Latin script)	0	
 mkd_Cyrl	Macedonian	Macedonian	0	
 plt_Latn	Plateau Malagasy	Plateau Malagasy	0	
@@ -157,7 +155,7 @@ quy_Latn	Ayacucho Quechua	Ayacucho Quechua	0
 run_Latn	Rundi	Rundi	0	
 sag_Latn	Sango	Sango	0	
 san_Deva	Sanskrit	Sanskrit	0	
-sat_Olck	Santali	Santali	0	
+sat_Beng	Santali	Santali	0
 scn_Latn	Sicilian	Sicilian	0	
 shn_Mymr	Shan	Shan	0	
 sin_Sinh	Sinhala	Sinhala	0	

@@ -240,7 +240,7 @@ pub const MODELS: &[ModelSpec] = &[
         storage: "5.2 GB FP32 · Q8 CPU",
         license: "CC-BY-NC-4.0",
         default_dir: "nllb-200-1.3b",
-        description: "Fast local translation · recommended on CPU",
+        description: "Balanced CPU translation",
         supports_beams: true,
         repo: "facebook/nllb-200-1.3B",
         revision: "b0de46b488af0cf31749cd8da5ed3171e11b2309",
@@ -255,7 +255,7 @@ pub const MODELS: &[ModelSpec] = &[
         storage: "17.5 GB FP32 · Q8 CPU",
         license: "CC-BY-NC-4.0",
         default_dir: "nllb-200-3.3b",
-        description: "Higher quality · GPU or lots of RAM",
+        description: "Higher-quality, resource-intensive translation",
         supports_beams: true,
         repo: "facebook/nllb-200-3.3B",
         revision: "1a07f7d195896b2114afcb79b7b57ab512e7b43e",
@@ -264,13 +264,13 @@ pub const MODELS: &[ModelSpec] = &[
     ModelSpec {
         mode: Mode::Madlad,
         id: "madlad400-3b-mt",
-        name: "MADLAD-400 3B MT",
+        name: "MADLAD-400 3B",
         architecture: Architecture::T5,
         parameters: "3B",
         storage: "1.7 GB q4_k GGUF",
         license: "Apache-2.0",
         default_dir: "madlad400-3b-mt",
-        description: "T5-based · 450+ languages · CPU greedy decoding",
+        description: "Alternative multilingual translation model",
         supports_beams: false,
         repo: "google/madlad400-3b-mt",
         revision: "fa184c675da0b5c9e1c8694fccd4e12e2d422094",
@@ -282,10 +282,10 @@ pub const MODELS: &[ModelSpec] = &[
         name: "SMaLL-100",
         architecture: Architecture::Small100,
         parameters: "330M",
-        storage: "1.4 GB FP32 · Q8 CPU",
+        storage: "1.3 GB FP32 · Q8 CPU",
         license: "MIT",
         default_dir: "small100",
-        description: "Lightweight · 98 mapped languages · fast CPU translation",
+        description: "Lightweight and fast",
         supports_beams: true,
         repo: "alirezamsh/small100",
         revision: "8ab680e26a596d2e3d2d2d17ae0f68df1037328c",
@@ -319,8 +319,48 @@ pub fn language_list(mode: Mode) -> Vec<&'static Language> {
         .collect()
 }
 
+/// A source/target language pair after reconciling it with a model's actual
+/// capability list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LanguageSelection {
+    pub source: String,
+    pub target: String,
+    pub adjusted: bool,
+}
+
+/// Clamps a language selection to a model's real capabilities.
+///
+/// `auto` is always a valid source. An unsupported explicit source falls back
+/// to automatic detection. An unsupported target falls back to the first
+/// available language in a stable preference order.
+pub fn resolve_language_selection(mode: Mode, source: &str, target: &str) -> LanguageSelection {
+    let mut adjusted = false;
+    let source = if source == "auto" || supports_language(mode, source) {
+        source.to_string()
+    } else {
+        adjusted = true;
+        "auto".to_string()
+    };
+    let target = if supports_language(mode, target) {
+        target.to_string()
+    } else {
+        adjusted = true;
+        ["eng_Latn", "fra_Latn", "deu_Latn", "spa_Latn", "zho_Hans"]
+            .into_iter()
+            .find(|code| supports_language(mode, code))
+            .or_else(|| language_list(mode).first().map(|language| language.code))
+            .unwrap_or("eng_Latn")
+            .to_string()
+    };
+    LanguageSelection {
+        source,
+        target,
+        adjusted,
+    }
+}
+
 /// Curated MADLAD target languages. Every entry is checked against the
-/// tokenizer at model load; NLLB keeps its full 204-language table.
+/// tokenizer at model load; NLLB keeps its full 202-language table.
 pub const MADLAD_LANGUAGES: &[MadladLanguage] = &[
     MadladLanguage {
         flores: "eng_Latn",
@@ -658,6 +698,31 @@ mod tests {
         }
         assert_eq!(language_list(Mode::Small).len(), 98);
         assert!(!supports_language(Mode::Small, "zho_Hant"));
+    }
+
+    #[test]
+    fn language_selection_is_clamped_to_each_model() {
+        // SMaLL-100 maps Simplified Chinese but not Traditional.
+        let selection = resolve_language_selection(Mode::Small, "zho_Hant", "zho_Hant");
+        assert_eq!(selection.source, "auto");
+        assert_eq!(selection.target, "eng_Latn");
+        assert!(selection.adjusted);
+
+        // MADLAD advertises both Chinese variants.
+        let selection = resolve_language_selection(Mode::Madlad, "zho_Hant", "zho_Hant");
+        assert_eq!(selection.source, "zho_Hant");
+        assert_eq!(selection.target, "zho_Hant");
+        assert!(!selection.adjusted);
+
+        // NLLB keeps the full table.
+        let selection = resolve_language_selection(Mode::Fast, "zho_Hant", "zho_Hant");
+        assert!(!selection.adjusted);
+
+        // Unknown codes never reach the backend.
+        let selection = resolve_language_selection(Mode::Small, "not_a_language", "not_a_language");
+        assert_eq!(selection.source, "auto");
+        assert!(supports_language(Mode::Small, &selection.target));
+        assert!(selection.adjusted);
     }
 
     #[test]

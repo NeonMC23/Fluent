@@ -823,6 +823,17 @@ impl Engine {
         if request.target_language == "auto" {
             return Err(Error::AutoTarget);
         }
+        // Never send a code the selected model does not implement. The GUI
+        // filters its selectors, but the CLI and library callers go through
+        // the same guard.
+        if request.source_language != "auto"
+            && !self.config.mode.supports_language(&request.source_language)
+        {
+            return Err(Error::UnknownLanguage(request.source_language.clone()));
+        }
+        if !self.config.mode.supports_language(&request.target_language) {
+            return Err(Error::UnknownLanguage(request.target_language.clone()));
+        }
 
         self.ensure_loaded(progress, cancel)?;
         if cancel.load(Ordering::Relaxed) {
@@ -1014,6 +1025,32 @@ fn dtype_label(dtype: DType) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unsupported_languages_are_rejected_before_loading() {
+        let dir = std::env::temp_dir().join("fluent-language-guard");
+        let mut engine = Engine::new(EngineConfig::new(Mode::Small, &dir));
+        let cancel = AtomicBool::new(false);
+
+        let request = TranslationRequest::new("hello", "eng_Latn", "zho_Hant");
+        let error = engine
+            .translate(&request, &mut |_| {}, &cancel)
+            .expect_err("SMaLL-100 must reject Traditional Chinese");
+        assert!(matches!(error, Error::UnknownLanguage(code) if code == "zho_Hant"));
+
+        let request = TranslationRequest::new("hello", "zho_Hant", "eng_Latn");
+        let error = engine
+            .translate(&request, &mut |_| {}, &cancel)
+            .expect_err("SMaLL-100 must reject an unsupported source");
+        assert!(matches!(error, Error::UnknownLanguage(code) if code == "zho_Hant"));
+
+        // A supported pair proceeds to the model check instead of the guard.
+        let request = TranslationRequest::new("hello", "eng_Latn", "fra_Latn");
+        let error = engine
+            .translate(&request, &mut |_| {}, &cancel)
+            .expect_err("the model directory does not exist");
+        assert!(matches!(error, Error::ModelNotFound(_)));
+    }
 
     #[test]
     fn missing_model_directory_is_reported_without_starting_a_load() {
