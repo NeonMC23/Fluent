@@ -4,6 +4,7 @@
 //! (`.bin`) or safetensors files, without Python, ONNX conversion or a
 //! background server.
 
+pub mod chat;
 pub mod config;
 pub mod detect;
 pub mod engine;
@@ -14,6 +15,7 @@ pub mod tokenizer;
 use std::fmt;
 use std::path::PathBuf;
 
+pub use chat::{ChatEngine, ChatMessage, ChatOptions, ChatReply, ChatRole};
 pub use config::ProjectConfig;
 pub use detect::Detection;
 pub use engine::{
@@ -25,9 +27,14 @@ pub use languages::{find_language, languages, popular_languages};
 pub use model::catalogue::{
     fetch as fetch_catalogue, Catalogue, CatalogueFile, CatalogueMatch, CatalogueModel,
 };
+pub use model::chat_registry::{
+    chat_model_spec, default_chat_model, ChatModelFile, ChatModelSpec, CHAT_MODELS,
+};
 pub use model::model_manager::{
-    available_bytes, directory_size, inspect_model, install_model, model_dir, remove_model,
-    verify_model, InstallState, ModelInstallation, TaskProgress, TaskStage,
+    available_bytes, chat_model_dir, directory_size, inspect_chat_model, inspect_model,
+    install_chat_model, install_model, installed_chat_models, model_dir, remove_chat_model,
+    remove_model, verify_chat_model, verify_model, InstallState, ManagedFile, ManagedModel,
+    ModelInstallation, TaskProgress, TaskStage,
 };
 pub use model::registry::model_spec_by_id;
 pub use model::registry::{

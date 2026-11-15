@@ -13,7 +13,8 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use fs2::available_space;
 use sha2::{Digest, Sha256};
 
-use crate::model::registry::{model_spec, ModelFile, ModelSpec};
+use crate::model::chat_registry::{ChatModelSpec, CHAT_MODELS};
+use crate::model::registry::{model_spec, ModelSpec};
 use crate::{Error, Mode, Result};
 
 const DISK_MARGIN: u64 = 256 * 1024 * 1024;
@@ -37,16 +38,86 @@ impl InstallState {
     }
 }
 
+/// One resolved file in a model manifest. Chat files can come from a
+/// different repository than the model card, so each file carries its own
+/// pinned repository and revision.
+#[derive(Debug, Clone)]
+pub struct ManagedFile {
+    pub name: &'static str,
+    pub size: u64,
+    pub sha256: &'static str,
+    pub repo: &'static str,
+    pub revision: &'static str,
+}
+
+impl ManagedFile {
+    pub fn url(&self) -> String {
+        format!(
+            "https://huggingface.co/{}/resolve/{}/{}",
+            self.repo, self.revision, self.name
+        )
+    }
+}
+
+/// Anything the native model manager can install and verify.
+pub trait ManagedModel {
+    fn id(&self) -> &'static str;
+    fn default_dir(&self) -> &'static str;
+    fn files(&self) -> Vec<ManagedFile>;
+}
+
+impl ManagedModel for ModelSpec {
+    fn id(&self) -> &'static str {
+        self.id
+    }
+    fn default_dir(&self) -> &'static str {
+        self.default_dir
+    }
+    fn files(&self) -> Vec<ManagedFile> {
+        self.files
+            .iter()
+            .map(|file| ManagedFile {
+                name: file.name,
+                size: file.size,
+                sha256: file.sha256,
+                repo: self.repo,
+                revision: self.revision,
+            })
+            .collect()
+    }
+}
+
+impl ManagedModel for ChatModelSpec {
+    fn id(&self) -> &'static str {
+        self.id
+    }
+    fn default_dir(&self) -> &'static str {
+        self.default_dir
+    }
+    fn files(&self) -> Vec<ManagedFile> {
+        self.files
+            .iter()
+            .map(|file| ManagedFile {
+                name: file.name,
+                size: file.size,
+                sha256: file.sha256,
+                repo: file.repo,
+                revision: file.revision,
+            })
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FileState {
-    pub file: ModelFile,
+    pub file: ManagedFile,
     pub actual_size: Option<u64>,
     pub sha_ok: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ModelInstallation {
-    pub mode: Mode,
+    pub id: &'static str,
     pub dir: PathBuf,
     pub state: InstallState,
     pub files: Vec<FileState>,
@@ -57,7 +128,7 @@ pub struct ModelInstallation {
 }
 
 impl ModelInstallation {
-    pub fn missing_files(&self) -> Vec<&ModelFile> {
+    pub fn missing_files(&self) -> Vec<&ManagedFile> {
         self.files
             .iter()
             .filter(|file| file.actual_size != Some(file.file.size))
@@ -65,7 +136,7 @@ impl ModelInstallation {
             .collect()
     }
 
-    pub fn bad_hashes(&self) -> Vec<&ModelFile> {
+    pub fn bad_hashes(&self) -> Vec<&ManagedFile> {
         self.files
             .iter()
             .filter(|file| file.sha_ok == Some(false))
@@ -91,7 +162,7 @@ impl TaskStage {
 
 #[derive(Debug, Clone)]
 pub struct TaskProgress {
-    pub mode: Mode,
+    pub id: &'static str,
     pub stage: TaskStage,
     pub file: Option<String>,
     pub file_index: usize,
@@ -104,12 +175,12 @@ pub struct TaskProgress {
     pub eta_seconds: Option<u64>,
 }
 
-pub fn inspect_model(mode: Mode, dir: &Path) -> ModelInstallation {
-    let spec = model_spec(mode);
-    let mut files = Vec::with_capacity(spec.files.len());
+pub fn inspect_managed(model: &dyn ManagedModel, dir: &Path) -> ModelInstallation {
+    let files = model.files();
+    let mut states = Vec::with_capacity(files.len());
     let mut installed_bytes = 0u64;
     let mut all_present = true;
-    for file in spec.files {
+    for file in &files {
         let path = dir.join(file.name);
         let actual_size = fs::metadata(&path)
             .ok()
@@ -121,46 +192,47 @@ pub fn inspect_model(mode: Mode, dir: &Path) -> ModelInstallation {
         if actual_size != Some(file.size) {
             all_present = false;
         }
-        files.push(FileState {
-            file: *file,
+        states.push(FileState {
+            file: file.clone(),
             actual_size,
             sha_ok: None,
         });
     }
-    let state =
-        if !dir.is_dir() || installed_bytes == 0 && files.iter().all(|f| f.actual_size.is_none()) {
-            InstallState::NotInstalled
-        } else if all_present {
-            InstallState::Installed
-        } else {
-            InstallState::Incomplete
-        };
+    let state = if !dir.is_dir()
+        || installed_bytes == 0 && states.iter().all(|f| f.actual_size.is_none())
+    {
+        InstallState::NotInstalled
+    } else if all_present {
+        InstallState::Installed
+    } else {
+        InstallState::Incomplete
+    };
     ModelInstallation {
-        mode,
+        id: model.id(),
         dir: dir.to_path_buf(),
         state,
-        files,
+        files: states,
         installed_bytes,
-        required_bytes: spec.download_bytes(),
+        required_bytes: files.iter().map(|file| file.size).sum(),
         verified: false,
     }
 }
 
-pub fn verify_model(
-    mode: Mode,
+pub fn verify_managed(
+    model: &dyn ManagedModel,
     dir: &Path,
     progress: &mut dyn FnMut(TaskProgress),
     cancel: &AtomicBool,
 ) -> Result<ModelInstallation> {
-    let spec = model_spec(mode);
-    let mut installation = inspect_model(mode, dir);
+    let files = model.files();
+    let mut installation = inspect_managed(model, dir);
     if installation.state == InstallState::NotInstalled {
         return Ok(installation);
     }
-    let total_bytes = spec.download_bytes();
+    let total_bytes: u64 = files.iter().map(|file| file.size).sum();
     let mut completed = 0u64;
     let started = Instant::now();
-    for (index, file) in spec.files.iter().enumerate() {
+    for (index, file) in files.iter().enumerate() {
         if cancel.load(Ordering::Relaxed) {
             return Err(Error::Cancelled);
         }
@@ -183,8 +255,8 @@ pub fn verify_model(
             total_bytes,
             file,
             index,
-            spec.files.len(),
-            mode,
+            files.len(),
+            model.id(),
             TaskStage::Verifying,
             started,
             progress,
@@ -213,22 +285,22 @@ pub fn verify_model(
     Ok(installation)
 }
 
-pub fn install_model(
-    mode: Mode,
+pub fn install_managed(
+    model: &dyn ManagedModel,
     dir: &Path,
     progress: &mut dyn FnMut(TaskProgress),
     cancel: &AtomicBool,
 ) -> Result<ModelInstallation> {
-    let spec = model_spec(mode);
+    let files = model.files();
     fs::create_dir_all(dir)?;
-    let total_bytes = spec.download_bytes();
+    let total_bytes: u64 = files.iter().map(|file| file.size).sum();
     let mut completed = 0u64;
 
     // Check which files are already valid, and preserve invalid files instead
     // of deleting any user bytes. A failed download leaves the valid set
     // intact.
-    let mut plan: Vec<(&ModelFile, PathBuf, u64)> = Vec::new();
-    for file in spec.files {
+    let mut plan: Vec<(&ManagedFile, PathBuf, u64)> = Vec::new();
+    for file in &files {
         if cancel.load(Ordering::Relaxed) {
             return Err(Error::Cancelled);
         }
@@ -264,8 +336,8 @@ pub fn install_model(
             return Err(Error::Cancelled);
         }
         download_file(
-            spec,
             file,
+            model.id(),
             target,
             *part_size,
             completed.saturating_sub(*part_size),
@@ -279,7 +351,7 @@ pub fn install_model(
     }
 
     // A complete hash pass is the only state that may be called installed.
-    let installation = verify_model(mode, dir, progress, cancel)?;
+    let installation = verify_managed(model, dir, progress, cancel)?;
     if installation.state != InstallState::Installed {
         return Err(Error::Other(format!(
             "model verification failed after download: {}",
@@ -289,20 +361,19 @@ pub fn install_model(
     Ok(installation)
 }
 
-pub fn remove_model(mode: Mode, dir: &Path, models_root: &Path) -> Result<()> {
+pub fn remove_managed(model: &dyn ManagedModel, dir: &Path, models_root: &Path) -> Result<()> {
     if !dir.exists() {
         return Ok(());
     }
     let root = fs::canonicalize(models_root)?;
     let target = fs::canonicalize(dir)?;
-    let spec = model_spec(mode);
     if target == root || !target.starts_with(&root) {
         return Err(Error::Other(format!(
             "refusing to remove a model outside the managed storage root: {}",
             target.display()
         )));
     }
-    if target.file_name().and_then(|name| name.to_str()) != Some(spec.default_dir) {
+    if target.file_name().and_then(|name| name.to_str()) != Some(model.default_dir()) {
         return Err(Error::Other(format!(
             "refusing to remove an unexpected model directory: {}",
             target.display()
@@ -310,6 +381,72 @@ pub fn remove_model(mode: Mode, dir: &Path, models_root: &Path) -> Result<()> {
     }
     fs::remove_dir_all(&target)?;
     Ok(())
+}
+
+// Translation wrappers keep the existing public API.
+pub fn inspect_model(mode: Mode, dir: &Path) -> ModelInstallation {
+    inspect_managed(model_spec(mode), dir)
+}
+
+pub fn verify_model(
+    mode: Mode,
+    dir: &Path,
+    progress: &mut dyn FnMut(TaskProgress),
+    cancel: &AtomicBool,
+) -> Result<ModelInstallation> {
+    verify_managed(model_spec(mode), dir, progress, cancel)
+}
+
+pub fn install_model(
+    mode: Mode,
+    dir: &Path,
+    progress: &mut dyn FnMut(TaskProgress),
+    cancel: &AtomicBool,
+) -> Result<ModelInstallation> {
+    install_managed(model_spec(mode), dir, progress, cancel)
+}
+
+pub fn remove_model(mode: Mode, dir: &Path, models_root: &Path) -> Result<()> {
+    remove_managed(model_spec(mode), dir, models_root)
+}
+
+// Chat wrappers use the same downloader, verifier and removal boundaries.
+pub fn inspect_chat_model(spec: &ChatModelSpec, dir: &Path) -> ModelInstallation {
+    inspect_managed(spec, dir)
+}
+
+pub fn verify_chat_model(
+    spec: &ChatModelSpec,
+    dir: &Path,
+    progress: &mut dyn FnMut(TaskProgress),
+    cancel: &AtomicBool,
+) -> Result<ModelInstallation> {
+    verify_managed(spec, dir, progress, cancel)
+}
+
+pub fn install_chat_model(
+    spec: &ChatModelSpec,
+    dir: &Path,
+    progress: &mut dyn FnMut(TaskProgress),
+    cancel: &AtomicBool,
+) -> Result<ModelInstallation> {
+    install_managed(spec, dir, progress, cancel)
+}
+
+pub fn remove_chat_model(spec: &ChatModelSpec, dir: &Path, models_root: &Path) -> Result<()> {
+    remove_managed(spec, dir, models_root)
+}
+
+pub fn chat_model_dir(root: &Path, spec: &ChatModelSpec) -> PathBuf {
+    root.join(spec.default_dir)
+}
+
+/// Chat model directories currently present under a storage root.
+pub fn installed_chat_models(root: &Path) -> Vec<&'static ChatModelSpec> {
+    CHAT_MODELS
+        .iter()
+        .filter(|spec| chat_model_dir(root, spec).is_dir())
+        .collect()
 }
 
 pub fn directory_size(dir: &Path) -> u64 {
@@ -397,10 +534,10 @@ fn hash_file(
     path: &Path,
     completed: u64,
     total: u64,
-    file: &ModelFile,
+    file: &ManagedFile,
     index: usize,
     file_count: usize,
-    mode: Mode,
+    id: &'static str,
     stage: TaskStage,
     started: Instant,
     progress: &mut dyn FnMut(TaskProgress),
@@ -422,7 +559,7 @@ fn hash_file(
         done = done.saturating_add(count as u64);
         let elapsed = started.elapsed().as_secs_f64().max(0.001);
         progress(TaskProgress {
-            mode,
+            id,
             stage,
             file: Some(file.name.to_string()),
             file_index: index,
@@ -447,8 +584,8 @@ fn hash_file(
 
 #[allow(clippy::too_many_arguments)]
 fn download_file(
-    spec: &ModelSpec,
-    file: &ModelFile,
+    file: &ManagedFile,
+    id: &'static str,
     target: &Path,
     part_size: u64,
     completed: u64,
@@ -458,20 +595,17 @@ fn download_file(
     progress: &mut dyn FnMut(TaskProgress),
     cancel: &AtomicBool,
 ) -> Result<()> {
-    let url = format!(
-        "https://huggingface.co/{}/resolve/{}/{}",
-        spec.repo, spec.revision, file.name
-    );
+    let url = file.url();
     download_url(
-        spec, file, target, part_size, completed, total, file_index, file_count, &url, progress,
+        file, id, target, part_size, completed, total, file_index, file_count, &url, progress,
         cancel,
     )
 }
 
 #[allow(clippy::too_many_arguments)]
 fn download_url(
-    spec: &ModelSpec,
-    file: &ModelFile,
+    file: &ManagedFile,
+    id: &'static str,
     target: &Path,
     part_size: u64,
     completed: u64,
@@ -569,7 +703,7 @@ fn download_url(
         let total_done = completed.saturating_add(done);
         let speed = (done.saturating_sub(if append { part_size } else { 0 })) as f64 / elapsed;
         progress(TaskProgress {
-            mode: spec.mode,
+            id,
             stage: TaskStage::Downloading,
             file: Some(file.name.to_string()),
             file_index,
@@ -692,6 +826,49 @@ mod tests {
     }
 
     #[test]
+    fn chat_models_use_the_same_installer_and_removal_boundaries() {
+        let spec = crate::CHAT_MODELS
+            .iter()
+            .find(|spec| spec.id == "qwen2.5-0.5b-instruct")
+            .unwrap();
+        let root = temp_dir("chat-root");
+        let dir = chat_model_dir(&root, spec);
+        fs::create_dir_all(&dir).unwrap();
+        for file in spec.files {
+            let handle = File::create(dir.join(file.name)).unwrap();
+            handle.set_len(file.size).unwrap();
+        }
+        let installation = inspect_chat_model(spec, &dir);
+        assert_eq!(installation.state, InstallState::Installed);
+        assert_eq!(installation.id, spec.id);
+        assert_eq!(installation.required_bytes, spec.download_bytes());
+        assert_eq!(installation.files.len(), spec.files.len());
+        assert!(installation
+            .files
+            .iter()
+            .all(|file| file.file.url().starts_with("https://huggingface.co/")));
+
+        remove_chat_model(spec, &dir, &root).unwrap();
+        assert!(!dir.exists());
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn chat_removal_rejects_an_unexpected_directory_name() {
+        let spec = crate::CHAT_MODELS
+            .iter()
+            .find(|spec| spec.id == "qwen2.5-0.5b-instruct")
+            .unwrap();
+        let root = temp_dir("chat-remove-root");
+        let wrong = root.join("not-the-chat-directory");
+        fs::create_dir_all(&wrong).unwrap();
+        let error = remove_chat_model(spec, &wrong, &root).unwrap_err();
+        assert!(error.to_string().contains("unexpected model directory"));
+        assert!(wrong.exists());
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
     fn registry_manifests_are_unique_and_sized() {
         for spec in MODELS {
             assert!(!spec.files.is_empty());
@@ -713,10 +890,12 @@ mod download_tests {
     use std::net::TcpListener;
     use std::thread;
 
-    const TEST_FILE: ModelFile = ModelFile {
+    const TEST_FILE: ManagedFile = ManagedFile {
         name: "test.bin",
         size: 5,
         sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+        repo: "test/model",
+        revision: "0000000000000000000000000000000000000000",
     };
 
     fn serve_once(partial: bool, body: &'static [u8]) -> String {
@@ -756,11 +935,10 @@ mod download_tests {
         let target = dir.join("test.bin");
         fs::write(part_path(&target), b"he").unwrap();
         let url = serve_once(true, b"llo");
-        let spec = model_spec(Mode::Fast);
         let cancel = AtomicBool::new(false);
         download_url(
-            spec,
             &TEST_FILE,
+            "test",
             &target,
             2,
             0,
@@ -790,11 +968,10 @@ mod download_tests {
         fs::create_dir_all(&dir).unwrap();
         let target = dir.join("test.bin");
         let url = serve_once(false, b"world");
-        let spec = model_spec(Mode::Fast);
         let cancel = AtomicBool::new(false);
         let error = download_url(
-            spec,
             &TEST_FILE,
+            "test",
             &target,
             0,
             0,
@@ -825,11 +1002,10 @@ mod download_tests {
         fs::create_dir_all(&dir).unwrap();
         let target = dir.join("test.bin");
         let url = serve_once(false, b"hello");
-        let spec = model_spec(Mode::Fast);
         let cancel = AtomicBool::new(true);
         let error = download_url(
-            spec,
             &TEST_FILE,
+            "test",
             &target,
             0,
             0,

@@ -5,14 +5,17 @@ use std::time::{Duration, Instant};
 
 use eframe::egui;
 use fluent_core::{
-    available_bytes, directory_size, estimate_memory_for_mode, fetch_catalogue, find_language,
-    inspect_model, install_model, language_list, languages, model_spec, popular_languages,
-    remove_model, resolve_language_selection, verify_model, Architecture, Catalogue, DeviceChoice,
+    available_bytes, chat_model_spec, default_chat_model, directory_size, estimate_memory_for_mode,
+    fetch_catalogue, find_language, inspect_chat_model, inspect_model, install_chat_model,
+    install_model, language_list, languages, model_spec, popular_languages, remove_chat_model,
+    remove_model, resolve_language_selection, verify_chat_model, verify_model, Architecture,
+    Catalogue, ChatMessage, ChatModelSpec, ChatOptions, ChatReply, ChatRole, DeviceChoice,
     EngineConfig, EngineStatus, InstallState, Language, Mode, ModelInstallation, Precision,
     Progress, ProjectConfig, TaskProgress, TaskStage, TranslationRequest, TranslationResult,
-    MODELS,
+    CHAT_MODELS, MODELS,
 };
 
+use crate::chat_worker::{self, ChatWorkerHandle};
 use crate::settings::{settings_path, OutputLengthSetting, Settings, ThemeChoice, ACCENTS};
 use crate::theme::{self, Palette};
 use crate::widgets;
@@ -29,8 +32,30 @@ enum ManagerEvent {
     Done(Result<ModelInstallation, String>),
 }
 
+#[derive(Debug, Clone, Copy)]
+enum ManagerKind {
+    Translation(Mode),
+    Chat(&'static ChatModelSpec),
+}
+
+impl ManagerKind {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Translation(mode) => model_spec(mode).id,
+            Self::Chat(spec) => spec.id,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Translation(mode) => model_spec(mode).name,
+            Self::Chat(spec) => spec.name,
+        }
+    }
+}
+
 struct ManagerTask {
-    mode: Mode,
+    kind: ManagerKind,
     op: ManagerOp,
     rx: mpsc::Receiver<ManagerEvent>,
     cancel: Arc<AtomicBool>,
@@ -38,6 +63,13 @@ struct ManagerTask {
 
 struct CatalogueTask {
     rx: mpsc::Receiver<Result<Catalogue, String>>,
+}
+
+fn chat_index(id: &str) -> usize {
+    CHAT_MODELS
+        .iter()
+        .position(|spec| spec.id == id)
+        .unwrap_or(0)
 }
 
 fn mode_index(mode: Mode) -> usize {
@@ -59,10 +91,25 @@ enum PickerTarget {
     Target,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum View {
+    Translate,
+    Chat,
+}
+
+#[derive(Debug, Clone)]
+struct ChatBubble {
+    role: ChatRole,
+    content: String,
+    cancelled: bool,
+}
+
 pub struct FluentApp {
     project: ProjectConfig,
     settings: Settings,
     worker: WorkerHandle,
+    chat_worker: ChatWorkerHandle,
+    view: View,
     palette: Palette,
     logo: egui::TextureHandle,
     applied_theme: Option<(ThemeChoice, [u8; 3])>,
@@ -92,10 +139,23 @@ pub struct FluentApp {
     manager_task: Option<ManagerTask>,
     manager_progress: Option<TaskProgress>,
     manager_reports: [Option<ModelInstallation>; 4],
+    chat_reports: Vec<Option<ModelInstallation>>,
     manager_error: Option<String>,
     manager_notice: Option<(String, Instant)>,
-    confirm_download: Option<Mode>,
-    confirm_remove: Option<Mode>,
+    confirm_download: Option<ManagerKind>,
+    confirm_remove: Option<ManagerKind>,
+
+    chat_messages: Vec<ChatBubble>,
+    chat_input: String,
+    chat_job: u64,
+    chat_busy: bool,
+    chat_loading: bool,
+    chat_loaded: bool,
+    chat_error: Option<String>,
+    chat_notice: Option<(String, Instant)>,
+    chat_truncated: bool,
+    chat_model_picker_open: bool,
+    chat_last_reply: Option<ChatReply>,
 
     catalogue: Option<Catalogue>,
     catalogue_task: Option<CatalogueTask>,
@@ -142,6 +202,7 @@ impl FluentApp {
         }
         let palette = theme::apply(&cc.egui_ctx, settings.theme, settings.accent);
         let worker = WorkerHandle::spawn(cc.egui_ctx.clone());
+        let chat_worker = ChatWorkerHandle::spawn(cc.egui_ctx.clone());
         let source_text = settings.last_source.clone();
         let logo = cc.egui_ctx.load_texture(
             "fluent-mark",
@@ -154,6 +215,8 @@ impl FluentApp {
             applied_theme: Some((settings.theme, settings.accent)),
             settings,
             worker,
+            chat_worker,
+            view: View::Translate,
             palette,
             logo,
             source_text,
@@ -178,10 +241,22 @@ impl FluentApp {
             manager_task: None,
             manager_progress: None,
             manager_reports: [None, None, None, None],
+            chat_reports: vec![None; CHAT_MODELS.len()],
             manager_error: None,
             manager_notice: None,
             confirm_download: None,
             confirm_remove: None,
+            chat_messages: Vec::new(),
+            chat_input: String::new(),
+            chat_job: 0,
+            chat_busy: false,
+            chat_loading: false,
+            chat_loaded: false,
+            chat_error: None,
+            chat_notice: None,
+            chat_truncated: false,
+            chat_model_picker_open: false,
+            chat_last_reply: None,
             catalogue: None,
             catalogue_task: None,
             catalogue_error: None,
@@ -324,6 +399,16 @@ impl FluentApp {
         }
     }
 
+    fn chat_installation_for(&self, spec: &ChatModelSpec) -> ModelInstallation {
+        let dir = self.chat_dir_for(spec);
+        if let Some(report) = &self.chat_reports[chat_index(spec.id)] {
+            if report.dir == dir && report.verified {
+                return report.clone();
+            }
+        }
+        inspect_chat_model(spec, &dir)
+    }
+
     fn installation_for(&self, mode: Mode) -> ModelInstallation {
         let dir = self.model_dir_for(mode);
         if let Some(report) = &self.manager_reports[mode_index(mode)] {
@@ -385,7 +470,7 @@ impl FluentApp {
         let Some(task) = self.manager_task.as_ref() else {
             return;
         };
-        let mode = task.mode;
+        let kind = task.kind;
         let op = task.op;
         let event = task.rx.try_recv();
         match event {
@@ -398,12 +483,19 @@ impl FluentApp {
                 self.manager_progress = None;
                 match result {
                     Ok(report) => {
-                        self.manager_reports[mode_index(mode)] = Some(report.clone());
+                        match kind {
+                            ManagerKind::Translation(mode) => {
+                                self.manager_reports[mode_index(mode)] = Some(report.clone());
+                            }
+                            ManagerKind::Chat(spec) => {
+                                self.chat_reports[chat_index(spec.id)] = Some(report.clone());
+                            }
+                        }
                         if report.state == InstallState::Installed {
                             self.manager_notice = Some((
                                 format!(
                                     "{}: {} complete",
-                                    model_spec(mode).name,
+                                    kind.name(),
                                     if op == ManagerOp::Install {
                                         "installation"
                                     } else {
@@ -415,7 +507,7 @@ impl FluentApp {
                         } else {
                             self.manager_error = Some(format!(
                                 "{}: {}",
-                                model_spec(mode).name,
+                                kind.name(),
                                 match report.state {
                                     InstallState::Corrupt => "checksum verification failed",
                                     InstallState::Incomplete =>
@@ -427,7 +519,7 @@ impl FluentApp {
                         }
                     }
                     Err(error) => {
-                        self.manager_error = Some(format!("{}: {error}", model_spec(mode).name));
+                        self.manager_error = Some(format!("{}: {error}", kind.name()));
                     }
                 }
                 ctx.request_repaint();
@@ -441,11 +533,14 @@ impl FluentApp {
         }
     }
 
-    fn begin_manager_task(&mut self, mode: Mode, op: ManagerOp, ctx: &egui::Context) {
+    fn begin_manager_task(&mut self, kind: ManagerKind, op: ManagerOp, ctx: &egui::Context) {
         if self.manager_task.is_some() || self.busy {
             return;
         }
-        let dir = self.model_dir_for(mode);
+        let dir = match kind {
+            ManagerKind::Translation(mode) => self.model_dir_for(mode),
+            ManagerKind::Chat(spec) => self.chat_dir_for(spec),
+        };
         if op == ManagerOp::Install && path_is_in_git_repo(&dir) {
             self.manager_error =
                 Some("Model downloads cannot be placed inside a Git repository.".to_string());
@@ -455,21 +550,32 @@ impl FluentApp {
         let cancel = Arc::new(AtomicBool::new(false));
         let thread_cancel = Arc::clone(&cancel);
         let thread_ctx = ctx.clone();
+        let thread_kind = kind;
         std::thread::spawn(move || {
             let mut report = |progress: TaskProgress| {
                 let _ = tx.send(ManagerEvent::Progress(progress));
                 thread_ctx.request_repaint();
             };
-            let result = match op {
-                ManagerOp::Install => install_model(mode, &dir, &mut report, &thread_cancel),
-                ManagerOp::Verify => verify_model(mode, &dir, &mut report, &thread_cancel),
+            let result = match (thread_kind, op) {
+                (ManagerKind::Translation(mode), ManagerOp::Install) => {
+                    install_model(mode, &dir, &mut report, &thread_cancel)
+                }
+                (ManagerKind::Translation(mode), ManagerOp::Verify) => {
+                    verify_model(mode, &dir, &mut report, &thread_cancel)
+                }
+                (ManagerKind::Chat(spec), ManagerOp::Install) => {
+                    install_chat_model(spec, &dir, &mut report, &thread_cancel)
+                }
+                (ManagerKind::Chat(spec), ManagerOp::Verify) => {
+                    verify_chat_model(spec, &dir, &mut report, &thread_cancel)
+                }
             }
             .map_err(|error| error.to_string());
             let _ = tx.send(ManagerEvent::Done(result));
             thread_ctx.request_repaint();
         });
         self.manager_task = Some(ManagerTask {
-            mode,
+            kind,
             op,
             rx,
             cancel,
@@ -477,7 +583,10 @@ impl FluentApp {
         self.manager_progress = None;
         self.manager_error = None;
         self.manager_notice = None;
-        self.manager_reports[mode_index(mode)] = None;
+        match kind {
+            ManagerKind::Translation(mode) => self.manager_reports[mode_index(mode)] = None,
+            ManagerKind::Chat(spec) => self.chat_reports[chat_index(spec.id)] = None,
+        }
     }
 
     fn cancel_manager_task(&mut self) {
@@ -493,6 +602,7 @@ impl FluentApp {
             self.settings.save();
             self.status = None;
             self.manager_reports = [None, None, None, None];
+            self.chat_reports = vec![None; CHAT_MODELS.len()];
             self.manager_notice = Some((
                 "Using the model paths from config.json".to_string(),
                 Instant::now(),
@@ -534,6 +644,7 @@ impl FluentApp {
         self.status = None;
         self.result = None;
         self.manager_reports = [None, None, None, None];
+        self.chat_reports = vec![None; CHAT_MODELS.len()];
         self.manager_error = None;
         self.manager_notice = Some((
             "Storage folder set. Existing models were not moved.".to_string(),
@@ -541,13 +652,15 @@ impl FluentApp {
         ));
     }
 
-    fn remove_manager_model(&mut self, mode: Mode) {
-        if self.busy
-            || self
+    fn remove_manager_model(&mut self, kind: ManagerKind) {
+        let loaded = match kind {
+            ManagerKind::Translation(mode) => self
                 .status
                 .as_ref()
-                .is_some_and(|status| status.mode == mode)
-        {
+                .is_some_and(|status| status.mode == mode),
+            ManagerKind::Chat(_) => self.chat_loaded || self.chat_busy,
+        };
+        if self.busy || loaded {
             self.manager_error = Some(
                 "Unload the model before removing it; Fluent never deletes a loaded model."
                     .to_string(),
@@ -558,16 +671,29 @@ impl FluentApp {
             self.manager_error = Some("Wait for the current model task to finish.".to_string());
             return;
         }
-        let dir = self.model_dir_for(mode);
+        let dir = match kind {
+            ManagerKind::Translation(mode) => self.model_dir_for(mode),
+            ManagerKind::Chat(spec) => self.chat_dir_for(spec),
+        };
         let root = dir
             .parent()
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
-        match remove_model(mode, &dir, &root) {
+        let result = match kind {
+            ManagerKind::Translation(mode) => remove_model(mode, &dir, &root),
+            ManagerKind::Chat(spec) => remove_chat_model(spec, &dir, &root),
+        };
+        match result {
             Ok(()) => {
-                self.manager_reports[mode_index(mode)] = None;
-                self.manager_notice =
-                    Some((format!("{} removed", model_spec(mode).name), Instant::now()));
+                match kind {
+                    ManagerKind::Translation(mode) => {
+                        self.manager_reports[mode_index(mode)] = None;
+                    }
+                    ManagerKind::Chat(spec) => {
+                        self.chat_reports[chat_index(spec.id)] = None;
+                    }
+                }
+                self.manager_notice = Some((format!("{} removed", kind.name()), Instant::now()));
             }
             Err(error) => self.manager_error = Some(error.to_string()),
         }
@@ -704,10 +830,37 @@ impl FluentApp {
                         .color(palette.text),
                 );
                 ui.label(
-                    egui::RichText::new("Local translation · on-device")
+                    egui::RichText::new("Local translation and chat · on-device")
                         .size(11.5)
                         .color(palette.muted),
                 );
+            });
+
+            ui.add_space(18.0);
+            ui.horizontal(|ui| {
+                for (view, label) in [(View::Translate, "Translate"), (View::Chat, "Chat")] {
+                    let selected = self.view == view;
+                    let fill = if selected {
+                        palette.accent
+                    } else {
+                        palette.card_alt
+                    };
+                    let color = if selected {
+                        palette.on_accent
+                    } else {
+                        palette.muted
+                    };
+                    let response = ui.add(
+                        egui::Button::new(egui::RichText::new(label).size(12.5).color(color))
+                            .fill(fill)
+                            .stroke(egui::Stroke::new(1.0, palette.border))
+                            .corner_radius(egui::CornerRadius::same(255))
+                            .min_size(egui::vec2(86.0, 32.0)),
+                    );
+                    if response.clicked() && !selected {
+                        self.select_view(view);
+                    }
+                }
             });
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -758,7 +911,9 @@ impl FluentApp {
             .as_ref()
             .and_then(|progress| progress.fraction)
             .unwrap_or(0.0);
-        let (color, label) = if self.busy && self.loading {
+        let (color, label) = if self.view == View::Chat {
+            self.chat_status()
+        } else if self.busy && self.loading {
             (
                 palette.warning,
                 format!("Loading · {:.0} %", fraction * 100.0),
@@ -791,6 +946,36 @@ impl FluentApp {
                     ui.label(egui::RichText::new(label).size(11.5).color(palette.muted));
                 });
             });
+    }
+
+    fn chat_status(&self) -> (egui::Color32, String) {
+        let palette = &self.palette;
+        if self.chat_busy && self.chat_loading {
+            (palette.warning, "Loading chat model".to_string())
+        } else if self.chat_busy {
+            (palette.accent, "Generating".to_string())
+        } else if self.chat_error.is_some() {
+            (palette.danger, "Error".to_string())
+        } else if let Some((notice, at)) = &self.chat_notice {
+            if at.elapsed() < Duration::from_secs(4) {
+                (palette.warning, notice.clone())
+            } else {
+                self.chat_ready_label()
+            }
+        } else {
+            self.chat_ready_label()
+        }
+    }
+
+    fn chat_ready_label(&self) -> (egui::Color32, String) {
+        if self.chat_available() {
+            (
+                self.palette.success,
+                format!("Ready · {} · CPU", self.chat_spec().name),
+            )
+        } else {
+            (self.palette.faint, "Chat model not installed".to_string())
+        }
     }
 
     fn ready_label(&self) -> (egui::Color32, String) {
@@ -945,9 +1130,755 @@ impl FluentApp {
     // Cards
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // Chat
+    // ------------------------------------------------------------------
+
+    fn chat_spec(&self) -> &'static ChatModelSpec {
+        chat_model_spec(&self.settings.chat_model).unwrap_or_else(default_chat_model)
+    }
+
+    fn chat_dir_for(&self, spec: &ChatModelSpec) -> PathBuf {
+        let raw = self.settings.models_root.trim();
+        if raw.is_empty() {
+            self.project.chat_model_path(spec.id)
+        } else {
+            PathBuf::from(raw).join(spec.default_dir)
+        }
+    }
+
+    fn chat_model_dir(&self) -> PathBuf {
+        self.chat_dir_for(self.chat_spec())
+    }
+
+    fn chat_installation(&self) -> ModelInstallation {
+        self.chat_installation_for(self.chat_spec())
+    }
+
+    fn chat_available(&self) -> bool {
+        self.chat_installation().state == InstallState::Installed
+    }
+
+    fn select_view(&mut self, view: View) {
+        if self.view == view {
+            return;
+        }
+        if self.busy {
+            self.notice = Some((
+                "Finish or cancel the translation before switching views.".to_string(),
+                Instant::now(),
+            ));
+            return;
+        }
+        match view {
+            View::Chat => {
+                // Keep only one heavyweight model resident.
+                if self.status.is_some() {
+                    self.unload_model();
+                }
+                self.view = View::Chat;
+                self.chat_error = None;
+            }
+            View::Translate => {
+                if self.chat_busy {
+                    self.chat_cancel();
+                }
+                self.chat_worker.submit(chat_worker::Command::Unload);
+                self.chat_busy = false;
+                self.chat_loading = false;
+                self.view = View::Translate;
+            }
+        }
+    }
+
+    fn select_chat_model(&mut self, id: &str) {
+        if self.chat_busy {
+            self.chat_cancel();
+        }
+        if self.settings.chat_model == id {
+            return;
+        }
+        let spec = chat_model_spec(id).unwrap_or_else(default_chat_model);
+        self.settings.chat_model = spec.id.to_string();
+        self.settings.save();
+        self.chat_worker.submit(chat_worker::Command::Unload);
+        self.chat_messages.clear();
+        self.chat_last_reply = None;
+        self.chat_error = None;
+        self.chat_truncated = false;
+        self.chat_notice = Some((
+            format!(
+                "Chat model changed to {}. Started a new conversation.",
+                spec.name
+            ),
+            Instant::now(),
+        ));
+    }
+
+    fn chat_send(&mut self) {
+        if self.chat_busy {
+            return;
+        }
+        let text = self.chat_input.trim().to_string();
+        if text.is_empty() {
+            return;
+        }
+        if !self.chat_available() {
+            self.chat_error =
+                Some("The chat model is not installed. Open Models to download it.".to_string());
+            return;
+        }
+        self.chat_messages.push(ChatBubble {
+            role: ChatRole::User,
+            content: text,
+            cancelled: false,
+        });
+        self.chat_messages.push(ChatBubble {
+            role: ChatRole::Assistant,
+            content: String::new(),
+            cancelled: false,
+        });
+        self.chat_input.clear();
+        self.chat_job += 1;
+        self.chat_busy = true;
+        self.chat_loading = false;
+        self.chat_error = None;
+        self.chat_truncated = false;
+        self.chat_notice = None;
+        let messages = self.chat_messages[..self.chat_messages.len() - 1]
+            .iter()
+            .filter(|bubble| {
+                !(bubble.role == ChatRole::Assistant && bubble.content.trim().is_empty())
+            })
+            .map(|bubble| ChatMessage {
+                role: bubble.role,
+                content: bubble.content.clone(),
+            })
+            .collect::<Vec<_>>();
+        let spec = self.chat_spec();
+        let options = ChatOptions {
+            max_context: spec.context_tokens,
+            max_new_tokens: 512,
+            ..Default::default()
+        };
+        self.chat_worker.submit(chat_worker::Command::Send {
+            job: self.chat_job,
+            dir: self.chat_model_dir(),
+            model_label: spec.name.to_string(),
+            messages,
+            options,
+        });
+    }
+
+    fn chat_cancel(&mut self) {
+        self.chat_worker.request_cancel();
+        self.chat_notice = Some(("Cancelling…".to_string(), Instant::now()));
+    }
+
+    fn chat_new(&mut self) {
+        if self.chat_busy {
+            self.chat_cancel();
+        }
+        self.chat_messages.clear();
+        self.chat_input.clear();
+        self.chat_error = None;
+        self.chat_notice = None;
+        self.chat_truncated = false;
+        self.chat_last_reply = None;
+    }
+
+    fn poll_chat(&mut self, ctx: &egui::Context) {
+        while let Ok(event) = self.chat_worker.rx.try_recv() {
+            match event {
+                chat_worker::Event::Loading { job } if job == self.chat_job => {
+                    self.chat_loading = true;
+                    self.chat_busy = true;
+                    ctx.request_repaint();
+                }
+                chat_worker::Event::Loading { .. } => {}
+                chat_worker::Event::Loaded { job } if job == self.chat_job => {
+                    self.chat_loading = false;
+                    self.chat_loaded = true;
+                    ctx.request_repaint();
+                }
+                chat_worker::Event::Loaded { .. } => {}
+                chat_worker::Event::Unloaded => {
+                    self.chat_loaded = false;
+                    self.chat_loading = false;
+                    ctx.request_repaint();
+                }
+                chat_worker::Event::Delta { job, text } if job == self.chat_job => {
+                    if let Some(last) = self.chat_messages.last_mut() {
+                        last.content.push_str(&text);
+                    }
+                    self.chat_loading = false;
+                    ctx.request_repaint();
+                }
+                chat_worker::Event::Delta { .. } => {}
+                chat_worker::Event::Done { job, reply } if job == self.chat_job => {
+                    if let Some(last) = self.chat_messages.last_mut() {
+                        last.content = reply.text.clone();
+                    }
+                    self.chat_busy = false;
+                    self.chat_loading = false;
+                    self.chat_truncated = reply.context_truncated;
+                    if reply.hit_token_limit {
+                        self.chat_notice = Some((
+                            "The reply reached the 512-token limit.".to_string(),
+                            Instant::now(),
+                        ));
+                    }
+                    self.chat_last_reply = Some(reply);
+                    ctx.request_repaint();
+                }
+                chat_worker::Event::Done { .. } => {}
+                chat_worker::Event::Failed {
+                    job,
+                    message,
+                    cancelled,
+                } if job == self.chat_job => {
+                    self.chat_busy = false;
+                    self.chat_loading = false;
+                    if cancelled {
+                        if let Some(last) = self.chat_messages.last_mut() {
+                            last.cancelled = true;
+                        }
+                        self.chat_notice =
+                            Some(("Generation cancelled.".to_string(), Instant::now()));
+                    } else {
+                        if self.chat_messages.last().is_some_and(|last| {
+                            last.role == ChatRole::Assistant && last.content.is_empty()
+                        }) {
+                            self.chat_messages.pop();
+                        }
+                        self.chat_error = Some(message);
+                    }
+                    ctx.request_repaint();
+                }
+                chat_worker::Event::Failed { .. } => {}
+            }
+        }
+    }
+
+    fn chat_area(&mut self, ui: &mut egui::Ui) {
+        let palette = self.palette;
+        let spec = self.chat_spec();
+        let installed = self.chat_available();
+        let mut open_models = false;
+        let mut open_picker = false;
+        let mut new_chat = false;
+
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                widgets::section_label(ui, &palette, "Chat model");
+                if widgets::model_button(
+                    ui,
+                    &palette,
+                    spec.name,
+                    spec.description,
+                    300.0,
+                    !self.chat_busy,
+                )
+                .clicked()
+                {
+                    open_picker = true;
+                }
+            });
+            ui.add_space(8.0);
+            ui.vertical(|ui| {
+                ui.add_space(15.0);
+                ui.label(
+                    egui::RichText::new(if installed {
+                        "Installed"
+                    } else {
+                        "Not installed"
+                    })
+                    .size(11.5)
+                    .strong()
+                    .color(if installed {
+                        palette.success
+                    } else {
+                        palette.warning
+                    }),
+                );
+            });
+            ui.label(
+                egui::RichText::new(format!(
+                    "{} · {} · {} · {} context",
+                    spec.parameters, spec.quantization, spec.license, spec.context_tokens
+                ))
+                .size(11.0)
+                .color(palette.muted),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if widgets::ghost_button(ui, &palette, "New chat").clicked() {
+                    new_chat = true;
+                }
+                if let Some(reply) = &self.chat_last_reply {
+                    if reply.generated_tokens > 0 {
+                        let seconds = reply.duration.as_secs_f64().max(0.001);
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} tok · {:.1} tok/s",
+                                reply.generated_tokens,
+                                reply.generated_tokens as f64 / seconds
+                            ))
+                            .size(10.5)
+                            .color(palette.faint),
+                        );
+                    }
+                }
+            });
+        });
+
+        if !installed {
+            ui.add_space(8.0);
+            egui::Frame::NONE
+                .fill(palette.card_alt)
+                .stroke(egui::Stroke::new(1.0, palette.warning))
+                .corner_radius(egui::CornerRadius::same(10))
+                .inner_margin(egui::Margin::same(10))
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} is not installed. Download it ({}), or choose the faster 0.5B model.",
+                                spec.name,
+                                human_bytes(spec.download_bytes())
+                            ))
+                            .size(12.0)
+                            .color(palette.text),
+                        );
+                        if widgets::accent_button(ui, &palette, "Open Models", true).clicked() {
+                            open_models = true;
+                        }
+                    });
+                });
+        }
+        if let Some(error) = &self.chat_error {
+            ui.add_space(6.0);
+            widgets::error_banner(ui, &palette, error);
+        } else if let Some((notice, at)) = &self.chat_notice {
+            if at.elapsed() < Duration::from_secs(6) {
+                ui.add_space(6.0);
+                widgets::info_banner(ui, &palette, notice);
+            }
+        }
+        if self.chat_truncated {
+            ui.add_space(6.0);
+            widgets::info_banner(
+                ui,
+                &palette,
+                "Older conversation turns were omitted to fit the model's context.",
+            );
+        }
+
+        ui.add_space(8.0);
+        let composer_height = 112.0;
+        let messages_height = (ui.available_height() - composer_height - 28.0).max(140.0);
+        egui::Frame::NONE
+            .fill(palette.card)
+            .stroke(egui::Stroke::new(1.0, palette.border))
+            .corner_radius(egui::CornerRadius::same(14))
+            .inner_margin(egui::Margin::same(12))
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .stick_to_bottom(true)
+                    .max_height(messages_height)
+                    .show(ui, |ui| {
+                        if self.chat_messages.is_empty() {
+                            self.chat_empty_state(ui, spec);
+                        } else {
+                            for bubble in &self.chat_messages {
+                                self.chat_bubble(ui, bubble);
+                                ui.add_space(8.0);
+                            }
+                        }
+                    });
+            });
+
+        ui.add_space(8.0);
+        self.chat_composer(ui);
+
+        if open_models {
+            self.open_model_manager();
+        }
+        if open_picker {
+            self.chat_model_picker_open = true;
+        }
+        if new_chat {
+            self.chat_new();
+        }
+    }
+
+    fn chat_empty_state(&mut self, ui: &mut egui::Ui, spec: &ChatModelSpec) {
+        let palette = self.palette;
+        ui.add_space(24.0);
+        ui.vertical_centered(|ui| {
+            ui.label(
+                egui::RichText::new("Chat with a local model")
+                    .size(18.0)
+                    .strong()
+                    .color(palette.text),
+            );
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new(
+                    "Chat runs on your device with a separate instruct model. Translation models are not used for chat.",
+                )
+                .size(12.0)
+                .color(palette.muted),
+            );
+            ui.add_space(10.0);
+            ui.label(
+                egui::RichText::new(format!("Using {}", spec.name))
+                    .size(11.5)
+                    .color(palette.faint),
+            );
+            ui.add_space(14.0);
+        });
+        let suggestions = [
+            "Explain a concept simply.",
+            "Help me practise French.",
+            "Summarise this text in three bullets.",
+        ];
+        ui.horizontal_wrapped(|ui| {
+            for suggestion in suggestions {
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new(suggestion)
+                                .size(11.5)
+                                .color(palette.accent),
+                        )
+                        .fill(palette.accent_soft)
+                        .stroke(egui::Stroke::new(1.0, palette.border))
+                        .corner_radius(egui::CornerRadius::same(255)),
+                    )
+                    .clicked()
+                {
+                    self.chat_input = suggestion.to_string();
+                }
+            }
+        });
+    }
+
+    fn chat_bubble(&self, ui: &mut egui::Ui, bubble: &ChatBubble) {
+        let palette = self.palette;
+        let user = bubble.role == ChatRole::User;
+        let fill = if user { palette.card_alt } else { palette.bg };
+        egui::Frame::NONE
+            .fill(fill)
+            .stroke(egui::Stroke::new(1.0, palette.border))
+            .corner_radius(egui::CornerRadius::same(12))
+            .inner_margin(egui::Margin::same(11))
+            .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(if user { "You" } else { "Fluent" })
+                            .size(10.5)
+                            .strong()
+                            .color(palette.accent),
+                    );
+                    if bubble.cancelled {
+                        widgets::badge(ui, &palette, "Cancelled", palette.warning);
+                    }
+                    if !user {
+                        if let Some(reply) = &self.chat_last_reply {
+                            if self
+                                .chat_messages
+                                .last()
+                                .is_some_and(|last| std::ptr::eq(last, bubble))
+                            {
+                                let seconds = reply.duration.as_secs_f64().max(0.001);
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{} tok · {:.1} tok/s",
+                                        reply.generated_tokens,
+                                        reply.generated_tokens as f64 / seconds
+                                    ))
+                                    .size(10.0)
+                                    .color(palette.faint),
+                                );
+                            }
+                        }
+                    }
+                });
+                if bubble.content.is_empty() {
+                    if self.chat_busy && !user {
+                        ui.label(
+                            egui::RichText::new("Thinking…")
+                                .size(13.0)
+                                .italics()
+                                .color(palette.muted),
+                        );
+                    }
+                } else {
+                    ui.label(
+                        egui::RichText::new(&bubble.content)
+                            .size(13.5)
+                            .color(palette.text),
+                    );
+                }
+            });
+    }
+
+    fn chat_composer(&mut self, ui: &mut egui::Ui) {
+        let palette = self.palette;
+        let mut send = false;
+        let mut stop = false;
+        egui::Frame::NONE
+            .fill(palette.card)
+            .stroke(egui::Stroke::new(1.0, palette.border))
+            .corner_radius(egui::CornerRadius::same(14))
+            .inner_margin(egui::Margin::same(10))
+            .show(ui, |ui| {
+                let response = ui.add(
+                    egui::TextEdit::multiline(&mut self.chat_input)
+                        .hint_text("Message Fluent…")
+                        .desired_rows(2)
+                        .desired_width(f32::INFINITY),
+                );
+                let enter = response.has_focus()
+                    && ui.input(|i| i.key_pressed(egui::Key::Enter) && !i.modifiers.shift);
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    if self.chat_busy {
+                        let button = egui::Button::new(
+                            egui::RichText::new("Stop")
+                                .size(12.5)
+                                .color(egui::Color32::WHITE),
+                        )
+                        .fill(palette.danger)
+                        .stroke(egui::Stroke::NONE)
+                        .corner_radius(egui::CornerRadius::same(10))
+                        .min_size(egui::vec2(86.0, 32.0));
+                        if ui.add(button).clicked() {
+                            stop = true;
+                        }
+                        ui.label(
+                            egui::RichText::new(if self.chat_loading {
+                                "Loading chat model…"
+                            } else {
+                                "Generating…"
+                            })
+                            .size(11.0)
+                            .color(palette.muted),
+                        );
+                    } else {
+                        if widgets::accent_button(
+                            ui,
+                            &palette,
+                            "Send",
+                            !self.chat_input.trim().is_empty(),
+                        )
+                        .clicked()
+                        {
+                            send = true;
+                        }
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(
+                            egui::RichText::new("Enter to send · Shift+Enter for a new line")
+                                .size(10.0)
+                                .color(palette.faint),
+                        );
+                    });
+                });
+                if enter {
+                    self.chat_input = self.chat_input.trim_end_matches('\n').to_string();
+                    send = true;
+                }
+            });
+        if stop {
+            self.chat_cancel();
+        }
+        if send {
+            self.chat_send();
+        }
+    }
+
+    fn chat_model_picker_modal(&mut self, ctx: &egui::Context) {
+        if !self.chat_model_picker_open {
+            return;
+        }
+        let palette = self.palette;
+        let mut close = false;
+        let mut chosen: Option<&'static str> = None;
+        let screen = ctx.content_rect();
+        let response = egui::Modal::new(egui::Id::unique("fluent_chat_model_picker"))
+            .frame(popup_frame(ctx, &palette))
+            .show(ctx, |ui| {
+                ui.set_width(620.0_f32.min((screen.width() - 48.0).max(360.0)));
+                ui.set_max_height(screen.height() * 0.86);
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("Chat model")
+                            .size(21.0)
+                            .strong()
+                            .color(palette.text),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new("✕").size(16.0).color(palette.muted),
+                                )
+                                .frame(false),
+                            )
+                            .clicked()
+                        {
+                            close = true;
+                        }
+                    });
+                });
+                widgets::hint(
+                    ui,
+                    &palette,
+                    "Chat models are separate from translation models. Downloads use the native Model Manager.",
+                );
+                ui.add_space(6.0);
+                widgets::divider(ui, &palette);
+                ui.add_space(6.0);
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .max_height(screen.height() * 0.64)
+                    .show(ui, |ui| {
+                        for spec in CHAT_MODELS {
+                            let selected = self.settings.chat_model == spec.id;
+                            let dir = self.chat_dir_for(spec);
+                            let installed = inspect_chat_model(spec, &dir).state
+                                == InstallState::Installed;
+                            let fill = if selected {
+                                palette.accent_soft
+                            } else {
+                                palette.card_alt
+                            };
+                            let stroke = egui::Stroke::new(
+                                if selected { 1.5 } else { 1.0 },
+                                if selected { palette.accent } else { palette.border },
+                            );
+                            let card = egui::Frame::NONE
+                                .fill(fill)
+                                .stroke(stroke)
+                                .corner_radius(egui::CornerRadius::same(12))
+                                .inner_margin(egui::Margin::same(12))
+                                .show(ui, |ui| {
+                                    ui.set_min_width(ui.available_width());
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(spec.name)
+                                                .size(15.0)
+                                                .strong()
+                                                .color(if selected {
+                                                    palette.accent
+                                                } else {
+                                                    palette.text
+                                                }),
+                                        );
+                                        widgets::badge(
+                                            ui,
+                                            &palette,
+                                            "GGUF",
+                                            palette.accent,
+                                        );
+                                        widgets::badge(
+                                            ui,
+                                            &palette,
+                                            if installed { "Installed" } else { "Not installed" },
+                                            if installed {
+                                                palette.success
+                                            } else {
+                                                palette.warning
+                                            },
+                                        );
+                                    });
+                                    ui.label(
+                                        egui::RichText::new(spec.description)
+                                            .size(12.0)
+                                            .color(palette.muted),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "{} · {} · {} · {} · {} context · {}",
+                                            spec.parameters,
+                                            spec.quantization,
+                                            spec.storage,
+                                            spec.license,
+                                            spec.context_tokens,
+                                            human_bytes(spec.download_bytes())
+                                        ))
+                                        .size(11.0)
+                                        .color(palette.faint),
+                                    );
+                                })
+                                .response
+                                .interact(egui::Sense::click())
+                                .on_hover_cursor(egui::CursorIcon::PointingHand);
+                            if card.clicked() && !selected && !self.chat_busy {
+                                chosen = Some(spec.id);
+                            }
+                            ui.add_space(8.0);
+                        }
+                    });
+            });
+        if response.should_close() {
+            close = true;
+        }
+        if close {
+            self.chat_model_picker_open = false;
+        }
+        if let Some(id) = chosen {
+            self.chat_model_picker_open = false;
+            self.select_chat_model(id);
+        }
+    }
+
     fn main_area(&mut self, ui: &mut egui::Ui) {
+        match self.view {
+            View::Translate => self.translation_area(ui),
+            View::Chat => self.chat_area(ui),
+        }
+    }
+
+    fn translation_area(&mut self, ui: &mut egui::Ui) {
         self.language_bar(ui);
         ui.add_space(12.0);
+
+        let spec = model_spec(self.settings.mode);
+        let dir = self.model_dir_for(self.settings.mode);
+        let installed = inspect_model(self.settings.mode, &dir).state == InstallState::Installed;
+        if !installed {
+            let palette = self.palette;
+            let mut open_models = false;
+            egui::Frame::NONE
+                .fill(palette.card_alt)
+                .stroke(egui::Stroke::new(1.0, palette.border))
+                .corner_radius(egui::CornerRadius::same(10))
+                .inner_margin(egui::Margin::same(10))
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} is not installed. Download it ({}), or choose an installed model.",
+                                spec.name,
+                                human_bytes(spec.download_bytes())
+                            ))
+                            .size(12.0)
+                            .color(palette.text),
+                        );
+                        if widgets::accent_button(ui, &palette, "Open Models", true).clicked() {
+                            open_models = true;
+                        }
+                    });
+                });
+            ui.add_space(10.0);
+            if open_models {
+                self.open_model_manager();
+            }
+        }
 
         if let Some(error) = self.error.clone() {
             widgets::error_banner(ui, &self.palette, &error);
@@ -1925,9 +2856,9 @@ impl FluentApp {
         let mut clear_storage = false;
         let mut load_mode = None;
         let mut unload = false;
-        let mut verify_mode = None;
-        let mut install_mode = None;
-        let mut remove_mode = None;
+        let mut verify_mode: Option<ManagerKind> = None;
+        let mut install_mode: Option<ManagerKind> = None;
+        let mut remove_mode: Option<ManagerKind> = None;
         let mut cancel_task = false;
         let mut refresh_catalogue = false;
 
@@ -2090,11 +3021,11 @@ impl FluentApp {
                             let active_task = self
                                 .manager_task
                                 .as_ref()
-                                .filter(|task| task.mode == mode);
+                                .filter(|task| task.kind.id() == spec.id);
                             let active_stage = self
                                 .manager_progress
                                 .as_ref()
-                                .filter(|progress| progress.mode == mode)
+                                .filter(|progress| progress.id == spec.id)
                                 .map(|progress| progress.stage);
                             let state_label = if loaded {
                                 "Loaded".to_string()
@@ -2223,7 +3154,7 @@ impl FluentApp {
                                         let progress = self
                                             .manager_progress
                                             .as_ref()
-                                            .filter(|progress| progress.mode == mode);
+                                            .filter(|progress| progress.id == spec.id);
                                         let fraction = progress
                                             .map(|p| {
                                                 if p.total_bytes == 0 {
@@ -2298,7 +3229,7 @@ impl FluentApp {
                                                     "Repair"
                                                 };
                                                 if widgets::accent_button(ui, &palette, label, true).clicked() {
-                                                    install_mode = Some(mode);
+                                                    install_mode = Some(ManagerKind::Translation(mode));
                                                 }
                                             }
                                             if installation.state != InstallState::NotInstalled
@@ -2306,14 +3237,14 @@ impl FluentApp {
                                                 && self.manager_task.is_none()
                                                 && widgets::ghost_button(ui, &palette, "Verify").clicked()
                                             {
-                                                verify_mode = Some(mode);
+                                                verify_mode = Some(ManagerKind::Translation(mode));
                                             }
                                             if installation.state != InstallState::NotInstalled
                                                 && !self.busy
                                                 && self.manager_task.is_none()
                                                 && widgets::ghost_button(ui, &palette, "Remove").clicked()
                                             {
-                                                remove_mode = Some(mode);
+                                                remove_mode = Some(ManagerKind::Translation(mode));
                                             }
                                         });
                                         if installation.state == InstallState::Incomplete {
@@ -2336,6 +3267,223 @@ impl FluentApp {
                                                 egui::RichText::new("Installed by size check; run Verify for checksums.")
                                                     .size(10.5)
                                                     .color(palette.faint),
+                                            );
+                                        }
+                                    }
+                                });
+                            ui.add_space(8.0);
+                        }
+                        ui.add_space(6.0);
+                        widgets::divider(ui, &palette);
+                        widgets::section_label(ui, &palette, "Chat models");
+                        ui.add_space(6.0);
+                        for spec in CHAT_MODELS {
+                            let dir = self.chat_dir_for(spec);
+                            let installation = self.chat_installation_for(spec);
+                            let active_task = self
+                                .manager_task
+                                .as_ref()
+                                .filter(|task| task.kind.id() == spec.id);
+                            let active_stage = self
+                                .manager_progress
+                                .as_ref()
+                                .filter(|progress| progress.id == spec.id)
+                                .map(|progress| progress.stage);
+                            let state_label = if let Some(task) = active_task {
+                                if active_stage == Some(TaskStage::Verifying) {
+                                    "Verifying".to_string()
+                                } else {
+                                    match task.op {
+                                        ManagerOp::Install => "Downloading".to_string(),
+                                        ManagerOp::Verify => "Verifying".to_string(),
+                                    }
+                                }
+                            } else if installation.verified
+                                && installation.state == InstallState::Installed
+                            {
+                                "Installed · verified".to_string()
+                            } else {
+                                installation.state.label().to_string()
+                            };
+                            let state_color = if installation.state == InstallState::Installed {
+                                palette.success
+                            } else if installation.state == InstallState::Corrupt {
+                                palette.danger
+                            } else {
+                                palette.warning
+                            };
+
+                            egui::Frame::NONE
+                                .fill(palette.card_alt)
+                                .stroke(egui::Stroke::new(1.0, palette.border))
+                                .corner_radius(egui::CornerRadius::same(12))
+                                .inner_margin(egui::Margin::same(12))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(spec.name)
+                                                .size(15.0)
+                                                .strong()
+                                                .color(palette.text),
+                                        );
+                                        widgets::badge(ui, &palette, "Chat", palette.accent);
+                                        widgets::badge(ui, &palette, "GGUF", palette.accent);
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                widgets::badge(
+                                                    ui,
+                                                    &palette,
+                                                    &state_label,
+                                                    state_color,
+                                                );
+                                            },
+                                        );
+                                    });
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "{} · {} · {} · {} · {} context · download {}",
+                                            spec.parameters,
+                                            spec.quantization,
+                                            spec.storage,
+                                            spec.license,
+                                            spec.context_tokens,
+                                            human_bytes(spec.download_bytes())
+                                        ))
+                                        .size(11.0)
+                                        .color(palette.muted),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(spec.description)
+                                            .size(11.0)
+                                            .color(palette.faint),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "{} · on disk: {}",
+                                            dir.display(),
+                                            human_bytes(directory_size(&dir))
+                                        ))
+                                        .monospace()
+                                        .size(10.5)
+                                        .color(palette.faint),
+                                    );
+
+                                    if let Some(task) = active_task {
+                                        let progress = self
+                                            .manager_progress
+                                            .as_ref()
+                                            .filter(|progress| progress.id == spec.id);
+                                        let fraction = progress
+                                            .map(|p| {
+                                                if p.total_bytes == 0 {
+                                                    0.0
+                                                } else {
+                                                    p.completed_bytes as f32
+                                                        / p.total_bytes as f32
+                                                }
+                                            })
+                                            .unwrap_or(0.0);
+                                        ui.add(
+                                            egui::ProgressBar::new(fraction.clamp(0.0, 1.0))
+                                                .text(format!(
+                                                    "{} · {} / {}",
+                                                    progress
+                                                        .map(|p| p.stage.label())
+                                                        .unwrap_or(match task.op {
+                                                            ManagerOp::Install => "Downloading",
+                                                            ManagerOp::Verify => "Verifying",
+                                                        }),
+                                                    human_bytes(
+                                                        progress
+                                                            .map(|p| p.completed_bytes)
+                                                            .unwrap_or(0)
+                                                    ),
+                                                    human_bytes(
+                                                        progress.map(|p| p.total_bytes).unwrap_or(0)
+                                                    )
+                                                )),
+                                        );
+                                        if let Some(progress) = progress {
+                                            let speed = if progress.speed_bps > 0.0 {
+                                                format!(
+                                                    "{}/s",
+                                                    human_bytes(progress.speed_bps as u64)
+                                                )
+                                            } else {
+                                                "—".to_string()
+                                            };
+                                            let eta = progress
+                                                .eta_seconds
+                                                .map(|seconds| format!(" · ETA {}s", seconds))
+                                                .unwrap_or_default();
+                                            ui.label(
+                                                egui::RichText::new(format!("{speed}{eta}"))
+                                                    .size(10.5)
+                                                    .color(palette.faint),
+                                            );
+                                        }
+                                        if widgets::ghost_button(ui, &palette, "Cancel").clicked() {
+                                            cancel_task = true;
+                                        }
+                                    } else {
+                                        ui.horizontal(|ui| {
+                                            let can_install =
+                                                installation.state != InstallState::Installed
+                                                    && !self.busy
+                                                    && self.manager_task.is_none();
+                                            if can_install {
+                                                let label =
+                                                    if installation.state == InstallState::NotInstalled {
+                                                        "Download"
+                                                    } else {
+                                                        "Repair"
+                                                    };
+                                                if widgets::accent_button(
+                                                    ui,
+                                                    &palette,
+                                                    label,
+                                                    true,
+                                                )
+                                                .clicked()
+                                                {
+                                                    install_mode =
+                                                        Some(ManagerKind::Chat(spec));
+                                                }
+                                            }
+                                            if installation.state != InstallState::NotInstalled
+                                                && !self.busy
+                                                && self.manager_task.is_none()
+                                                && widgets::ghost_button(ui, &palette, "Verify")
+                                                    .clicked()
+                                            {
+                                                verify_mode = Some(ManagerKind::Chat(spec));
+                                            }
+                                            if installation.state != InstallState::NotInstalled
+                                                && !self.busy
+                                                && self.manager_task.is_none()
+                                                && widgets::ghost_button(ui, &palette, "Remove")
+                                                    .clicked()
+                                            {
+                                                remove_mode = Some(ManagerKind::Chat(spec));
+                                            }
+                                        });
+                                        if installation.state == InstallState::Incomplete {
+                                            ui.label(
+                                                egui::RichText::new(format!(
+                                                    "{} required file(s) missing or incomplete",
+                                                    installation.missing_files().len()
+                                                ))
+                                                .size(10.5)
+                                                .color(palette.warning),
+                                            );
+                                        } else if installation.state == InstallState::Corrupt {
+                                            ui.label(
+                                                egui::RichText::new(
+                                                    "Checksum verification failed; use Repair.",
+                                                )
+                                                .size(10.5)
+                                                .color(palette.danger),
                                             );
                                         }
                                     }
@@ -2366,14 +3514,14 @@ impl FluentApp {
             self.manager_root_input.clear();
             self.apply_storage_root();
         }
-        if let Some(mode) = install_mode {
-            self.confirm_download = Some(mode);
+        if let Some(kind) = install_mode {
+            self.confirm_download = Some(kind);
         }
-        if let Some(mode) = verify_mode {
-            self.begin_manager_task(mode, ManagerOp::Verify, ctx);
+        if let Some(kind) = verify_mode {
+            self.begin_manager_task(kind, ManagerOp::Verify, ctx);
         }
-        if let Some(mode) = remove_mode {
-            self.confirm_remove = Some(mode);
+        if let Some(kind) = remove_mode {
+            self.confirm_remove = Some(kind);
         }
         if let Some(mode) = load_mode {
             self.load_mode(mode);
@@ -2390,12 +3538,35 @@ impl FluentApp {
     }
 
     fn confirm_download_modal(&mut self, ctx: &egui::Context) {
-        let Some(mode) = self.confirm_download else {
+        let Some(kind) = self.confirm_download else {
             return;
         };
         let palette = self.palette;
-        let spec = model_spec(mode);
-        let dir = self.model_dir_for(mode);
+        let (name, detail, size, dir) = match kind {
+            ManagerKind::Translation(mode) => {
+                let spec = model_spec(mode);
+                (
+                    spec.name,
+                    format!(
+                        "{} · {} · {} languages",
+                        spec.parameters,
+                        spec.license,
+                        fluent_core::language_list(mode).len()
+                    ),
+                    spec.download_bytes(),
+                    self.model_dir_for(mode),
+                )
+            }
+            ManagerKind::Chat(spec) => (
+                spec.name,
+                format!(
+                    "{} · {} · {} · {} context",
+                    spec.parameters, spec.quantization, spec.license, spec.context_tokens
+                ),
+                spec.download_bytes(),
+                self.chat_dir_for(spec),
+            ),
+        };
         let free = available_bytes(&self.storage_root()).ok().unwrap_or(0);
         let mut close = false;
         let mut start = false;
@@ -2404,26 +3575,21 @@ impl FluentApp {
             .show(ctx, |ui| {
                 ui.set_width(540.0);
                 ui.label(
-                    egui::RichText::new(format!("Download {}", spec.name))
+                    egui::RichText::new(format!("Download {name}"))
                         .size(20.0)
                         .strong()
                         .color(palette.text),
                 );
                 ui.add_space(6.0);
                 ui.label(
-                    egui::RichText::new(format!(
-                        "{} · {} · {} languages",
-                        spec.parameters,
-                        spec.license,
-                        fluent_core::language_list(mode).len()
-                    ))
-                    .size(12.0)
-                    .color(palette.muted),
+                    egui::RichText::new(detail)
+                        .size(12.0)
+                        .color(palette.muted),
                 );
                 ui.label(
                     egui::RichText::new(format!(
                         "Download size: {}. Free disk space: {}.",
-                        human_bytes(spec.download_bytes()),
+                        human_bytes(size),
                         human_bytes(free)
                     ))
                     .size(12.0)
@@ -2458,21 +3624,26 @@ impl FluentApp {
         }
         if start {
             self.confirm_download = None;
-            self.begin_manager_task(mode, ManagerOp::Install, ctx);
+            self.begin_manager_task(kind, ManagerOp::Install, ctx);
         }
     }
 
     fn confirm_remove_modal(&mut self, ctx: &egui::Context) {
-        let Some(mode) = self.confirm_remove else {
+        let Some(kind) = self.confirm_remove else {
             return;
         };
         let palette = self.palette;
-        let spec = model_spec(mode);
-        let dir = self.model_dir_for(mode);
-        let loaded = self
-            .status
-            .as_ref()
-            .is_some_and(|status| status.mode == mode);
+        let (name, dir) = match kind {
+            ManagerKind::Translation(mode) => (model_spec(mode).name, self.model_dir_for(mode)),
+            ManagerKind::Chat(spec) => (spec.name, self.chat_dir_for(spec)),
+        };
+        let loaded = match kind {
+            ManagerKind::Translation(mode) => self
+                .status
+                .as_ref()
+                .is_some_and(|status| status.mode == mode),
+            ManagerKind::Chat(_) => self.chat_loaded || self.chat_busy,
+        };
         let mut close = false;
         let mut remove = false;
         let _ = egui::Modal::new(egui::Id::unique("fluent_confirm_remove"))
@@ -2480,7 +3651,7 @@ impl FluentApp {
             .show(ctx, |ui| {
                 ui.set_width(540.0);
                 ui.label(
-                    egui::RichText::new(format!("Remove {}?", spec.name))
+                    egui::RichText::new(format!("Remove {name}?"))
                         .size(20.0)
                         .strong()
                         .color(palette.text),
@@ -2502,7 +3673,14 @@ impl FluentApp {
                     widgets::error_banner(
                         ui,
                         &palette,
-                        "Unload this model before removing it.",
+                        match kind {
+                            ManagerKind::Chat(_) => {
+                                "Switch to Translate to unload the chat model before removing it."
+                            }
+                            ManagerKind::Translation(_) => {
+                                "Unload this model before removing it."
+                            }
+                        },
                     );
                 }
                 ui.add_space(8.0);
@@ -2522,7 +3700,7 @@ impl FluentApp {
         }
         if remove {
             self.confirm_remove = None;
-            self.remove_manager_model(mode);
+            self.remove_manager_model(kind);
         }
     }
 
@@ -2862,6 +4040,7 @@ impl eframe::App for FluentApp {
         let ctx = ui.ctx().clone();
         self.poll_manager(&ctx);
         self.poll_catalogue(&ctx);
+        self.poll_chat(&ctx);
         self.drain_events();
 
         let key = (self.settings.theme, self.settings.accent);
@@ -2910,6 +4089,7 @@ impl eframe::App for FluentApp {
         self.model_manager_modal(&ctx);
         self.confirm_download_modal(&ctx);
         self.confirm_remove_modal(&ctx);
+        self.chat_model_picker_modal(&ctx);
         self.picker_modal(&ctx);
 
         // The status bar must refresh even without interaction during

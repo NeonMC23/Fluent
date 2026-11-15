@@ -1,4 +1,5 @@
 mod app;
+mod chat_worker;
 mod settings;
 mod theme;
 mod widgets;
@@ -136,6 +137,7 @@ fn run_self_test() -> i32 {
         ("accurate-model", &config.accurate_model),
         ("madlad-model", &config.madlad_model),
         ("small-model", &config.small_model),
+        ("chat-model", &config.chat_model),
     ] {
         if path.is_dir() {
             println!("{label}: present ({})", path.display());

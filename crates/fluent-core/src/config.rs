@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::model::chat_registry::{chat_model_spec, default_chat_model};
 use crate::{Error, Mode, OutputLimit, Result};
 
 #[derive(Debug, Clone)]
@@ -16,6 +17,9 @@ pub struct ProjectConfig {
     pub accurate_model: PathBuf,
     pub madlad_model: PathBuf,
     pub small_model: PathBuf,
+    /// Chat model directory for the default (1.5B) chat model. Other chat
+    /// models live next to it.
+    pub chat_model: PathBuf,
     pub max_length: usize,
     /// Generated-token policy. `Auto` derives a finite budget from the
     /// encoded source; `Tokens(n)` uses a finite ceiling; `UntilEos` removes
@@ -33,6 +37,7 @@ impl Default for ProjectConfig {
             accurate_model: base_dir.join("models/nllb-200-3.3b"),
             madlad_model: base_dir.join("models/madlad400-3b-mt"),
             small_model: base_dir.join("models/small100"),
+            chat_model: base_dir.join("models/qwen2.5-1.5b-instruct"),
             base_dir,
             default_source_language: "auto".to_string(),
             default_target_language: "eng_Latn".to_string(),
@@ -61,6 +66,7 @@ struct RawModels {
     accurate: Option<String>,
     madlad: Option<String>,
     small: Option<String>,
+    chat: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -142,6 +148,9 @@ impl ProjectConfig {
             if let Some(small) = models.small {
                 config.small_model = resolve_model_path(&base_dir, &small);
             }
+            if let Some(chat) = models.chat {
+                config.chat_model = resolve_model_path(&base_dir, &chat);
+            }
         }
         if let Some(generation) = raw.generation {
             if let Some(max_length) = generation.max_length {
@@ -197,8 +206,36 @@ impl ProjectConfig {
                 }
             }
         }
+        if !config.chat_model.is_dir() {
+            let fallback = base_dir.join("models/qwen2.5-1.5b-instruct");
+            if fallback.is_dir() {
+                config.chat_model = fallback;
+            }
+        }
+        if !config.chat_model.is_dir() {
+            if let Some(dirs) = directories::ProjectDirs::from("io", "fluent", "Fluent") {
+                let fallback = dirs.data_dir().join("models/qwen2.5-1.5b-instruct");
+                if fallback.is_dir() {
+                    config.chat_model = fallback;
+                }
+            }
+        }
 
         Ok(config)
+    }
+
+    /// Directory for a chat model id. The default 1.5B model uses the explicit
+    /// `chat_model` path; other chat models live beside it.
+    pub fn chat_model_path(&self, id: &str) -> PathBuf {
+        let spec = chat_model_spec(id).unwrap_or_else(default_chat_model);
+        if spec.default_dir == default_chat_model().default_dir {
+            self.chat_model.clone()
+        } else {
+            self.chat_model
+                .parent()
+                .map(|parent| parent.join(spec.default_dir))
+                .unwrap_or_else(|| self.base_dir.join(spec.default_dir))
+        }
     }
 
     pub fn model_path(&self, mode: Mode) -> &Path {

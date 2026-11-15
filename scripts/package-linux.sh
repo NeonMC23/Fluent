@@ -199,7 +199,8 @@ FLUENT_CONFIG to its absolute path. Example model entries:
          "fast": "/absolute/path/nllb-200-1.3b",
          "accurate": "/absolute/path/nllb-200-3.3b",
          "madlad": "/absolute/path/madlad400-3b-mt",
-         "small": "/absolute/path/small100"
+         "small": "/absolute/path/small100",
+         "chat": "/absolute/path/qwen2.5-1.5b-instruct"
        }
 
 The GUI starts without a model; the first translation reports an actionable

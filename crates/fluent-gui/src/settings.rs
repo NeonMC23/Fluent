@@ -89,6 +89,9 @@ pub struct Settings {
     /// Optional override for the model storage root. Empty uses the paths in
     /// `config.json`; setting it does not move existing files.
     pub models_root: String,
+    /// Selected chat model id. Separate from the translation mode.
+    #[serde(default = "default_chat_model_id")]
+    pub chat_model: String,
     /// Last entered text, restored on startup.
     pub last_source: String,
 }
@@ -108,9 +111,14 @@ impl Default for Settings {
             output_length: OutputLengthSetting::Automatic,
             max_new_tokens: 512,
             models_root: String::new(),
+            chat_model: default_chat_model_id(),
             last_source: String::new(),
         }
     }
+}
+
+fn default_chat_model_id() -> String {
+    fluent_core::default_chat_model().id.to_string()
 }
 
 impl Settings {
@@ -157,6 +165,11 @@ impl Settings {
             self.device = "auto".to_string();
         }
         self.models_root = self.models_root.trim().to_string();
+        if self.chat_model.trim().is_empty()
+            || fluent_core::chat_model_spec(self.chat_model.trim()).is_none()
+        {
+            self.chat_model = default_chat_model_id();
+        }
     }
 
     /// Maps the persisted GUI choice to the inference-engine policy.
