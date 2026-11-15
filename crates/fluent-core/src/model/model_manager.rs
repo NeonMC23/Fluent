@@ -477,10 +477,15 @@ fn download_url(
     cancel: &AtomicBool,
 ) -> Result<()> {
     let part = part_path(target);
-    // Large checkpoints can legitimately take many minutes. Rely on the
-    // transport's read behavior and cancellation rather than a global
-    // deadline that would abort a healthy download.
-    let agent: ureq::Agent = ureq::Agent::config_builder().build().into();
+    // Large checkpoints can legitimately take many minutes, so there is no
+    // global deadline. Connect/response and per-read inactivity limits still
+    // prevent a stalled connection from hanging the manager indefinitely.
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_connect(Some(std::time::Duration::from_secs(30)))
+        .timeout_recv_response(Some(std::time::Duration::from_secs(30)))
+        .timeout_per_read(Some(std::time::Duration::from_secs(60)))
+        .build()
+        .into();
     let mut request = agent.get(url);
     if part_size > 0 {
         request = request.header("Range", &format!("bytes={part_size}-"));
