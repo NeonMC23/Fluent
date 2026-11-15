@@ -120,14 +120,16 @@ Captured from the actual running application on the canonical Linux host:
 | Settings page, MADLAD selected | `docs/screenshots/settings-madlad.png` |
 | MADLAD CPU/greedy/output controls | `docs/screenshots/settings-madlad-output.png` |
 | MADLAD filtered target-language picker | `docs/screenshots/language-picker-madlad.png` |
-| Model Manager, storage and installed models | `docs/screenshots/model-manager.png` |
-| Model Manager, MADLAD card and actions | `docs/screenshots/model-manager-madlad.png` |
-| Model Manager, custom storage and download actions | `docs/screenshots/model-manager-download.png` |
+| Main interface with SMaLL-100 selected | `docs/screenshots/main-small.png` |
+| Model Manager, storage, catalogue and four models | `docs/screenshots/model-manager.png` |
+| Model Manager, SMaLL-100 installed and verified | `docs/screenshots/model-manager-small.png` |
+| Model Manager, download confirmation and licence | `docs/screenshots/model-manager-confirm.png` |
+| Model Manager, live download progress, speed, ETA and cancel | `docs/screenshots/model-manager-download.png` |
 | Language picker | `docs/screenshots/language-picker.png` |
 | Main interface, light theme | `docs/screenshots/main-light.png` |
 
 The settings screenshots use a disposable container home directory so no user
-paths or private text are exposed; they show the three-model selector, MADLAD
+paths or private text are exposed; they show the four-model selector, MADLAD
 runtime capabilities and the Output limit control. The main preview was captured with neutral sample
 text. These are documentation captures, not mockups.
 

@@ -1,4 +1,7 @@
-# Translation Quality and Performance Benchmarks (Cycle 14)
+# Translation Quality and Performance Benchmarks
+
+Sections 1–9 record Cycle 14. Section 10 adds the Cycle 16 lightweight-model
+comparison over all 42 directed pairs among the seven required languages.
 
 This document records measured results on the canonical development host. It is
 a snapshot, not a universal performance claim. Raw JSON and metric outputs are
@@ -234,3 +237,162 @@ Unsupported selections are explicitly rejected and the GUI filters the picker.
 - Allocator-retained RSS after unload is not live model state.
 - The manual model selector is intentionally unchanged; no automatic routing
   was added.
+
+## 10. Cycle 16: SMaLL-100 and all 42 directed pairs
+
+### 10.1 Corpus and method
+
+- Corpus: `benchmarks/flores-7x7.json`, CC-BY-SA-4.0, derived from the first
+  three FLORES-200 devtest sentences for each of the **42 directed pairs** among
+  `eng_Latn`, `fra_Latn`, `deu_Latn`, `spa_Latn`, `por_Latn`, `ita_Latn` and
+  `zho_Hans` (126 cases). The archive is not committed.
+- Harness: `crates/fluent-core/examples/eval.rs`, one model per process, same
+  `Engine` path as the GUI, one warm-up translation, one measured repetition,
+  output ceiling 256 tokens, source limit 512 tokens.
+- Beams: 4 for NLLB and SMaLL-100; MADLAD is greedy by design (effective
+  beams = 1).
+- Metrics: SacreBLEU 2.6.0, chrF++ (word order 2) and BLEU (13a). Macro values
+  are the unweighted mean of the 42 pair scores.
+- Host: Intel Core i5-11400H (6C/12T), 15 GiB RAM, 24 GiB swap, Nobara Linux
+  44, CPU only, Rust 1.99.0, Candle 0.11.
+
+### 10.2 Quality
+
+Primary comparison: one sentence per pair (42 cases), identical case ids for
+every model. MADLAD was measured on this sample because its CPU cost makes the
+three-sentence run impractical on this host.
+
+| Model | Parameters | Download | chrF++ (macro) | BLEU (macro) | Cases |
+|---|---:|---:|---:|---:|---:|
+| SMaLL-100, beams=4 | 330M | 1.34 GB | 43.35 | 18.64 | 42 |
+| NLLB-200 1.3B, beams=4 | 1.3B | 5.50 GB | 44.40 | 20.79 | 42 |
+| NLLB-200 3.3B Q8, beams=4 | 3.3B | 17.60 GB | **47.56** | **24.28** | 42 |
+| MADLAD-400 3B q4_k, greedy | 3B | 1.68 GB | **47.65** | 22.50 | 42 |
+
+Extended sample: three sentences per pair (126 cases) for the three models that
+could complete it in reasonable time.
+
+| Model | chrF++ (macro) | BLEU (macro) | Cases |
+|---|---:|---:|---:|
+| SMaLL-100, beams=4 | 50.06 | 24.60 | 126 |
+| NLLB-200 1.3B, beams=4 | 51.04 | 27.61 | 126 |
+| NLLB-200 3.3B Q8, beams=4 | **53.83** | **30.80** | 126 |
+
+Differences of a few chrF++ points are within noise at this sample size. The
+per-pair table is the useful view.
+
+### 10.3 Performance
+
+Same 42-case sample. All timings are CPU-only.
+
+| Model | Load | RSS after load | Peak RSS | Median latency | TTFT (median) | Generated tok/s | Median output |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| SMaLL-100 | **0.96 s** | **0.42 GB** | **1.67 GB** | **0.44 s** | **98 ms** | **59.9** | 27 tok |
+| NLLB-200 1.3B | 10.46 s | 1.63 GB | 2.29 GB | 2.08 s | 406 ms | 12.0 | 25 tok |
+| NLLB-200 3.3B Q8 | 19.08 s | 3.75 GB | 4.57 GB | 4.43 s | 852 ms | 6.1 | 27 tok |
+| MADLAD-400 3B q4_k | 1.19 s | 2.68 GB | 2.72 GB | 16.87 s | 2.91 s | 1.8 | 31 tok |
+
+Extended 126-case performance (three models):
+
+| Model | Median latency | p95 latency | TTFT (median) | Generated tok/s |
+|---|---:|---:|---:|---:|
+| SMaLL-100 | 0.67 s | 1.05 s | 122 ms | 61.6 |
+| NLLB-200 1.3B | 3.10 s | 5.19 s | 484 ms | 12.2 |
+| NLLB-200 3.3B Q8 | 6.01 s | 10.31 s | 998 ms | 6.2 |
+
+Latency is the per-case wall time including tokenization, encoding and beam
+search. TTFT is the first decoding-progress update, not a hardware-level token
+timestamp. Peak RSS includes checkpoint mapping and Q8 conversion.
+
+### 10.4 Per-pair chrF++
+
+42-case common sample:
+
+| Pair | SMaLL-100 | NLLB 1.3B | NLLB 3.3B | MADLAD |
+|---|---:|---:|---:|---:|
+| deu→eng | 34.4 | 49.5 | 49.5 | 45.4 |
+| deu→fra | 47.8 | 47.9 | 47.9 | 51.4 |
+| deu→ita | 54.6 | 55.1 | 68.7 | 49.6 |
+| deu→por | 39.6 | 33.7 | 39.6 | 40.3 |
+| deu→spa | 29.6 | 29.6 | 40.0 | 34.6 |
+| deu→zho | 22.3 | 18.8 | 17.8 | 26.2 |
+| eng→deu | 45.0 | 53.7 | 45.0 | 52.4 |
+| eng→fra | 57.7 | 63.9 | 63.9 | 64.7 |
+| eng→ita | 49.7 | 54.9 | 55.0 | 41.6 |
+| eng→por | 58.3 | 72.6 | 66.6 | 63.6 |
+| eng→spa | 38.0 | 50.8 | 43.4 | 51.5 |
+| eng→zho | 16.3 | 18.8 | 9.7 | 22.1 |
+| fra→deu | 44.6 | 53.2 | 52.2 | 52.2 |
+| fra→eng | 46.6 | 55.2 | 64.0 | 64.9 |
+| fra→ita | 54.5 | 57.6 | 56.0 | 57.6 |
+| fra→por | 50.4 | 47.1 | 56.2 | 56.8 |
+| fra→spa | 36.5 | 31.6 | 40.6 | 40.6 |
+| fra→zho | 21.8 | 18.8 | 9.7 | 40.6 |
+| ita→deu | 65.3 | 56.4 | 56.8 | 55.5 |
+| ita→eng | 41.3 | 46.3 | 59.6 | 48.9 |
+| ita→fra | 53.0 | 52.1 | 50.2 | 62.1 |
+| ita→por | 50.0 | 42.2 | 49.4 | 44.7 |
+| ita→spa | 56.6 | 49.9 | 51.5 | 56.6 |
+| ita→zho | 12.4 | 6.7 | 8.5 | 17.1 |
+| por→deu | 46.1 | 48.7 | 53.6 | 53.4 |
+| por→eng | 43.5 | 55.0 | 67.3 | 63.4 |
+| por→fra | 65.2 | 61.3 | 68.0 | 67.7 |
+| por→ita | 63.1 | 56.8 | 55.0 | 63.1 |
+| por→spa | 45.8 | 41.6 | 43.0 | 51.5 |
+| por→zho | 14.4 | 7.8 | 17.8 | 16.9 |
+| spa→deu | 61.0 | 54.1 | 61.8 | 55.5 |
+| spa→eng | 50.9 | 58.7 | 57.1 | 55.4 |
+| spa→fra | 58.7 | 60.3 | 54.3 | 61.4 |
+| spa→ita | 80.8 | 86.9 | 91.0 | 82.9 |
+| spa→por | 62.9 | 53.6 | 63.4 | 57.0 |
+| spa→zho | 10.6 | 6.5 | 12.0 | 17.2 |
+| zho→deu | 41.5 | 41.7 | 53.5 | 44.9 |
+| zho→eng | 27.8 | 36.9 | 37.9 | 33.5 |
+| zho→fra | 34.3 | 32.6 | 38.8 | 40.1 |
+| zho→ita | 28.8 | 25.1 | 50.3 | 39.0 |
+| zho→por | 26.0 | 42.8 | 40.0 | 23.5 |
+| zho→spa | 33.4 | 28.1 | 30.5 | 33.8 |
+
+These are single-sentence scores and therefore noisy at the pair level; the
+macro figures above are the reliable summary. The 126-case run gave a smoother
+picture (SMaLL 50.06, NLLB 1.3B 51.04, NLLB 3.3B 53.83).
+
+
+### 10.5 Stability and cancellation
+
+- SMaLL-100: two identical requests produced identical text and token counts;
+  unload/reload reproduced the same output. Cancellation during generation was
+  observed within ~100 ms.
+- The NLLB and MADLAD lifecycle, cancellation and long-generation tests from
+  Cycle 14 remain unchanged and pass.
+
+### 10.6 Interpretation
+
+- SMaLL-100 is dramatically lighter (1.34 GB, 0.42 GB RSS after load) and
+  ~4.7x faster than NLLB 1.3B on this CPU (0.44 s vs 2.08 s median on the
+  42-case sample), with macro chrF++ about one point lower (43.35 vs 44.40;
+  50.06 vs 51.04 on 126 cases).
+- SMaLL-100 is ~38x faster than MADLAD on the same 42 cases (0.44 s vs 16.87 s
+  median) and uses ~6x less resident memory, at a cost of ~4.3 chrF++ points.
+- NLLB 3.3B and MADLAD are effectively tied on chrF++ in this sample (47.56 vs
+  47.65); NLLB 3.3B has the higher BLEU and is ~3.8x faster than MADLAD. NLLB
+  3.3B remains the quality ceiling but costs 17.6 GB and 3.75 GB RSS.
+- On the larger 126-case sample, SMaLL-100 is notably stronger than NLLB 1.3B
+  on Chinese→English and English→Chinese, and weaker on Romance→English.
+- The 42-case per-pair differences are noisy; use the macro figures and the
+  126-case sample for decisions.
+
+### 10.7 Limitations
+
+- The primary comparison uses one sentence per pair (42 cases); the extended
+  sample uses three (126 cases) for the three models that could complete it.
+  Neither substitutes for a full FLORES devtest evaluation.
+- MADLAD's 16.9 s median makes the three-sentence run impractical on this CPU;
+  its per-pair scores are single-sentence and noisy.
+- One NLLB 1.3B case in the 126-case run reached the 256-token ceiling
+  (`zho_Hans→eng_Latn`, sentence 2); its output is truncated.
+- BLEU is 0 for Chinese targets with three references because no 4-gram
+  matches; chrF++ is the more informative number there.
+- No COMET, human evaluation or GPU benchmark was performed.
+- Windows and macOS SMaLL-100 runtime validation was not executed; CI compiles
+  the code only.
