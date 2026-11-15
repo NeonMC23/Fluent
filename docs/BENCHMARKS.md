@@ -388,7 +388,8 @@ picture (SMaLL 50.06, NLLB 1.3B 51.04, NLLB 3.3B 53.83).
   sample uses three (126 cases) for the three models that could complete it.
   Neither substitutes for a full FLORES devtest evaluation.
 - MADLAD's 16.9 s median makes the three-sentence run impractical on this CPU;
-  its per-pair scores are single-sentence and noisy.
+  its per-pair scores are single-sentence and noisy. It was run with a
+  128-token ceiling; its longest output was 40 tokens, so the cap did not bind.
 - One NLLB 1.3B case in the 126-case run reached the 256-token ceiling
   (`zho_Hans→eng_Latn`, sentence 2); its output is truncated.
 - BLEU is 0 for Chinese targets with three references because no 4-gram
