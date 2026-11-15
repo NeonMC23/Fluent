@@ -15,7 +15,7 @@ use crate::detect::{detect, Detection};
 use crate::model::nllb::{GenerateOptions, Nllb};
 use crate::model::Checkpoint;
 use crate::tokenizer::NllbTokenizer;
-use crate::{Error, Mode, Result};
+use crate::{Error, Mode, OutputLimit, Result};
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -73,9 +73,8 @@ pub struct EngineConfig {
     pub precision: Precision,
     /// Maximum length of the source sequence (tokens).
     pub max_length: usize,
-    /// Maximum number of generated tokens. `None` derives a length-aware
-    /// budget from the encoded source.
-    pub max_new_tokens: Option<usize>,
+    /// Generated-token policy. `Auto` preserves the input-derived budget.
+    pub output_limit: OutputLimit,
     /// Beam search width.
     pub num_beams: usize,
 }
@@ -88,7 +87,7 @@ impl EngineConfig {
             device: DeviceChoice::Auto,
             precision: Precision::Auto,
             max_length: 512,
-            max_new_tokens: None,
+            output_limit: OutputLimit::Auto,
             num_beams: 4,
         }
     }
@@ -97,24 +96,14 @@ impl EngineConfig {
     pub fn from_project(project: &ProjectConfig, mode: Mode) -> Self {
         let mut config = Self::new(mode, project.model_path(mode).to_path_buf());
         config.max_length = project.max_length;
-        config.max_new_tokens = project.max_new_tokens;
+        config.output_limit = project.output_limit;
         config.num_beams = project.num_beams;
         config
     }
 }
 
-/// Length-aware default budget for generated tokens.
-///
-/// A translation is rarely longer than twice its source, so this keeps short
-/// inputs far below the 512-token cap while still leaving room for expansion,
-/// identifiers, and punctuation. The hard cap matches the model's position
-/// table and the previous behaviour.
-pub fn default_generation_budget(source_tokens: usize) -> usize {
-    source_tokens
-        .saturating_mul(2)
-        .saturating_add(16)
-        .clamp(16, 512)
-}
+// Keep the historical `fluent_core::engine::default_generation_budget` path.
+pub use crate::default_generation_budget;
 
 // ---------------------------------------------------------------------------
 // Progress and results
@@ -592,13 +581,8 @@ impl Engine {
             Some(0.0),
             "Generating translation",
         ));
-        let generation_budget = self
-            .config
-            .max_new_tokens
-            .map(|value| value.clamp(1, 1024))
-            .unwrap_or_else(|| default_generation_budget(source_ids.len()));
         let options = GenerateOptions {
-            max_new_tokens: generation_budget,
+            output_limit: self.config.output_limit,
             num_beams: self.config.num_beams.max(1),
             early_stopping: Default::default(),
         };
@@ -613,14 +597,15 @@ impl Engine {
                 } else {
                     Some(generation.generated as f32 / generation.max as f32)
                 };
-                let mut update = Progress::new(
-                    ProgressStage::Decoding,
-                    fraction,
+                let detail = if generation.max == 0 {
+                    format!("Translating… {} tokens (no limit)", generation.generated)
+                } else {
                     format!(
                         "Translating… {}/{} tokens",
                         generation.generated, generation.max
-                    ),
-                );
+                    )
+                };
+                let mut update = Progress::new(ProgressStage::Decoding, fraction, detail);
                 update.preview = Some(generation.preview);
                 progress(update);
             },
@@ -842,11 +827,11 @@ mod tests {
     fn source_and_generation_limits_are_independent() {
         let project = ProjectConfig {
             max_length: 64,
-            max_new_tokens: Some(200),
+            output_limit: OutputLimit::Tokens(200),
             ..ProjectConfig::default()
         };
         let config = EngineConfig::from_project(&project, Mode::Fast);
         assert_eq!(config.max_length, 64);
-        assert_eq!(config.max_new_tokens, Some(200));
+        assert_eq!(config.output_limit, OutputLimit::Tokens(200));
     }
 }

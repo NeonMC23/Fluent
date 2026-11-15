@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use serde::Deserialize;
 
 use crate::tokenizer::NllbTokenizer;
-use crate::{Error, Result};
+use crate::{default_generation_budget, Error, OutputLimit, Result};
 
 use super::checkpoint::Checkpoint;
 use super::quant::{quantization_enabled, Embedding, Projection};
@@ -578,6 +578,15 @@ impl DecoderCache {
 // score/softmax/value kernel. The buffers are preallocated for the whole token
 // budget, so appending a position never copies the cache.
 
+fn try_zeroed(elements: usize, tokens: usize) -> Result<Vec<f32>> {
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(elements)
+        .map_err(|_| Error::CacheAllocation(tokens))?;
+    values.resize(elements, 0.0);
+    Ok(values)
+}
+
 struct CpuLayerKv {
     k: Vec<f32>,
     v: Vec<f32>,
@@ -590,6 +599,9 @@ struct CpuDecoderCache {
     src_len: usize,
     len: usize,
     cap: usize,
+    /// Hard positional capacity. `UntilEos` starts smaller and grows
+    /// geometrically up to this bound.
+    max_cap: usize,
     active_beams: usize,
     max_beams: usize,
     heads: usize,
@@ -612,7 +624,10 @@ impl CpuDecoderCache {
         cfg: &NllbConfig,
         max_beams: usize,
         cap: usize,
+        max_cap: usize,
     ) -> Result<Self> {
+        let cap = cap.max(1).min(max_cap.max(1));
+        let max_cap = max_cap.max(cap);
         let heads = cfg.decoder_attention_heads;
         let head_dim = cfg.d_model / heads;
         let mut cross = Vec::with_capacity(decoder.layers.len());
@@ -636,6 +651,7 @@ impl CpuDecoderCache {
             src_len,
             len: 0,
             cap,
+            max_cap,
             active_beams: 1,
             max_beams,
             heads,
@@ -649,10 +665,60 @@ impl CpuDecoderCache {
         self.len += 1;
     }
 
+    /// Grows the preallocated cache when the next decode step needs a new
+    /// position. Growth is geometric, so long generations do not reallocate on
+    /// every token. Allocation failures return an error instead of aborting.
+    fn ensure_next_position(&mut self) -> Result<()> {
+        let required = self.len.saturating_add(1);
+        if required <= self.cap {
+            return Ok(());
+        }
+        if required > self.max_cap {
+            return Err(Error::PositionLimit(self.max_cap));
+        }
+        let mut new_cap = self.cap.max(1);
+        while new_cap < required {
+            new_cap = new_cap.saturating_mul(2).min(self.max_cap);
+        }
+        self.grow(new_cap)
+    }
+
+    fn grow(&mut self, new_cap: usize) -> Result<()> {
+        if new_cap <= self.cap {
+            return Ok(());
+        }
+        let old_cap = self.cap;
+        let used = self.len;
+        let total = self
+            .max_beams
+            .saturating_mul(self.heads)
+            .saturating_mul(new_cap)
+            .saturating_mul(self.head_dim);
+        let mut grown = Vec::with_capacity(self.layers.len());
+        for layer in &self.layers {
+            let mut k = try_zeroed(total, new_cap)?;
+            let mut v = try_zeroed(total, new_cap)?;
+            for slot in 0..self.max_beams {
+                for head in 0..self.heads {
+                    let src = ((slot * self.heads + head) * old_cap) * self.head_dim;
+                    let dst = ((slot * self.heads + head) * new_cap) * self.head_dim;
+                    let bytes = used.saturating_mul(self.head_dim);
+                    k[dst..dst + bytes].copy_from_slice(&layer.k[src..src + bytes]);
+                    v[dst..dst + bytes].copy_from_slice(&layer.v[src..src + bytes]);
+                }
+            }
+            grown.push(CpuLayerKv { k, v });
+        }
+        self.layers = grown;
+        self.cap = new_cap;
+        Ok(())
+    }
+
     /// Stores one new key/value position for every layer.
     fn append(&mut self, index: usize, k_new: &[f32], v_new: &[f32]) {
         let (heads, head_dim, cap) = (self.heads, self.head_dim, self.cap);
         let pos = self.len;
+        debug_assert!(pos < cap, "cache capacity was not grown before append");
         let layer = &mut self.layers[index];
         for beam in 0..self.active_beams {
             let slot = self.phys[beam];
@@ -1050,6 +1116,7 @@ impl Nllb {
         let x = match cache {
             CacheState::Tensors(cache) => self.decoder.forward(x, cache, timers)?,
             CacheState::Cpu(cache) => {
+                cache.ensure_next_position()?;
                 let out = self.decoder.forward_cpu(x, cache, timers)?;
                 // The fused path appends at `len`; advancing after the whole
                 // stack makes the position visible to the next call.
@@ -1147,19 +1214,33 @@ impl Nllb {
         timers.encode += started.elapsed();
 
         let beams = options.num_beams.max(1);
-        let max_new = options.max_new_tokens.max(1);
+        let window = GenerationWindow::resolve(
+            options.output_limit,
+            source_ids.len(),
+            self.config.max_position_embeddings,
+        );
+        let max_new = window.max_steps;
+        let cache_capacity = max_new.saturating_add(2);
 
         // The fused CPU cache is only used with quantized weights. The generic
         // path is byte-for-byte the previous implementation, so f32/CUDA/Metal
         // behaviour does not change.
         let started = Instant::now();
         let mut cache = if self.is_quantized() {
+            // Unlimited output starts smaller and grows on demand instead of
+            // reserving the full positional capacity up front.
+            let initial_capacity = if window.unlimited {
+                cache_capacity.min(128)
+            } else {
+                cache_capacity
+            };
             CacheState::Cpu(CpuDecoderCache::new(
                 &self.decoder,
                 &encoder_hidden,
                 &self.config,
                 beams,
-                max_new + 2,
+                initial_capacity,
+                cache_capacity,
             )?)
         } else {
             CacheState::Tensors(DecoderCache::new(
@@ -1193,11 +1274,11 @@ impl Nllb {
         let mut rows = prepare_logits(&first_logits, beams, timers)?;
         timers.search_logits += first_rows_started.elapsed();
 
-        let eos_id = tokenizer.eos_id();
+        let eos_id = tokenizer.stop_eos_id();
         let mut completed: Vec<(Vec<u32>, f64)> = Vec::new();
         let mut steps = 0usize;
 
-        while steps < max_new {
+        while window.allows(steps) {
             if cancel.load(AtomicOrdering::Relaxed) {
                 return Err(Error::Cancelled);
             }
@@ -1257,16 +1338,19 @@ impl Nllb {
                 .unwrap_or_default();
             progress(GenerationProgress {
                 generated: steps,
-                max: max_new,
+                max: if window.unlimited { 0 } else { max_new },
                 preview,
             });
 
             if steps >= max_new {
-                for (sequence, score) in sequences.iter().zip(scores.iter()) {
-                    let length = sequence.len().max(1) as f64;
-                    completed.push((sequence.clone(), *score / length));
+                if !window.unlimited {
+                    // A finite ceiling is an expected completion condition.
+                    for (sequence, score) in sequences.iter().zip(scores.iter()) {
+                        let length = sequence.len().max(1) as f64;
+                        completed.push((sequence.clone(), *score / length));
+                    }
+                    trim_completed(&mut completed, beams);
                 }
-                trim_completed(&mut completed, beams);
                 break;
             }
 
@@ -1288,6 +1372,9 @@ impl Nllb {
         }
 
         if completed.is_empty() {
+            if window.unlimited {
+                return Err(Error::PositionLimit(max_new));
+            }
             return Err(Error::Other(
                 "the model produced no translation tokens".to_string(),
             ));
@@ -1629,7 +1716,7 @@ pub enum EarlyStopping {
     /// cannot be improved on by the best active hypothesis.
     #[default]
     Heuristic,
-    /// Never stop early; generate until `max_new_tokens` (Hugging Face's
+    /// Never stop early; generate until the output limit (Hugging Face's
     /// `early_stopping = "never"`).
     Never,
 }
@@ -1725,9 +1812,43 @@ impl GenerationTimers {
     }
 }
 
+/// Resolved search window for one generation call.
+#[derive(Debug, Clone, Copy)]
+struct GenerationWindow {
+    max_steps: usize,
+    unlimited: bool,
+}
+
+impl GenerationWindow {
+    fn resolve(limit: OutputLimit, source_tokens: usize, max_positions: usize) -> Self {
+        // Two decoder positions are consumed by the mandatory start and target
+        // language tokens, so the model's positional table can host at most
+        // `max_positions - 2` generated tokens.
+        let model_budget = max_positions.saturating_sub(2).max(1);
+        match limit {
+            OutputLimit::Auto => Self {
+                max_steps: default_generation_budget(source_tokens).min(model_budget),
+                unlimited: false,
+            },
+            OutputLimit::Tokens(tokens) => Self {
+                max_steps: tokens.clamp(1, model_budget),
+                unlimited: false,
+            },
+            OutputLimit::UntilEos => Self {
+                max_steps: model_budget,
+                unlimited: true,
+            },
+        }
+    }
+
+    fn allows(self, steps: usize) -> bool {
+        steps < self.max_steps
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct GenerateOptions {
-    pub max_new_tokens: usize,
+    pub output_limit: OutputLimit,
     pub num_beams: usize,
     pub early_stopping: EarlyStopping,
 }
@@ -1735,7 +1856,7 @@ pub struct GenerateOptions {
 impl Default for GenerateOptions {
     fn default() -> Self {
         Self {
-            max_new_tokens: 256,
+            output_limit: OutputLimit::Tokens(256),
             num_beams: 4,
             early_stopping: EarlyStopping::default(),
         }
@@ -1745,6 +1866,7 @@ impl Default for GenerateOptions {
 #[derive(Debug, Clone)]
 pub struct GenerationProgress {
     pub generated: usize,
+    /// Finite ceiling, or `0` when the caller selected no Fluent limit.
     pub max: usize,
     pub preview: String,
 }
@@ -2251,6 +2373,16 @@ mod tests {
     // -- CPU cache bookkeeping --------------------------------------------
 
     fn test_cache(max_beams: usize, cap: usize, heads: usize, head_dim: usize) -> CpuDecoderCache {
+        test_cache_with_max(max_beams, cap, cap, heads, head_dim)
+    }
+
+    fn test_cache_with_max(
+        max_beams: usize,
+        cap: usize,
+        max_cap: usize,
+        heads: usize,
+        head_dim: usize,
+    ) -> CpuDecoderCache {
         let total = heads * cap * head_dim * max_beams;
         CpuDecoderCache {
             layers: vec![CpuLayerKv {
@@ -2261,6 +2393,7 @@ mod tests {
             src_len: 0,
             len: 0,
             cap,
+            max_cap,
             active_beams: 1,
             max_beams,
             heads,
@@ -2503,5 +2636,168 @@ mod tests {
         );
         let expected: Vec<f32> = beam_zero.into_iter().chain(beam_one).collect();
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn generation_window_allows_more_than_512_tokens_only_when_unlimited() {
+        let auto = GenerationWindow::resolve(OutputLimit::Auto, 100, 1024);
+        assert!(!auto.unlimited);
+        assert_eq!(auto.max_steps, 216);
+
+        let finite = GenerationWindow::resolve(OutputLimit::Tokens(512), 100, 1024);
+        assert!(!finite.unlimited);
+        assert_eq!(finite.max_steps, 512);
+
+        let longer = GenerationWindow::resolve(OutputLimit::Tokens(600), 100, 1024);
+        assert!(!longer.unlimited);
+        assert_eq!(longer.max_steps, 600);
+
+        let unlimited = GenerationWindow::resolve(OutputLimit::UntilEos, 100, 1024);
+        assert!(unlimited.unlimited);
+        assert_eq!(unlimited.max_steps, 1022);
+
+        // Simulate the production loop condition: 600 tokens are allowed
+        // before an EOS arrives, which is beyond the old 512 ceiling.
+        let mut generated = 0usize;
+        while unlimited.allows(generated) && generated < 600 {
+            generated += 1;
+        }
+        assert_eq!(generated, 600);
+    }
+
+    #[test]
+    fn finite_generation_is_clamped_to_model_capacity() {
+        let clamped = GenerationWindow::resolve(OutputLimit::Tokens(5_000), 100, 1024);
+        assert!(!clamped.unlimited);
+        assert_eq!(clamped.max_steps, 1022);
+
+        let minimum = GenerationWindow::resolve(OutputLimit::Tokens(0), 100, 1024);
+        assert_eq!(minimum.max_steps, 1);
+    }
+
+    #[test]
+    fn cpu_cache_grows_beyond_512_positions_and_preserves_data() {
+        let (heads, head_dim) = (2usize, 2usize);
+        let mut cache = test_cache_with_max(1, 4, 1024, heads, head_dim);
+        for position in 0..600usize {
+            cache.ensure_next_position().unwrap();
+            let base = position as f32 * 10.0;
+            let k: Vec<f32> = (0..heads * head_dim).map(|i| base + i as f32).collect();
+            cache.append(0, &k, &vec![0.0; heads * head_dim]);
+            cache.advance();
+        }
+        assert_eq!(cache.len, 600);
+        assert!(cache.cap > 512, "cache stayed at {}", cache.cap);
+
+        for position in [0usize, 1, 127, 128, 255, 256, 511, 512, 599] {
+            let base = position as f32 * 10.0;
+            assert_eq!(
+                position_slice(&cache, 0, 0, position),
+                vec![base, base + 1.0],
+                "position {position} was not preserved"
+            );
+            assert_eq!(
+                position_slice(&cache, 0, 1, position),
+                vec![base + 2.0, base + 3.0],
+                "head 1 position {position} was not preserved"
+            );
+        }
+    }
+
+    #[test]
+    fn cpu_cache_capacity_overflow_is_an_error() {
+        let (heads, head_dim) = (1usize, 1usize);
+        let mut cache = test_cache_with_max(1, 2, 4, heads, head_dim);
+        for _ in 0..4 {
+            cache.ensure_next_position().unwrap();
+            cache.append(0, &[1.0], &[1.0]);
+            cache.advance();
+        }
+        let error = cache
+            .ensure_next_position()
+            .expect_err("capacity must be enforced");
+        assert!(matches!(error, Error::PositionLimit(4)));
+    }
+
+    /// Load a real model with `FLUENT_TEST_MODEL` to prove the production
+    /// search loop can generate beyond 512 tokens, and that unlimited mode
+    /// stays cancellable. Disabling EOS is test-only; normal generation still
+    /// terminates on the tokenizer's real EOS id.
+    #[test]
+    fn real_model_generates_beyond_512_and_unlimited_cancels() {
+        let Some(dir) = std::env::var_os("FLUENT_TEST_MODEL").map(std::path::PathBuf::from) else {
+            eprintln!("skipping: set FLUENT_TEST_MODEL to run the long-generation test");
+            return;
+        };
+        if !dir.is_dir() {
+            eprintln!("skipping: FLUENT_TEST_MODEL is not a directory");
+            return;
+        }
+        let mut tokenizer = NllbTokenizer::from_dir(&dir).expect("tokenizer");
+        let (source_ids, _) = tokenizer
+            .encode_source(
+                "The library opens at eight. Visitors can borrow up to ten books for three weeks.",
+                "eng_Latn",
+                512,
+            )
+            .expect("encode source");
+        tokenizer.disable_stop_eos_for_test();
+        let model = Nllb::load(&dir, DType::F32, &Device::Cpu).expect("load model");
+        let cancel = AtomicBool::new(false);
+
+        let finite = model
+            .generate(
+                &tokenizer,
+                &source_ids,
+                "fra_Latn",
+                GenerateOptions {
+                    output_limit: OutputLimit::Tokens(600),
+                    num_beams: 1,
+                    early_stopping: EarlyStopping::default(),
+                },
+                &mut |_| {},
+                &cancel,
+            )
+            .expect("finite long generation");
+        assert!(
+            finite.len() > 512,
+            "expected more than 512 tokens, got {}",
+            finite.len()
+        );
+        println!("long generation produced {} tokens", finite.len());
+
+        let cancel = AtomicBool::new(false);
+        let mut seen = 0usize;
+        let error = model
+            .generate(
+                &tokenizer,
+                &source_ids,
+                "fra_Latn",
+                GenerateOptions {
+                    output_limit: OutputLimit::UntilEos,
+                    num_beams: 1,
+                    early_stopping: EarlyStopping::default(),
+                },
+                &mut |generation| {
+                    seen = seen.max(generation.generated);
+                    if generation.generated > 0 {
+                        assert_eq!(
+                            generation.max, 0,
+                            "unlimited progress must not report a fake ceiling"
+                        );
+                    }
+                    if generation.generated >= 520 {
+                        cancel.store(true, AtomicOrdering::Relaxed);
+                    }
+                },
+                &cancel,
+            )
+            .expect_err("unlimited generation must stop when cancelled");
+        assert!(matches!(error, Error::Cancelled));
+        assert!(
+            seen > 512,
+            "cancellation arrived before 512 tokens ({seen})"
+        );
+        println!("unlimited generation cancelled after {seen} tokens");
     }
 }

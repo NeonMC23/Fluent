@@ -15,6 +15,10 @@ pub struct NllbTokenizer {
     pad_id: u32,
     bos_id: u32,
     unk_id: u32,
+    /// Test-only override for the token that terminates beam search. The
+    /// decoder start token still uses the real `eos_id`.
+    #[cfg(test)]
+    stop_eos_override: Option<u32>,
 }
 
 impl NllbTokenizer {
@@ -42,11 +46,30 @@ impl NllbTokenizer {
             pad_id,
             bos_id,
             unk_id,
+            #[cfg(test)]
+            stop_eos_override: None,
         })
     }
 
     pub fn eos_id(&self) -> u32 {
         self.eos_id
+    }
+
+    /// Token compared against beam-search candidates. In production this is
+    /// always [`Self::eos_id`].
+    pub fn stop_eos_id(&self) -> u32 {
+        #[cfg(test)]
+        if let Some(id) = self.stop_eos_override {
+            return id;
+        }
+        self.eos_id
+    }
+
+    /// Test-only switch that prevents beam search from ever treating a token
+    /// as EOS, so long-generation tests can reach beyond the old 512 ceiling.
+    #[cfg(test)]
+    pub(crate) fn disable_stop_eos_for_test(&mut self) {
+        self.stop_eos_override = Some(u32::MAX);
     }
 
     pub fn pad_id(&self) -> u32 {

@@ -24,6 +24,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use candle_core::{DType, Device, Tensor};
 use fluent_core::model::nllb::{EarlyStopping, GenerateOptions, GenerationStats, Nllb};
 use fluent_core::NllbTokenizer;
+use fluent_core::OutputLimit;
 use serde_json::{json, Map, Value};
 
 // ---------------------------------------------------------------------------
@@ -722,7 +723,7 @@ fn run_case(
         let mut noop = |_progress: fluent_core::model::nllb::GenerationProgress| {};
         let cancel = AtomicBool::new(false);
         let options = GenerateOptions {
-            max_new_tokens: budget,
+            output_limit: OutputLimit::Tokens(budget),
             num_beams: beams,
             early_stopping,
         };

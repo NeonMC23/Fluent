@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(4);
     if let Ok(value) = std::env::var("FLUENT_MAX_NEW") {
         if let Ok(value) = value.parse() {
-            config.max_new_tokens = Some(value);
+            config.output_limit = fluent_core::OutputLimit::Tokens(value);
         }
     }
 

@@ -32,7 +32,7 @@ fn engine(dir: &PathBuf) -> Engine {
     config.precision = Precision::Auto;
     // Short, deterministic generations keep the suite fast while still
     // exercising the encoder, prefill, decode and cache paths.
-    config.max_new_tokens = Some(24);
+    config.output_limit = fluent_core::OutputLimit::Tokens(24);
     config.num_beams = 2;
     Engine::new(config)
 }

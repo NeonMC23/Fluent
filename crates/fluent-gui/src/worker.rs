@@ -146,7 +146,7 @@ fn worker_loop(
                     current.mode = config.mode;
                     current.num_beams = config.num_beams;
                     current.max_length = config.max_length;
-                    current.max_new_tokens = config.max_new_tokens;
+                    current.output_limit = config.output_limit;
                 }
 
                 send(

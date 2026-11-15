@@ -7,7 +7,7 @@ use fluent_core::{
     TranslationRequest, TranslationResult,
 };
 
-use crate::settings::{settings_path, Settings, ThemeChoice, ACCENTS};
+use crate::settings::{settings_path, OutputLengthSetting, Settings, ThemeChoice, ACCENTS};
 use crate::theme::{self, Palette};
 use crate::widgets;
 use crate::worker::{Command, Event, WorkerHandle};
@@ -197,9 +197,7 @@ impl FluentApp {
         config.precision = self.settings.precision;
         config.num_beams = self.settings.num_beams;
         config.max_length = self.settings.max_length;
-        // Generated length is derived from the encoded source; the settings
-        // slider controls the input limit only.
-        config.max_new_tokens = None;
+        config.output_limit = self.settings.output_limit();
         config
     }
 
@@ -1179,11 +1177,74 @@ impl FluentApp {
                                 .step_by(32.0)
                                 .text("Maximum input length (tokens)"),
                         );
+
+                        ui.add_space(4.0);
+                        egui::Grid::new("settings_output_limit")
+                            .num_columns(2)
+                            .spacing([16.0, 8.0])
+                            .show(ui, |ui| {
+                                ui.label(
+                                    egui::RichText::new("Output limit")
+                                        .size(13.0)
+                                        .color(palette.text),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        egui::ComboBox::from_id_salt("output_length_combo")
+                                            .selected_text(self.settings.output_length.label())
+                                            .width(230.0)
+                                            .show_ui(ui, |ui| {
+                                                for choice in [
+                                                    OutputLengthSetting::Automatic,
+                                                    OutputLengthSetting::Limited,
+                                                    OutputLengthSetting::Unlimited,
+                                                ] {
+                                                    if ui
+                                                        .selectable_label(
+                                                            self.settings.output_length == choice,
+                                                            choice.label(),
+                                                        )
+                                                        .clicked()
+                                                    {
+                                                        self.settings.output_length = choice;
+                                                    }
+                                                }
+                                            });
+                                    },
+                                );
+                                ui.end_row();
+                            });
+
+                        if self.settings.output_length == OutputLengthSetting::Limited {
+                            ui.add(
+                                egui::Slider::new(&mut self.settings.max_new_tokens, 64..=1024)
+                                    .step_by(32.0)
+                                    .text("Maximum output (tokens)"),
+                            );
+                        }
+
+                        widgets::hint(
+                            ui,
+                            &palette,
+                            match self.settings.output_length {
+                                OutputLengthSetting::Automatic => {
+                                    "Automatic adapts the output budget to the input, up to 512 tokens."
+                                }
+                                OutputLengthSetting::Limited => {
+                                    "Custom limit stops at the selected maximum even without EOS."
+                                }
+                                OutputLengthSetting::Unlimited => {
+                                    "No limit continues until EOS, cancellation, or the model's \
+                                     1024-position capacity (about 1022 generated tokens). \
+                                     Long outputs use more memory and time."
+                                }
+                            },
+                        );
                         widgets::hint(
                             ui,
                             &palette,
                             "More beams = better quality but slower generation. \
-                             Output length adapts to the input. \
                              Changing the model, device or precision reloads the model.",
                         );
 

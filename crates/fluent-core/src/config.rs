@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::{Error, Mode, Result};
+use crate::{Error, Mode, OutputLimit, Result};
 
 #[derive(Debug, Clone)]
 pub struct ProjectConfig {
@@ -15,9 +15,10 @@ pub struct ProjectConfig {
     pub fast_model: PathBuf,
     pub accurate_model: PathBuf,
     pub max_length: usize,
-    /// Optional explicit cap on generated tokens. `None` selects a
-    /// length-aware budget derived from the encoded source.
-    pub max_new_tokens: Option<usize>,
+    /// Generated-token policy. `Auto` derives a finite budget from the
+    /// encoded source; `Tokens(n)` uses a finite ceiling; `UntilEos` removes
+    /// the Fluent ceiling and runs until EOS, cancellation or model capacity.
+    pub output_limit: OutputLimit,
     pub num_beams: usize,
 }
 
@@ -34,7 +35,7 @@ impl Default for ProjectConfig {
             default_mode: Mode::Fast,
             theme: "system".to_string(),
             max_length: 512,
-            max_new_tokens: None,
+            output_limit: OutputLimit::Auto,
             num_beams: 4,
         }
     }
@@ -60,6 +61,9 @@ struct RawModels {
 struct RawGeneration {
     max_length: Option<usize>,
     max_new_tokens: Option<usize>,
+    /// Explicit opt-in for the no-Fluent-ceiling mode. Kept separate from
+    /// `max_new_tokens` so older files with a numeric value are unchanged.
+    unlimited_output: Option<bool>,
     num_beams: Option<usize>,
 }
 
@@ -131,8 +135,10 @@ impl ProjectConfig {
             if let Some(max_length) = generation.max_length {
                 config.max_length = max_length.clamp(16, 1024);
             }
-            if let Some(max_new_tokens) = generation.max_new_tokens {
-                config.max_new_tokens = Some(max_new_tokens.clamp(16, 1024));
+            if generation.unlimited_output.unwrap_or(false) {
+                config.output_limit = OutputLimit::UntilEos;
+            } else if let Some(max_new_tokens) = generation.max_new_tokens {
+                config.output_limit = OutputLimit::Tokens(max_new_tokens.clamp(16, 1024));
             }
             if let Some(num_beams) = generation.num_beams {
                 config.num_beams = num_beams.clamp(1, 8);
@@ -263,7 +269,7 @@ mod tests {
         assert_eq!(config.default_target_language, "fra_Latn");
         // Out-of-range values are clamped.
         assert_eq!(config.max_length, 1024);
-        assert_eq!(config.max_new_tokens, Some(1024));
+        assert_eq!(config.output_limit, OutputLimit::Tokens(1024));
         assert_eq!(config.num_beams, 8);
 
         fs::remove_dir_all(dir).ok();
@@ -283,7 +289,7 @@ mod tests {
         let config = ProjectConfig::load_from(&dir.join("config.json")).unwrap();
         assert_eq!(config.fast_model, dir.join("models/nllb-200-1.3b"));
         assert_eq!(config.accurate_model, dir.join("models/nllb-200-3.3b"));
-        assert_eq!(config.max_new_tokens, None);
+        assert_eq!(config.output_limit, OutputLimit::Auto);
 
         fs::remove_dir_all(dir).ok();
     }
@@ -300,9 +306,22 @@ mod tests {
         let config = ProjectConfig::load_from(&dir.join("config.json")).unwrap();
         assert_eq!(config.default_mode, Mode::Fast);
         assert_eq!(config.max_length, 16);
-        assert_eq!(config.max_new_tokens, Some(16));
+        assert_eq!(config.output_limit, OutputLimit::Tokens(16));
         assert_eq!(config.num_beams, 1);
 
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn unlimited_output_is_an_explicit_opt_in() {
+        let dir = temp_dir("unlimited");
+        fs::write(
+            dir.join("config.json"),
+            r#"{"generation": {"unlimited_output": true, "max_new_tokens": 256}}"#,
+        )
+        .unwrap();
+        let config = ProjectConfig::load_from(&dir.join("config.json")).unwrap();
+        assert_eq!(config.output_limit, OutputLimit::UntilEos);
         fs::remove_dir_all(dir).ok();
     }
 }

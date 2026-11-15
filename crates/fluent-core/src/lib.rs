@@ -17,12 +17,48 @@ use std::path::PathBuf;
 pub use config::ProjectConfig;
 pub use detect::Detection;
 pub use engine::{
-    default_generation_budget, estimate_memory, estimate_memory_for_choice, memory_info,
-    DeviceChoice, Engine, EngineConfig, EngineStatus, MemoryEstimate, MemoryInfo, Precision,
-    Progress, ProgressStage, TranslationRequest, TranslationResult,
+    estimate_memory, estimate_memory_for_choice, memory_info, DeviceChoice, Engine, EngineConfig,
+    EngineStatus, MemoryEstimate, MemoryInfo, Precision, Progress, ProgressStage,
+    TranslationRequest, TranslationResult,
 };
 pub use languages::{find_language, languages, popular_languages};
 pub use tokenizer::NllbTokenizer;
+
+/// Requested output-length policy.
+///
+/// `Auto` preserves the input-derived budget used by earlier releases.
+/// `Tokens(n)` is a finite ceiling. `UntilEos` removes the Fluent token
+/// ceiling and runs until the model emits EOS, the caller cancels, or the
+/// model's positional capacity is reached.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum OutputLimit {
+    #[default]
+    Auto,
+    Tokens(usize),
+    UntilEos,
+}
+
+impl OutputLimit {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "Automatic",
+            Self::Tokens(_) => "Custom limit",
+            Self::UntilEos => "No limit",
+        }
+    }
+}
+
+/// Length-aware default budget for generated tokens.
+///
+/// A translation is rarely longer than twice its source, so this keeps short
+/// inputs far below the 512-token ceiling while still leaving room for
+/// expansion, identifiers and punctuation. `Auto` preserves this behaviour.
+pub fn default_generation_budget(source_tokens: usize) -> usize {
+    source_tokens
+        .saturating_mul(2)
+        .saturating_add(16)
+        .clamp(16, 512)
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -46,6 +82,12 @@ pub enum Error {
 
     #[error("not enough memory to load the model (about {needed_mb} MB needed, {available_mb} MB available)")]
     OutOfMemory { needed_mb: u64, available_mb: u64 },
+
+    #[error("not enough memory to extend the translation cache to {0} tokens")]
+    CacheAllocation(usize),
+
+    #[error("the model reached its {0}-token positional capacity before producing EOS")]
+    PositionLimit(usize),
 
     #[error("tokenizer: {0}")]
     Tokenizer(String),

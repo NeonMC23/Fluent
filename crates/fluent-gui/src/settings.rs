@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use fluent_core::{DeviceChoice, Mode, Precision, ProjectConfig};
+use fluent_core::{DeviceChoice, Mode, OutputLimit, Precision, ProjectConfig};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -33,6 +33,30 @@ impl From<ThemeChoice> for egui::ThemePreference {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OutputLengthSetting {
+    /// Use `max_new_tokens` as a finite ceiling.
+    Limited,
+    /// Continue until EOS, cancellation or the model's positional capacity.
+    Unlimited,
+    /// Preserve the input-derived budget used by earlier releases. Unknown
+    /// persisted values fall back here instead of discarding the whole file.
+    #[default]
+    #[serde(other)]
+    Automatic,
+}
+
+impl OutputLengthSetting {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Automatic => "Automatic",
+            Self::Limited => "Custom limit",
+            Self::Unlimited => "No limit",
+        }
+    }
+}
+
 /// Accent colors offered in the settings.
 pub const ACCENTS: &[(&str, [u8; 3])] = &[
     ("Turquoise", [15, 159, 143]),
@@ -57,7 +81,11 @@ pub struct Settings {
     pub device: String,
     pub precision: Precision,
     pub num_beams: usize,
+    /// Maximum source tokens.
     pub max_length: usize,
+    pub output_length: OutputLengthSetting,
+    /// Finite output ceiling used when `output_length` is `Limited`.
+    pub max_new_tokens: usize,
     /// Last entered text, restored on startup.
     pub last_source: String,
 }
@@ -74,6 +102,8 @@ impl Default for Settings {
             precision: Precision::Auto,
             num_beams: 4,
             max_length: 512,
+            output_length: OutputLengthSetting::Automatic,
+            max_new_tokens: 512,
             last_source: String::new(),
         }
     }
@@ -112,6 +142,7 @@ impl Settings {
     pub fn sanitize(&mut self) {
         self.num_beams = self.num_beams.clamp(1, 8);
         self.max_length = self.max_length.clamp(64, 1024);
+        self.max_new_tokens = self.max_new_tokens.clamp(64, 1024);
         if self.source_language.is_empty() {
             self.source_language = "auto".to_string();
         }
@@ -120,6 +151,15 @@ impl Settings {
         }
         if self.device.is_empty() {
             self.device = "auto".to_string();
+        }
+    }
+
+    /// Maps the persisted GUI choice to the inference-engine policy.
+    pub fn output_limit(&self) -> OutputLimit {
+        match self.output_length {
+            OutputLengthSetting::Automatic => OutputLimit::Auto,
+            OutputLengthSetting::Limited => OutputLimit::Tokens(self.max_new_tokens),
+            OutputLengthSetting::Unlimited => OutputLimit::UntilEos,
         }
     }
 
@@ -213,6 +253,7 @@ mod tests {
         let mut settings = Settings {
             num_beams: 0,
             max_length: 10,
+            max_new_tokens: 1,
             source_language: String::new(),
             target_language: "auto".to_string(),
             device: String::new(),
@@ -230,5 +271,58 @@ mod tests {
         settings.sanitize();
         assert_eq!(settings.num_beams, 8);
         assert_eq!(settings.max_length, 1024);
+        assert_eq!(settings.max_new_tokens, 64);
+
+        settings.max_new_tokens = 9_000;
+        settings.sanitize();
+        assert_eq!(settings.max_new_tokens, 1024);
+    }
+
+    #[test]
+    fn output_length_choices_map_to_the_inference_policy() {
+        let mut settings = Settings::default();
+        assert_eq!(settings.output_length, OutputLengthSetting::Automatic);
+        assert_eq!(settings.output_limit(), OutputLimit::Auto);
+
+        settings.output_length = OutputLengthSetting::Limited;
+        settings.max_new_tokens = 600;
+        assert_eq!(settings.output_limit(), OutputLimit::Tokens(600));
+
+        settings.output_length = OutputLengthSetting::Unlimited;
+        assert_eq!(settings.output_limit(), OutputLimit::UntilEos);
+    }
+
+    #[test]
+    fn unknown_output_choice_falls_back_to_automatic() {
+        let parsed: Settings =
+            serde_json::from_str(r#"{"output_length":"something-new","num_beams":3}"#).unwrap();
+        assert_eq!(parsed.output_length, OutputLengthSetting::Automatic);
+        assert_eq!(parsed.num_beams, 3);
+    }
+
+    #[test]
+    fn older_settings_files_default_to_automatic_output() {
+        let parsed: Settings = serde_json::from_str(r#"{"theme":"dark","num_beams":2}"#).unwrap();
+        assert_eq!(parsed.output_length, OutputLengthSetting::Automatic);
+        assert_eq!(parsed.max_new_tokens, 512);
+    }
+
+    #[test]
+    fn output_length_round_trips_through_json() {
+        for choice in [
+            OutputLengthSetting::Automatic,
+            OutputLengthSetting::Limited,
+            OutputLengthSetting::Unlimited,
+        ] {
+            let settings = Settings {
+                output_length: choice,
+                max_new_tokens: 768,
+                ..Settings::default()
+            };
+            let raw = serde_json::to_string(&settings).unwrap();
+            let parsed: Settings = serde_json::from_str(&raw).unwrap();
+            assert_eq!(parsed.output_length, choice);
+            assert_eq!(parsed.max_new_tokens, 768);
+        }
     }
 }
