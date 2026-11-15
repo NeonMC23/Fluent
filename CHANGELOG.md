@@ -7,6 +7,10 @@ versions until a release is explicitly published.
 
 ### Added
 
+- Reproducible product-level benchmark harness (`examples/eval`), FLORES-200
+  sample and Fluent-oriented review corpus, and chrF++/BLEU summarizer.
+- Cycle 14 long-generation tests: MADLAD 520 tokens, cancellation after 515,
+  post-cancellation translation and drop/reload.
 - MADLAD-400-3B-MT (T5) backend with the pinned Apache-2.0 q4_k GGUF,
   SentencePiece-compatible tokenizer, target-language prefixes, curated
   language mapping, deterministic greedy decoding, output limits and
@@ -39,6 +43,10 @@ versions until a release is explicitly published.
 
 ### Changed
 
+- CPU Automatic precision now uses the Q8 path for NLLB 3.3B as well as 1.3B.
+  On the benchmark host this reduced median 3.3B latency from 26.6 s to
+  3.6 s and peak RSS from 6.54 GB to 4.57 GB on a 12-case probe, with
+  identical metrics.
 - Application version is centralized in the Cargo workspace and derived by
   build/package scripts and the GUI About string.
 - Settings layout uses aligned grids and equal model cards.

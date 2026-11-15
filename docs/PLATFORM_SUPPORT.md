@@ -84,6 +84,12 @@ execution is still not physical-device validation.
 
 ## CPU and GPU behaviour
 
+- NLLB 1.3B and 3.3B both use CPU Q8 under Automatic precision. A measured
+  12-case probe showed 3.3B Q8 at ~3.6 s median versus ~26.6 s for f16, with
+  4.57 GB versus 6.54 GB peak RSS and equal metrics.
+- MADLAD is CPU-only q4_k greedy. Its 520-token long-generation test passed;
+  see [BENCHMARKS.md](BENCHMARKS.md).
+
 - x86-64: AVX2/FMA kernels are selected at runtime with `is_x86_feature_detected!`;
   the scalar Q8 kernel is always available. The binary is not compiled with
   `target-cpu=native`.

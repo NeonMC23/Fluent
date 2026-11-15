@@ -30,7 +30,7 @@ Translate across **190+ languages and dialects** with a clean desktop interface,
 | 🧠 **Local AI inference** | Run NLLB-200 or MADLAD-400 locally, without a server or cloud API. |
 | 🧬 **Two model families** | Choose NLLB-200 for broad coverage or MADLAD-400 for T5 translation. |
 | ⚡ **Fast mode** | Use the smaller 1.3B model for lighter workloads. |
-| 🎯 **Accurate mode** | Choose the larger 3.3B model for translation quality. |
+| 🎯 **Accurate mode** | Choose the larger 3.3B model for translation quality; CPU auto uses Q8. |
 | 🔎 **Automatic detection** | Detect the source language automatically. |
 | 🖥️ **Native desktop UI** | A responsive interface built with Rust and egui. |
 | 🎨 **Customizable appearance** | Light, dark, and system themes, plus accent colors. |
@@ -95,7 +95,8 @@ Fluent supports three translation choices across two model families:
 > MIT license covers the application code only. Fluent does not bundle or
 > redistribute model weights. See
 > [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md) and
-> [docs/MADLAD.md](docs/MADLAD.md).
+> [docs/MADLAD.md](docs/MADLAD.md). Cycle 14 CPU, quality and memory
+> measurements are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 This repository intentionally contains **no** model weights, tokenizer, or
 model configuration files. Place each model's files in the corresponding
@@ -448,6 +449,7 @@ the unresolved tokenizer-redistribution question.
 - [Windows build guide](docs/WINDOWS.md)
 - [macOS build guide](docs/MACOS.md)
 - [MADLAD-400 setup, languages and measurements](docs/MADLAD.md)
+- [Cycle 14 quality and performance benchmarks](docs/BENCHMARKS.md)
 - [Model backend architecture decision](docs/ADR-001-model-backends.md)
 - [Model package specification](docs/MODEL_PACKAGE.md)
 - [Model provenance and licensing](docs/MODEL_PROVENANCE.md)

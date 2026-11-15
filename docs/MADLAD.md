@@ -114,8 +114,10 @@ Measured on the canonical development host:
 | Peak process RAM | 2.72 GB |
 | RSS after unload | ~1.54 GB retained by the allocator; engine state is released |
 | First output | 1.4–2.2 s |
-| Throughput | roughly 2.4 generated tokens/s |
+| Throughput | roughly 1.8–2.4 generated tokens/s depending on length |
 | Typical sentence | 21–33 tokens in 8–13 s |
+| Long generation | 520 tokens in 124 s; 2.98 GB peak |
+| Unlimited cancellation | cancelled after 515 tokens; 3.22 GB peak |
 
 These are CPU measurements only. GPU acceleration is not implemented for
 MADLAD and is not advertised.
@@ -135,6 +137,9 @@ implicitly.
   f32 checkpoint.
 - Allocation is not unlimited: very long generations can exhaust memory, and
   the error is reported rather than treated as success.
+- A 520-token finite run, unlimited cancellation after 515 tokens, a
+  post-cancellation translation and a drop/reload were tested successfully.
+  Allocation failure itself was not deliberately induced.
 - Physical Windows/macOS runtime validation is separate from the Linux
   measurements above.
 
@@ -150,6 +155,15 @@ FLUENT_MADLAD_MODEL="$HOME/.local/share/fluent/models/madlad400-3b-mt" \
 ```bash
 FLUENT_MADLAD_MODEL="$HOME/.local/share/fluent/models/madlad400-3b-mt" \
     cargo test --release -p fluent-core --lib real_model_translates_required_pairs -- --nocapture
+```
+
+The opt-in long-generation test generates 520 tokens with EOS suppressed,
+cancels unlimited generation after 515 tokens, and then reloads the model:
+
+```bash
+FLUENT_MADLAD_MODEL="$HOME/.local/share/fluent/models/madlad400-3b-mt" \
+    cargo test --release -p fluent-core --lib \
+    real_model_exceeds_512_tokens_and_cancels_unlimited -- --nocapture
 ```
 
 The normal workspace test suite skips these tests and remains fully offline.
