@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LOGO = ROOT / "src/logo/logo.png"
 BANNER = ROOT / "src/logo/banner.png"
+MARK = ROOT / "src/logo/fluent-mark.png"
 GENERATED = ROOT / "src/logo/generated"
 PNG_DIR = GENERATED / "png"
 ICO = GENERATED / "windows/fluent.ico"
@@ -26,6 +27,7 @@ UI_RGBA = GENERATED / "ui/fluent-mark-256.rgba"
 
 MASTER_SHA = "bce82ebd549e4e6a0001a605a7bb8ff3efc8bfedf30fc20c3803801db884b5e7"
 BANNER_SHA = "ce3deeb9bab7a9cf847ba06568886e8cb5b10d88080bc1c55363300f35925545"
+MARK_SHA = "6ac61dc6b89694f3a1d6aa900b2b6604c100464c79e352e43e5de5b0c5e24df4"
 PNG_SIZES = (16, 24, 32, 48, 64, 128, 256, 512)
 ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
 ICNS_ENTRIES = {
@@ -155,18 +157,23 @@ def check_rgba() -> None:
         fail("UI mark PNG has the wrong dimensions")
     if UI_RGBA.stat().st_size != 256 * 256 * 4:
         fail("raw RGBA UI mark has the wrong size")
+    # The window icon and the header mark must be the same pixels. This is the
+    # regression check that keeps the selected turquoise F in both places.
+    if RGBA.read_bytes() != UI_RGBA.read_bytes():
+        fail("window icon and header mark are not the same artwork")
 
 
 def main() -> None:
     check_master(LOGO, MASTER_SHA, (1024, 1024))
     check_master(BANNER, BANNER_SHA, (1536, 1024))
+    check_master(MARK, MARK_SHA, (475, 475))
     check_pngs()
     check_ico()
     check_icns()
     check_rgba()
     print(
-        "PASS: branding masters, 8 PNG variants, UI mark, 7-entry ICO, "
-        "11-chunk ICNS and raw RGBA assets are valid"
+        "PASS: branding masters, canonical F mark, 8 PNG variants, UI mark, "
+        "7-entry ICO, 11-chunk ICNS and matching raw RGBA assets are valid"
     )
 
 

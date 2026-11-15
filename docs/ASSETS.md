@@ -3,30 +3,37 @@
 This document records the official Fluent branding sources, derived platform
 icons, validation rules and remaining public-distribution caveats.
 
-## 1. Source masters (immutable)
+## 1. Source masters and the canonical symbol
 
 The two source files were copied byte-for-byte from the original local project
 with explicit authorization. They are masters: **never re-encode, overwrite,
 crop, vectorize or edit them in place.**
 
+The canonical application symbol is the **turquoise stylized F mark**. It is
+extracted from `logo.png` with the same `(270, 190, 745, 665)` crop the GUI
+header has always used and committed as `src/logo/fluent-mark.png` (475×475
+RGBA). Every application and platform icon derives from that mark. The full
+`logo.png` and `banner.png` remain unchanged as the original brand artwork.
+
 | File | Dimensions | Mode | Alpha | SHA-256 | Size |
 |---|---|---|---|---|---|
 | `src/logo/logo.png` | 1024×1024 | RGBA / sRGB | Yes; 0–255, non-opaque corners | `bce82ebd549e4e6a0001a605a7bb8ff3efc8bfedf30fc20c3803801db884b5e7` | 1,410,578 B |
 | `src/logo/banner.png` | 1536×1024 | RGBA / sRGB | Yes; non-opaque corners | `ce3deeb9bab7a9cf847ba06568886e8cb5b10d88080bc1c55363300f35925545` | 876,488 B |
+| `src/logo/fluent-mark.png` | 475×475 | RGBA / sRGB | Yes; non-opaque corners | `6ac61dc6b89694f3a1d6aa900b2b6604c100464c79e352e43e5de5b0c5e24df4` | generated from `logo.png` |
 
 Visual notes:
 
-- The logo contains the Fluent mark plus the “Fluent” wordmark on a soft dark
-  gradient, with transparent outer padding. The non-transparent bounding box is
-  approximately `(280,201)–(735,808)` within the 1024 canvas.
-- Because the wordmark is part of the master, it becomes unreadable below
-  roughly 32 px; at 16–24 px only the mark is distinguishable. The original was
-  preserved unchanged; no crop or redesign was applied. This is a documented
-  limitation, not a hidden asset substitution.
-- The banner is landscape and carries the mark/wordmark on a dark transparent
-  background. It is used in the README only; it is not an icon and is not
-  embedded in the application.
+- The full logo master contains the Fluent mark plus the “Fluent” wordmark on a
+  soft dark gradient, with transparent outer padding. The non-transparent
+  bounding box is approximately `(280,201)–(735,808)`.
+- The mark crop `(270,190,745,665)` contains only the turquoise F. It is the
+  authoritative application symbol and is never redrawn.
+- The banner is landscape and carries the same mark/wordmark. It is used in the
+  README only; it is not an application icon and is not embedded in the binary.
+  It is documented here because it is the one remaining wordmark composition.
 - Neither source is a vector. No automatic vectorization was attempted.
+- The mark is the only artwork used for window, taskbar, launcher, executable,
+  bundle and dock icons.
 
 License/provenance: these are **project-provided branding assets**. Their
 authorship/license is not documented in the original project. Do not assume the
@@ -40,22 +47,22 @@ builds and installers need no image tooling.
 
 | Asset | Format | Dimensions / entries | Purpose | Validation |
 |---|---|---|---|---|
-| `png/fluent-16.png` … `fluent-512.png` | PNG, RGBA | 16, 24, 32, 48, 64, 128, 256, 512 px | Linux/source variants, documentation, ICO/ICNS inputs | IHDR dimensions checked |
-| `window/fluent-256.rgba` | raw RGBA8 | 256×256, 262,144 B | Compile-time embedded window icon | Exact length checked; used by `main.rs` |
+| `png/fluent-16.png` … `fluent-512.png` | PNG, RGBA | 16, 24, 32, 48, 64, 128, 256, 512 px | Linux/source variants, documentation, ICO/ICNS inputs | All derive from the mark; dimensions checked |
+| `window/fluent-256.rgba` | raw RGBA8 | 256×256, 262,144 B | Compile-time embedded window icon | Byte-identical to the header mark; used by `main.rs` |
 | `ui/fluent-mark-256.png` | PNG RGBA | 256×256 | Documentation/preview of the header mark | IHDR checked |
 | `ui/fluent-mark-256.rgba` | raw RGBA8 | 256×256, 262,144 B | Compile-time embedded header mark | Exact length checked; used by `app.rs` |
-| `windows/fluent.ico` | ICO | 7 entries: 16, 24, 32, 48, 64, 128, 256; 32-bit | Windows executable resource | Directory/BMP payloads parsed independently |
-| `macos/Fluent.icns` | ICNS | 11 PNG chunks: 16, 32, 64, 128, 256, 512, 1024 plus 2× variants | macOS bundle icon | Header/chunk lengths and PNG dimensions parsed independently |
+| `windows/fluent.ico` | ICO | 7 entries: 16, 24, 32, 48, 64, 128, 256; 32-bit | Windows executable resource | Generated from the mark; directory/BMP payloads parsed independently |
+| `macos/Fluent.icns` | ICNS | 11 PNG chunks: 16, 32, 64, 128, 256, 512, 1024 plus 2× variants | macOS bundle icon | Generated from the mark; header/chunk lengths and PNG dimensions parsed independently |
 
 Key hashes:
 
 ```text
-fluent.ico         d5459a9fc241815c2833bc1c325af12c4583ba11cf648d1fa171e6a6d0f03966
-Fluent.icns        8016e6005b889bd463bb30c4afb4d3ff01a758a11a71b0ba5fc1965636150107
-fluent-256.png     8b4212285d6d33cc786cc54d0dc0715da4ce9127757d946e2a23daca848c0de9
-fluent-512.png     ca62ea2c784fd58cc32a5bf44e655c31a9ecaaee6028262fe0402fc00d7f4d4e
-fluent-256.rgba    6eb9909db6a7b702a862731de84f5551e957a0c08cb3f31346e4139ad779d7a2
-fluent-mark.png    061a732acbec76cf91c9108ffec65383bd44d7a6919c13599e2851a016759e60
+fluent-mark.png    6ac61dc6b89694f3a1d6aa900b2b6604c100464c79e352e43e5de5b0c5e24df4
+fluent.ico         bd50855683fd9eaba549f058fa8de0315abeb987474091b652db67df5b8e2c6f
+Fluent.icns        b1c5163c0eed7132987accc35c3fb950813926adfb541de5878bcfc33083ce44
+fluent-256.png     061a732acbec76cf91c9108ffec65383bd44d7a6919c13599e2851a016759e60
+fluent-512.png     a4b830d076bf8b27648ef11fc44fae4d445ee842ed9ac2470041367c1590b521
+fluent-256.rgba    22c92da9c4d9eefaa1524300b7f3e961a1332f21bb5b6f0ce6dc67c6e5b45ac3
 fluent-mark.rgba   22c92da9c4d9eefaa1524300b7f3e961a1332f21bb5b6f0ce6dc67c6e5b45ac3
 ```
 
@@ -70,38 +77,46 @@ python3 scripts/generate-branding-assets.py
 The script:
 
 1. verifies the master is 1024×1024 RGBA;
-2. resizes with Lanczos to the listed sizes, preserving aspect ratio and alpha;
-3. writes optimized PNGs;
-4. writes the raw 256 RGBA payload;
-5. writes a 7-entry ICO with 32-bit BMP entries;
-6. writes an 11-chunk ICNS containing PNG payloads.
+2. extracts the canonical mark with the fixed crop and writes
+   `src/logo/fluent-mark.png`;
+3. resizes the **mark** with Lanczos to the listed sizes;
+4. writes optimized PNGs;
+5. writes the raw 256 RGBA window payload and the matching header mark;
+6. writes a 7-entry ICO with 32-bit BMP entries from the mark;
+7. writes an 11-chunk ICNS containing PNG payloads from the mark.
 
-Validate without Pillow (standard library only):
+Validate structurally without Pillow (standard library only):
 
 ```bash
 python3 scripts/verify-branding-assets.py
 ```
 
-It checks master hashes/dimensions, every PNG size, ICO directory/payload
-dimensions, ICNS header/chunks/PNG dimensions, and the raw RGBA length. The CI
-workflow executed this check successfully in run 43605074905.
+It checks the master/banner/mark hashes and dimensions, every PNG size, ICO
+directory/payload dimensions, ICNS header/chunks/PNG dimensions, the raw RGBA
+lengths, and that the window icon and header mark are byte-identical.
 
-Reproducibility: the same masters, Pillow version and script produce the same
-files here. Different Pillow/zlib versions may choose different PNG compression
-bytes. The committed assets are authoritative for builds; regeneration is only
-needed when the master changes.
+Verify reproducibility (requires Pillow):
+
+```bash
+python3 scripts/generate-branding-assets.py --check
+```
+
+It regenerates all 14 outputs into a temporary directory and compares them
+byte-for-byte with the committed files. The same master, Pillow version and
+script produce the same files here. The CI structural check does not require
+Pillow.
 
 ## 4. Application and platform integration
 
 | Target | Integration | Status |
 |---|---|---|
-| GUI window icon | `include_bytes!("…/window/fluent-256.rgba")` in `crates/fluent-gui/src/main.rs`; no runtime file lookup or image decoder | Implemented |
+| GUI window icon | `include_bytes!("…/window/fluent-256.rgba")` in `crates/fluent-gui/src/main.rs`; now the same mark as the header, with no runtime file lookup or image decoder | Implemented and verified byte-identical to the header mark |
 | GUI header | Mark-only `ui/fluent-mark-256.rgba` loaded once as an egui texture in `app.rs`; the “Fluent” wordmark remains text | Implemented and visible in a real app screenshot (`src/image1.png`) |
-| Linux desktop entry | Installer copies the bundled `fluent-256.png` to `hicolor/256x256/apps/io.fluent.Fluent.png`; explicit SVG/PNG `--icon` still supported | Implemented and tested |
+| Linux desktop entry | Installer copies the bundled `fluent-256.png` (the mark) to `hicolor/256x256/apps/io.fluent.Fluent.png`; explicit SVG/PNG `--icon` still supported | Implemented and tested |
 | Linux portable archive | Window icon embedded in the binary; no external icon files needed for running | Implemented |
-| Windows executable | `build.rs` uses `winres` to embed `windows/fluent.ico`, ProductName, FileDescription, OriginalFilename and numeric file/product version | Prepared; no Windows build executed |
-| macOS bundle | `scripts/package-macos.sh` stages `Fluent.app` with `Fluent.icns` and `Info.plist`; no signing/notarization | Prepared; no macOS build executed |
-| README | Banner referenced from `src/logo/banner.png` | Implemented |
+| Windows executable | `build.rs` uses `winres` to embed the mark-based `windows/fluent.ico`, ProductName, FileDescription, OriginalFilename and numeric file/product version | CI-compiled; physical Windows runtime not executed |
+| macOS bundle | `scripts/package-macos.sh` stages `Fluent.app` with the mark-based `Fluent.icns` and `Info.plist`; no signing/notarization | CI-built; physical macOS runtime not executed |
+| README | Banner referenced from `src/logo/banner.png`; it is the only wordmark composition and is not used as an icon | Implemented and documented |
 | In-app banner | Deliberately not added; it would consume permanent UI space and the screenshots already show the interface | Not used |
 
 The Windows icon embedding is only exercised when the build script runs on a
@@ -121,6 +136,10 @@ Captured from the actual running application on the canonical Linux host:
 | MADLAD CPU/greedy/output controls | `docs/screenshots/settings-madlad-output.png` |
 | MADLAD filtered target-language picker | `docs/screenshots/language-picker-madlad.png` |
 | Main interface with SMaLL-100 selected | `docs/screenshots/main-small.png` |
+| Model selector with explicit model identities | `docs/screenshots/model-selector.png` |
+| Language picker filtered to SMaLL-100 (Simplified Chinese only) | `docs/screenshots/language-picker-small.png` |
+| Language picker for NLLB-200 (Simplified and Traditional Chinese) | `docs/screenshots/language-picker-nllb.png` |
+| Model-switch language adjustment notice | `docs/screenshots/language-adjusted.png` |
 | Model Manager, storage, catalogue and four models | `docs/screenshots/model-manager.png` |
 | Model Manager, SMaLL-100 installed and verified | `docs/screenshots/model-manager-small.png` |
 | Model Manager, download confirmation and licence | `docs/screenshots/model-manager-confirm.png` |
