@@ -27,7 +27,8 @@ Translate across **190+ languages and dialects** with a clean desktop interface,
 | Feature | Description |
 | --- | --- |
 | 🌍 **200+ languages** | NLLB-200 covers 202 language and script variants. |
-| 🧠 **Local AI inference** | Run NLLB-200, MADLAD-400 or SMaLL-100 locally, without a server or cloud API. |
+| 🧠 **Local AI inference** | Run translation and chat models locally, without a server or cloud API. |
+| 💬 **Local chat** | A separate Qwen2.5 Instruct model for on-device conversation, with streaming and cancellation. |
 | 🧬 **Three model families** | Choose NLLB-200 for broad coverage, MADLAD-400 for T5 translation, or SMaLL-100 for a fast 330M CPU model. |
 | 🌐 **Accurate language lists** | The source and target pickers show only the languages the selected model can actually translate. |
 | 📦 **Model Manager** | Detect, download, verify, load and safely remove models from the desktop app. |
@@ -37,7 +38,7 @@ Translate across **190+ languages and dialects** with a clean desktop interface,
 | 🖥️ **Native desktop UI** | A responsive interface built with Rust and egui. |
 | 🎨 **Customizable appearance** | Light, dark, and system themes, plus accent colors. |
 | 🚀 **Optional GPU acceleration** | CUDA on supported NVIDIA systems or Metal on Apple Silicon. |
-| 🔒 **Local-first privacy** | Translation inference runs on your device, without a cloud translation API. |
+| 🔒 **Local-first privacy** | Translation and chat inference run on your device; chat history is session-only. |
 | 🧩 **Clean per-user installation** | The application, configuration, and models live in separate, predictable locations. Uninstall never deletes your models or settings. |
 
 ## ▸ Getting Started
@@ -93,11 +94,18 @@ Fluent supports four translation choices across three model families:
 | 🧬 **MADLAD-400 3B** | `google/madlad400-3b-mt` q4_k | 1.7 GB | Alternative multilingual translation model |
 | 🪶 **SMaLL-100** | `alirezamsh/small100` | 1.3 GB | Lightweight and fast |
 
+Chat uses separate instruct models:
+
+| Chat model | Upstream | Approximate storage | Intended use |
+| --- | --- | ---: | --- |
+| 💬 **Qwen2.5 1.5B Instruct** | `Qwen/Qwen2.5-1.5B-Instruct-GGUF` Q4_K_M | 1.1 GB | Better-quality local chat |
+| ⚡ **Qwen2.5 0.5B Instruct** | `Qwen/Qwen2.5-0.5B-Instruct-GGUF` Q4_0 | 0.4 GB | Fastest local chat |
+
 > **Model licenses:** Meta releases the NLLB-200 weights under
 > **CC BY-NC 4.0 (non-commercial)**. MADLAD-400 is **Apache-2.0**. SMaLL-100 is
-> released under the **MIT** licence by its authors. Fluent's MIT license covers
-> the application code only. Fluent does not bundle or redistribute model
-> weights. See [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md),
+> released under the **MIT** licence by its authors. Qwen2.5 Instruct is
+> **Apache-2.0**. Fluent's MIT license covers the application code only. Fluent
+> does not bundle or redistribute model weights. See [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md),
 > [docs/MADLAD.md](docs/MADLAD.md) and [docs/SMALL100.md](docs/SMALL100.md).
 > CPU, quality and memory measurements are in
 > [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
@@ -113,17 +121,26 @@ directory:
 │   ├── tokenizer.json
 │   └── pytorch_model.bin   (or safetensors / sharded checkpoint)
 ├── nllb-200-3.3b/
-└── madlad400-3b-mt/
-    ├── config.json
+├── madlad400-3b-mt/
+│   ├── config.json
+│   ├── tokenizer.json
+│   └── model-q4k.gguf
+└── qwen2.5-1.5b-instruct/
+    ├── qwen2.5-1.5b-instruct-q4_k_m.gguf
     ├── tokenizer.json
-    └── model-q4k.gguf
+    └── tokenizer_config.json
 ```
 
-The native **Model Manager** can download and verify all four models. Open
-**Models** in the application header (or **Settings → Manage models…**), choose
-a model, review its license and download size, and confirm. Existing model
-directories are detected without moving or downloading them again. See
-[docs/MODEL_MANAGER.md](docs/MODEL_MANAGER.md).
+The native **Model Manager** can download and verify the four translation
+models and the two chat models. Open **Models** in the application header (or
+**Settings → Manage models…**), choose a model, review its license and download
+size, and confirm. Existing model directories are detected without moving or
+downloading them again. See [docs/MODEL_MANAGER.md](docs/MODEL_MANAGER.md).
+
+To use chat, select **Chat** in the header, install either Qwen2.5 Instruct
+model under **Models → Chat models**, and type a message. Chat is separate from
+translation: changing the chat model never changes the translation model, and
+chat history is session-only. See [docs/CHAT.md](docs/CHAT.md).
 
 The MADLAD command-line acquisition remains available as an optional fallback:
 
@@ -278,7 +295,8 @@ Example:
     "fast": "/home/you/.local/share/fluent/models/nllb-200-1.3b",
     "accurate": "/home/you/.local/share/fluent/models/nllb-200-3.3b",
     "madlad": "/home/you/.local/share/fluent/models/madlad400-3b-mt",
-    "small": "/home/you/.local/share/fluent/models/small100"
+    "small": "/home/you/.local/share/fluent/models/small100",
+    "chat": "/home/you/.local/share/fluent/models/qwen2.5-1.5b-instruct"
   },
   "generation": {
     "max_length": 512,
@@ -471,6 +489,7 @@ the unresolved tokenizer-redistribution question.
 - [Language support and the capability registry](docs/LANGUAGES.md)
 - [Remote catalogue schema and maintainer workflow](docs/CATALOGUE.md)
 - [SMaLL-100 setup, languages and licence](docs/SMALL100.md)
+- [Local chat, models and performance](docs/CHAT.md)
 - [MADLAD-400 setup, languages and measurements](docs/MADLAD.md)
 - [Quality and performance benchmarks (Cycle 14 and Cycle 16)](docs/BENCHMARKS.md)
 - [Model backend architecture decision](docs/ADR-001-model-backends.md)

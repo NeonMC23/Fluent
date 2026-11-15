@@ -1,8 +1,8 @@
 # Model Manager
 
 Fluent can discover, download, verify, load, unload and remove its four
-supported models from the **Model Manager** in the application header (or
-**Settings → Manage models…**).
+translation models and two chat models from the **Model Manager** in the
+application header (or **Settings → Manage models…**).
 
 Models are always **user-supplied**. Fluent does not bundle weights in the
 application, installer, portable archive or CI artifacts.
@@ -15,6 +15,8 @@ application, installer, portable archive or CI artifacts.
 | NLLB-200 3.3B | NLLB-200 | 17.5 GB | ~17.6 GB | CC-BY-NC-4.0 | CPU Q8; CUDA/Metal if built |
 | MADLAD-400 3B | T5 | 1.7 GB | ~1.7 GB | Apache-2.0 | CPU q4_k greedy only |
 | SMaLL-100 | M2M-100 (12/3) | 1.3 GB | 1.34 GB | MIT | CPU Q8; CUDA/Metal if built |
+| Qwen2.5 1.5B Instruct | Qwen2 (chat) | 1.1 GB | 1.12 GB | Apache-2.0 | CPU GGUF Q4_K_M |
+| Qwen2.5 0.5B Instruct | Qwen2 (chat) | 0.4 GB | 0.43 GB | Apache-2.0 | CPU GGUF Q4_0 |
 
 The catalogue is defined once in `crates/fluent-core/src/model/registry.rs`.
 Required files, sizes, SHA-256 values, repository and pinned revision are in
@@ -59,6 +61,21 @@ The manager distinguishes:
 A size check is deliberately cheap and runs whenever the catalogue is shown.
 Use **Verify** for the full checksum pass. A model is never reported as
 downloaded/installed before its required files pass verification.
+
+## Chat models
+
+The **Chat models** section uses the same native installer and verifier as the
+translation models: pinned revisions, exact sizes and SHA-256, resumable
+`.part` downloads, disk checks, atomic promotion, cancellation and safe
+removal. Chat models are intentionally separate from translation models and do
+not appear in the translation selector.
+
+- **Download/Repair/Verify** work exactly like the translation cards.
+- There is no **Load** action in the manager: the Chat view loads the selected
+  chat model on the first message.
+- To remove a chat model, switch to **Translate** first. That unloads the chat
+  engine; removal is refused while it is loaded or generating.
+- Chat history is never stored in the model directory or settings.
 
 ## Installation
 

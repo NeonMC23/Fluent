@@ -135,7 +135,13 @@ Captured from the actual running application on the canonical Linux host:
 | Settings page, MADLAD selected | `docs/screenshots/settings-madlad.png` |
 | MADLAD CPU/greedy/output controls | `docs/screenshots/settings-madlad-output.png` |
 | MADLAD filtered target-language picker | `docs/screenshots/language-picker-madlad.png` |
-| Main interface with SMaLL-100 selected | `docs/screenshots/main-small.png` |
+| Main interface with SMaLL-100 selected and Translate/Chat navigation | `docs/screenshots/main-small.png` |
+| Chat empty state and model status | `docs/screenshots/chat.png` |
+| Chat conversation with a French follow-up | `docs/screenshots/chat-conversation.png` |
+| Chat model picker | `docs/screenshots/chat-model-picker.png` |
+| Model Manager chat models | `docs/screenshots/model-manager-chat.png` |
+| Chat model download progress with speed and ETA | `docs/screenshots/chat-download-progress.png` |
+| Downloaded chat model installed in a custom storage root | `docs/screenshots/chat-download.png` |
 | Model selector with explicit model identities | `docs/screenshots/model-selector.png` |
 | Language picker filtered to SMaLL-100 (Simplified Chinese only) | `docs/screenshots/language-picker-small.png` |
 | Language picker for NLLB-200 (Simplified and Traditional Chinese) | `docs/screenshots/language-picker-nllb.png` |

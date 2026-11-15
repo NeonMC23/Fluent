@@ -7,6 +7,7 @@ specification.
 MADLAD-400 uses a different GGUF/tokenizer contract documented in
 [MADLAD.md](MADLAD.md). SMaLL-100 uses `vocab.json` plus
 `sentencepiece.bpe.model` and `model.safetensors`; see [SMALL100.md](SMALL100.md).
+Chat models use a Qwen2 GGUF plus `tokenizer.json`; see [CHAT.md](CHAT.md).
 This page covers NLLB-200 only.
 
 ## 1. Directory layout

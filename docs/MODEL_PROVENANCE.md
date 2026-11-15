@@ -51,6 +51,25 @@ SMaLL-100 is a separate M2M-100 family model.
 
 This is an engineering record, not legal advice.
 
+## Qwen2.5 Instruct (Cycle 18)
+
+Qwen2.5 Instruct is the local chat model family. It is not a translation model.
+
+- Sources: `Qwen/Qwen2.5-1.5B-Instruct-GGUF` and
+  `Qwen/Qwen2.5-0.5B-Instruct-GGUF`, plus the matching
+  `Qwen/Qwen2.5-{1.5B,0.5B}-Instruct` tokenizer repositories.
+- Model card licence: **Apache-2.0**.
+- Files used: one Q4_K_M or Q4_0 GGUF, `tokenizer.json` and
+  `tokenizer_config.json`.
+- The weights and tokenizer are **not committed or packaged**; they are
+  user-supplied and downloaded only after explicit confirmation.
+- The native Model Manager pins every size and SHA-256.
+- Fluent's source remains MIT; Apache-2.0 applies to the Qwen assets.
+- Chat does not redistribute or convert the model; Candle reads the GGUF
+  directly on the CPU.
+
+This is an engineering record, not legal advice.
+
 ## 1. What was committed at the Cycle 6 baseline
 
 `git ls-files models` listed:

@@ -102,6 +102,13 @@ unsupported explicit source or target before loading a model.
 All four backends translate every supported source/target pair in both
 directions. No asymmetric pair restrictions are implemented or claimed.
 
+## 4b. Chat languages
+
+Chat does not use the source/target language selectors. Qwen2.5 Instruct is a
+general conversational model with its own multilingual behaviour; Fluent does
+not advertise a verified per-language translation matrix for chat. The chat
+model selector is independent of the translation language selectors.
+
 ## 5. Display names
 
 The selector and pickers show human-readable names and native names. Internal

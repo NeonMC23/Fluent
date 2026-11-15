@@ -13,6 +13,7 @@ CI definitions, CI execution and actual GUI runtime validation.
 | macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43747547053) | **Yes on CI runner** (bundle GUI smoke) | `.app` ZIP; unsigned; Intel not produced |
 | MADLAD-400 3B (T5, q4_k GGUF) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43747547053) | **Yes** (Linux real-model engine test + GUI inspection) | User-supplied GGUF; CPU only |
 | SMaLL-100 (M2M-100, 330M) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43747547053) | **Yes** (Linux real-model engine test + GUI download/verify) | User-supplied safetensors; CPU validated |
+| Qwen2.5 Instruct chat (0.5B/1.5B) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **NOT EXECUTED** for Cycle 18 at the time of writing | **Yes** (Linux real-model chat test + GUI conversation) | User-supplied GGUF; CPU only |
 
 The current fully green `main` run is `43747547053` (`23a7c94`), including
 MADLAD/T5 and SMaLL-100 compilation, packaged application smoke tests, the
@@ -119,6 +120,20 @@ The selector, engine and catalogue use the same capability registry. Actual
 counts are NLLB-200 1.3B/3.3B: 202; MADLAD-400 3B: 72; SMaLL-100: 98. See
 [LANGUAGES.md](LANGUAGES.md) for mappings, Chinese variants and the NLLB
 204→202 correction.
+
+## Chat (Qwen2.5 Instruct)
+
+- **Architecture:** Qwen2 causal decoder, GGUF Q4_0 (0.5B) or Q4_K_M (1.5B).
+- **Device:** CPU only in this release. CUDA/Metal chat inference is not
+  validated and is not advertised.
+- **Decoding:** deterministic greedy with a repetition penalty. Streaming
+  deltas and cancellation are supported.
+- **Measured on the canonical host:** 1.5B loads in ~1.9 s, uses ~1.95 GB RSS
+  and generates at ~4–7 tok/s; 0.5B loads in ~1.0 s, uses ~0.94 GB RSS and
+  generates at ~5–8 tok/s.
+- **Validated:** English and French prompts, follow-up context, streaming,
+  cancellation during generation, reload and context truncation on Linux.
+- **Not executed:** physical Windows/macOS chat runtime and GPU chat.
 
 ## CPU and GPU behaviour
 

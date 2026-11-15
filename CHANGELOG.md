@@ -7,6 +7,19 @@ versions until a release is explicitly published.
 
 ### Added
 
+- Local chat view with a separate Qwen2.5 Instruct engine, worker and model
+  directory. Two chat models are supported: Qwen2.5 1.5B Instruct (Q4_K_M,
+  1.1 GB) and Qwen2.5 0.5B Instruct (Q4_0, 0.4 GB), both Apache-2.0.
+- Streaming assistant replies, cancellation, deterministic greedy decoding
+  with a repetition penalty, conversation context, context-limit notices and
+  session-only history.
+- Chat models in the native Model Manager with the same pinned manifests,
+  resumable downloads, SHA-256 verification, safe removal and licence display
+  as translation models.
+- Translate/Chat navigation. The two capabilities have independent model
+  selection, and switching views unloads the other heavyweight model.
+- First-run guidance when a translation or chat model is not installed.
+- `chat_eval` reproducible benchmark harness and gated real-model chat tests.
 - Canonical turquoise F mark used for the GUI header, window icon, Linux
   launcher icon, Windows executable/window icon and macOS bundle/dock icon.
   All platform variants derive reproducibly from the immutable logo master.
