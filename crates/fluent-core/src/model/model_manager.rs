@@ -292,7 +292,12 @@ pub fn install_managed(
     cancel: &AtomicBool,
 ) -> Result<ModelInstallation> {
     let files = model.files();
-    fs::create_dir_all(dir)?;
+    if let Err(error) = crate::ensure_model_root(dir) {
+        return Err(Error::Config(format!(
+            "could not prepare model directory {}: {error}",
+            dir.display()
+        )));
+    }
     let total_bytes: u64 = files.iter().map(|file| file.size).sum();
     let mut completed = 0u64;
 
@@ -786,6 +791,20 @@ mod tests {
         assert!(!installation.verified);
         assert_eq!(installation.installed_bytes, installation.required_bytes);
         fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn install_reports_an_unusable_model_directory_with_its_path() {
+        let root = temp_dir("unusable");
+        let blocked = root.join("blocked");
+        fs::write(&blocked, b"not a directory").unwrap();
+        let cancel = AtomicBool::new(false);
+        let mut progress = |_progress| {};
+        let error = install_model(Mode::Fast, &blocked, &mut progress, &cancel).unwrap_err();
+        let text = error.to_string();
+        assert!(text.contains("could not prepare model directory"), "{text}");
+        assert!(text.contains("blocked"), "{text}");
+        fs::remove_dir_all(root).ok();
     }
 
     #[test]
