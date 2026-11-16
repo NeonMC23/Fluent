@@ -610,15 +610,11 @@ impl FluentApp {
             return;
         }
         let path = PathBuf::from(raw);
-        if let Err(error) = std::fs::create_dir_all(&path) {
-            self.manager_error = Some(format!("Could not create {}: {error}", path.display()));
-            return;
-        }
-        let probe = path.join(".fluent-write-test");
-        let writable =
-            std::fs::write(&probe, b"ok").is_ok() && std::fs::remove_file(&probe).is_ok();
-        if !writable {
-            self.manager_error = Some(format!("{} is not writable", path.display()));
+        if let Err(error) = fluent_core::ensure_model_root(&path) {
+            self.manager_error = Some(format!(
+                "Could not use {} as the model storage folder: {error}",
+                path.display()
+            ));
             return;
         }
         let canonical = match std::fs::canonicalize(&path) {
@@ -2958,6 +2954,15 @@ impl FluentApp {
                                 ui,
                                 &palette,
                                 "Custom storage is active. Existing models were not moved; clear it to use config.json paths again.",
+                            );
+                        } else if let Some(detected) = &self.project.detected_model_root {
+                            widgets::info_banner(
+                                ui,
+                                &palette,
+                                &format!(
+                                    "Existing model directory detected at {}. Fluent is using it without moving files.",
+                                    detected.display()
+                                ),
                             );
                         }
                         if let Some(error) = &self.manager_error {

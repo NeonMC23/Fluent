@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -8,6 +9,9 @@ use crate::{Error, Mode, OutputLimit, Result};
 #[derive(Debug, Clone)]
 pub struct ProjectConfig {
     pub config_path: Option<PathBuf>,
+    /// Set when a populated portable model directory was adopted because no
+    /// `config.json` existed. Used for first-run guidance; no files are moved.
+    pub detected_model_root: Option<PathBuf>,
     pub base_dir: PathBuf,
     pub default_source_language: String,
     pub default_target_language: String,
@@ -28,16 +32,38 @@ pub struct ProjectConfig {
     pub num_beams: usize,
 }
 
+const MODEL_DIRS: [&str; 6] = [
+    "nllb-200-1.3b",
+    "nllb-200-3.3b",
+    "madlad400-3b-mt",
+    "small100",
+    "qwen2.5-1.5b-instruct",
+    "qwen2.5-0.5b-instruct",
+];
+
 impl Default for ProjectConfig {
     fn default() -> Self {
-        let base_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        Self::for_model_root(&default_model_root())
+    }
+}
+
+impl ProjectConfig {
+    /// Build the default configuration with every model directory under one
+    /// root. Used by the platform default and by tests; keeping this pure
+    /// avoids relying on the process working directory.
+    fn for_model_root(root: &Path) -> Self {
+        let base_dir = root
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| root.to_path_buf());
         Self {
             config_path: None,
-            fast_model: base_dir.join("models/nllb-200-1.3b"),
-            accurate_model: base_dir.join("models/nllb-200-3.3b"),
-            madlad_model: base_dir.join("models/madlad400-3b-mt"),
-            small_model: base_dir.join("models/small100"),
-            chat_model: base_dir.join("models/qwen2.5-1.5b-instruct"),
+            detected_model_root: None,
+            fast_model: root.join("nllb-200-1.3b"),
+            accurate_model: root.join("nllb-200-3.3b"),
+            madlad_model: root.join("madlad400-3b-mt"),
+            small_model: root.join("small100"),
+            chat_model: root.join("qwen2.5-1.5b-instruct"),
             base_dir,
             default_source_language: "auto".to_string(),
             default_target_language: "eng_Latn".to_string(),
@@ -48,6 +74,45 @@ impl Default for ProjectConfig {
             num_beams: 4,
         }
     }
+
+    fn with_model_root(mut self, root: &Path) -> Self {
+        self.detected_model_root = Some(root.to_path_buf());
+        self.fast_model = root.join("nllb-200-1.3b");
+        self.accurate_model = root.join("nllb-200-3.3b");
+        self.madlad_model = root.join("madlad400-3b-mt");
+        self.small_model = root.join("small100");
+        self.chat_model = root.join("qwen2.5-1.5b-instruct");
+        self.base_dir = root
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| root.to_path_buf());
+        self
+    }
+}
+
+/// Platform-native model root used when no `config.json` exists.
+///
+/// `directories` resolves the user data directory per platform:
+/// Linux follows XDG, Windows uses per-user application data, and macOS uses
+/// Application Support. The model subdirectory is kept outside the
+/// application bundle and never depends on the process working directory.
+pub fn default_model_root() -> PathBuf {
+    let data_dir = directories::ProjectDirs::from("io", "fluent", "Fluent")
+        .expect("Fluent requires a user data directory")
+        .data_dir()
+        .to_path_buf();
+    data_dir.join("models")
+}
+
+/// Create a storage root and prove that it is writable.
+///
+/// The probe is removed before returning. The caller receives the underlying
+/// I/O error so it can show the exact path and cause.
+pub fn ensure_model_root(root: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(root)?;
+    let probe = root.join(format!(".fluent-write-test-{}", std::process::id()));
+    fs::write(&probe, b"ok")?;
+    fs::remove_file(&probe)
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -104,7 +169,17 @@ impl ProjectConfig {
                 }
             }
         }
-        Self::default()
+
+        // No config.json: use the platform data directory by default. A
+        // populated portable model directory from an earlier run is adopted
+        // only when the platform root is empty, so existing users keep access
+        // without moving or duplicating model files.
+        let mut config = Self::default();
+        if let Some(root) = discover_portable_model_root() {
+            eprintln!("Fluent: using existing model directory {}", root.display());
+            config = config.with_model_root(&root);
+        }
+        config
     }
 
     pub fn load_from(path: &Path) -> Result<Self> {
@@ -115,11 +190,8 @@ impl ProjectConfig {
             .map(Path::to_path_buf)
             .unwrap_or_else(|| PathBuf::from("."));
 
-        let mut config = Self {
-            config_path: Some(path.to_path_buf()),
-            base_dir: base_dir.clone(),
-            ..Self::default()
-        };
+        let mut config = Self::for_model_root(&base_dir.join("models"));
+        config.config_path = Some(path.to_path_buf());
 
         if let Some(value) = raw.default_source_language {
             config.default_source_language = value;
@@ -282,6 +354,108 @@ fn config_candidates() -> Vec<PathBuf> {
     candidates
 }
 
+/// Existing portable model roots, in priority order. These are read-only
+/// discovery candidates: nothing is moved or deleted.
+fn portable_model_candidates(
+    exe: Option<&Path>,
+    cwd: Option<&Path>,
+    home: Option<&Path>,
+) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    let mut push = |path: PathBuf| {
+        if !candidates.contains(&path) {
+            candidates.push(path);
+        }
+    };
+
+    if let Some(exe) = exe.filter(|path| !is_app_bundle_path(path)) {
+        if let Some(dir) = exe.parent() {
+            push(dir.join("models"));
+            if let Some(parent) = dir.parent() {
+                push(parent.join("models"));
+            }
+        }
+    }
+
+    // Preserve the old portable launch pattern only when the process was
+    // started from the executable directory or the archive root. An
+    // arbitrary terminal working directory is not evidence of a portable
+    // installation.
+    if let (Some(exe), Some(cwd)) = (exe, cwd) {
+        if !is_app_bundle_path(cwd) {
+            if let Some(exe_dir) = exe.parent() {
+                let exe_parent = exe_dir.parent();
+                if cwd == exe_dir || exe_parent == Some(cwd) {
+                    push(cwd.join("models"));
+                }
+            }
+        }
+    }
+
+    // Historical installer layout. It is only adopted when populated and no
+    // newer location wins.
+    if let Some(home) = home {
+        push(home.join(".fluent/models"));
+    }
+
+    candidates
+}
+
+fn is_app_bundle_path(path: &Path) -> bool {
+    path.components()
+        .any(|component| component.as_os_str().to_string_lossy().ends_with(".app"))
+}
+
+fn is_safe_portable_root(root: &Path) -> bool {
+    // Reject /models, C:\models and other paths whose parent is a filesystem
+    // root. They are not user-owned portable locations.
+    root.parent().and_then(Path::parent).is_some() && !is_app_bundle_path(root)
+}
+
+fn model_root_is_populated(root: &Path) -> bool {
+    MODEL_DIRS.iter().any(|name| {
+        let dir = root.join(name);
+        dir.is_dir()
+            && fs::read_dir(&dir)
+                .map(|mut entries| entries.next().is_some())
+                .unwrap_or(false)
+    })
+}
+
+fn populated_portable_root(
+    default_root: &Path,
+    candidates: impl IntoIterator<Item = PathBuf>,
+) -> Option<PathBuf> {
+    let default_canonical = default_root
+        .canonicalize()
+        .unwrap_or_else(|_| default_root.to_path_buf());
+    if model_root_is_populated(&default_canonical) {
+        return None;
+    }
+    for candidate in candidates {
+        let Ok(canonical) = candidate.canonicalize() else {
+            continue;
+        };
+        if canonical == default_canonical || !is_safe_portable_root(&canonical) {
+            continue;
+        }
+        if model_root_is_populated(&canonical) {
+            return Some(canonical);
+        }
+    }
+    None
+}
+
+fn discover_portable_model_root() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok();
+    let cwd = std::env::current_dir().ok();
+    let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+    populated_portable_root(
+        &default_model_root(),
+        portable_model_candidates(exe.as_deref(), cwd.as_deref(), home.as_deref()),
+    )
+}
+
 fn resolve_model_path(base_dir: &Path, value: &str) -> PathBuf {
     let path = PathBuf::from(value);
     if path.is_absolute() {
@@ -405,6 +579,166 @@ mod tests {
         .unwrap();
         let config = ProjectConfig::load_from(&dir.join("config.json")).unwrap();
         assert_eq!(config.output_limit, OutputLimit::UntilEos);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    fn create_model_marker(root: &Path) {
+        let dir = root.join("nllb-200-1.3b");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("config.json"), b"{}").unwrap();
+    }
+
+    #[test]
+    fn default_model_paths_are_platform_native_and_cwd_independent() {
+        let root = default_model_root();
+        assert!(root.is_absolute(), "default root is not absolute: {root:?}");
+        assert!(root.ends_with("models"), "unexpected root: {root:?}");
+
+        let config = ProjectConfig::default();
+        assert_eq!(config.fast_model, root.join("nllb-200-1.3b"));
+        assert_eq!(config.accurate_model, root.join("nllb-200-3.3b"));
+        assert_eq!(config.madlad_model, root.join("madlad400-3b-mt"));
+        assert_eq!(config.small_model, root.join("small100"));
+        assert_eq!(config.chat_model, root.join("qwen2.5-1.5b-instruct"));
+        assert_eq!(
+            config.fast_model.parent(),
+            Some(root.as_path()),
+            "model paths must not be under the process working directory"
+        );
+    }
+
+    #[test]
+    fn model_paths_preserve_spaces_and_unicode() {
+        let dir = temp_dir("paths");
+        let root = dir.join("Models with spaces").join("日本語");
+        let config = ProjectConfig::for_model_root(&root);
+        assert_eq!(config.fast_model, root.join("nllb-200-1.3b"));
+        assert_eq!(config.chat_model, root.join("qwen2.5-1.5b-instruct"));
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn absolute_configured_paths_take_precedence_and_keep_unicode() {
+        let dir = temp_dir("configured");
+        let fast = dir.join("models with spaces").join("日本語");
+        fs::create_dir_all(&fast).unwrap();
+        let raw = serde_json::json!({"models": {"fast": fast}});
+        fs::write(dir.join("config.json"), serde_json::to_vec(&raw).unwrap()).unwrap();
+
+        let config = ProjectConfig::load_from(&dir.join("config.json")).unwrap();
+        assert_eq!(config.fast_model, fast);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn portable_archive_root_is_detected_from_the_executable() {
+        let archive = temp_dir("portable");
+        let models = archive.join("models");
+        create_model_marker(&models);
+        let exe = archive.join("bin/fluent");
+        let candidates = portable_model_candidates(Some(&exe), Some(&archive), None);
+        assert!(candidates.contains(&models));
+
+        let default_root = temp_dir("platform-empty");
+        let adopted = models.canonicalize().unwrap();
+        assert_eq!(
+            populated_portable_root(&default_root, candidates),
+            Some(adopted.clone())
+        );
+        let config = ProjectConfig::default().with_model_root(&adopted);
+        assert_eq!(config.detected_model_root, Some(adopted));
+        fs::remove_dir_all(archive).ok();
+        fs::remove_dir_all(default_root).ok();
+    }
+
+    #[test]
+    fn arbitrary_working_directory_is_not_adopted() {
+        let cwd = temp_dir("arbitrary-cwd");
+        let exe_dir = temp_dir("other-exe");
+        create_model_marker(&cwd.join("models"));
+        let exe = exe_dir.join("fluent");
+        let candidates = portable_model_candidates(Some(&exe), Some(&cwd), None);
+        assert!(
+            !candidates.contains(&cwd.join("models")),
+            "an unrelated working directory must not become a model root"
+        );
+        fs::remove_dir_all(cwd).ok();
+        fs::remove_dir_all(exe_dir).ok();
+    }
+
+    #[test]
+    fn app_bundle_executables_do_not_use_bundle_or_finder_paths() {
+        let exe = Path::new("/Applications/Fluent.app/Contents/MacOS/fluent");
+        let candidates = portable_model_candidates(Some(exe), Some(Path::new("/")), None);
+        assert!(
+            candidates.is_empty(),
+            "unexpected candidates: {candidates:?}"
+        );
+        assert!(!is_safe_portable_root(Path::new("/models")));
+    }
+
+    #[test]
+    fn populated_platform_root_wins_over_portable_roots() {
+        let platform = temp_dir("platform-populated");
+        create_model_marker(&platform);
+        let portable = temp_dir("portable-other");
+        create_model_marker(&portable.join("models"));
+        assert_eq!(
+            populated_portable_root(&platform, vec![portable.join("models")]),
+            None
+        );
+        fs::remove_dir_all(platform).ok();
+        fs::remove_dir_all(portable).ok();
+    }
+
+    #[test]
+    fn legacy_home_models_is_a_candidate() {
+        let home = temp_dir("legacy-home");
+        let legacy = home.join(".fluent/models");
+        create_model_marker(&legacy);
+        let candidates = portable_model_candidates(None, None, Some(&home));
+        assert!(candidates.contains(&legacy));
+        fs::remove_dir_all(home).ok();
+    }
+
+    #[test]
+    fn ensure_model_root_creates_and_probes_the_directory() {
+        let dir = temp_dir("ensure");
+        let root = dir.join("nested with spaces").join("日本語");
+        ensure_model_root(&root).unwrap();
+        assert!(root.is_dir());
+        assert!(
+            fs::read_dir(&root).unwrap().next().is_none(),
+            "write probe was not removed"
+        );
+
+        let blocked = dir.join("not-a-directory");
+        fs::write(&blocked, b"file").unwrap();
+        assert!(ensure_model_root(&blocked).is_err());
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ensure_model_root_reports_a_read_only_parent() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = temp_dir("readonly");
+        let parent = dir.join("read-only");
+        fs::create_dir_all(&parent).unwrap();
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o500)).unwrap();
+
+        // Root can bypass permission bits. Skip the assertion there rather
+        // than making the test depend on the CI user.
+        let probe = parent.join(".probe");
+        let can_write = fs::write(&probe, b"x").is_ok();
+        if can_write {
+            fs::remove_file(probe).ok();
+        } else {
+            assert!(ensure_model_root(&parent.join("models")).is_err());
+        }
+
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o700)).unwrap();
         fs::remove_dir_all(dir).ok();
     }
 }

@@ -123,6 +123,11 @@ fn run_self_test() -> i32 {
         Some(path) => println!("config: OK ({})", path.display()),
         None => println!("config: defaults (no config.json found)"),
     }
+    match (&config.detected_model_root, &config.config_path) {
+        (Some(root), _) => println!("model-root: existing portable ({})", root.display()),
+        (None, Some(_)) => println!("model-root: configured"),
+        (None, None) => println!("model-root: platform default"),
+    }
 
     let language_count = fluent_core::languages().len();
     if language_count > 0 && fluent_core::find_language(&config.default_target_language).is_some() {

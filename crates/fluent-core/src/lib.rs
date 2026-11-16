@@ -16,7 +16,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 pub use chat::{ChatEngine, ChatMessage, ChatOptions, ChatReply, ChatRole};
-pub use config::ProjectConfig;
+pub use config::{default_model_root, ensure_model_root, ProjectConfig};
 pub use detect::Detection;
 pub use engine::{
     estimate_memory, estimate_memory_for_choice, estimate_memory_for_mode, memory_info,
