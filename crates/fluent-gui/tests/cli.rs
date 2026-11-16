@@ -79,6 +79,7 @@ fn help_describes_translation_and_local_chat() {
     );
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn self_test_uses_xdg_data_home_instead_of_the_working_directory() {
     let dir = temp_dir();
