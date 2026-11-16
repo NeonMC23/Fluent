@@ -3,7 +3,8 @@
 Fluent has one authoritative development version in `Cargo.toml`; see
 [VERSIONING.md](VERSIONING.md). The current unreleased version is **0.2.0**;
 the last published version was **0.1.0**. No tag or GitHub Release is created
-by the current mission.
+by the current mission. Draft user-facing notes are in
+[RELEASE_NOTES.md](RELEASE_NOTES.md).
 
 ## 1. GitHub Actions
 

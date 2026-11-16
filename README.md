@@ -936,6 +936,7 @@ licence record.
 - [Model provenance and licensing](docs/MODEL_PROVENANCE.md)
 - [Release integrity and historical assets](docs/RELEASE_INTEGRITY.md)
 - [Builds, CI artifacts, signing and release verification](docs/RELEASE.md)
+- [Fluent 0.2.0 release notes](docs/RELEASE_NOTES.md)
 - [Versioning](docs/VERSIONING.md)
 - [Branding assets](docs/ASSETS.md)
 - [Model backend architecture decision](docs/ADR-001-model-backends.md)
