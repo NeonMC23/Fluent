@@ -112,10 +112,10 @@ The workflow has run successfully on GitHub:
   `d903b2c801acaabf8625bfaa6a54df3503962c7ff2c49648a0c8761b6291fa39`
   (7,905,926 B). The run reports `signing=unsigned verified=False` because
   `MINISIGN_SECRET_KEY` is not configured.
-- **Cycle 19 local Linux candidate:** the Linux inner archive was rebuilt from
-  `27a4a3d` in an Ubuntu 22.04 container, packaged, Minisign-signed with the
-  project key and verified. Its SHA-256 is byte-identical to the CI inner
-  archive above; `dist/release-manifest.json` records `signed 1/1` and
+- **Cycle 19 local Linux candidate:** the Linux binary was rebuilt from the
+  same source in an Ubuntu 22.04 container, packaged, Minisign-signed with the
+  project key and verified. Its SHA-256 is byte-identical to the `27a4a3d` CI
+  inner archive above; `dist/release-manifest.json` records `signed 1/1` and
   `signatures_verified=true`.
 - **Cycle 18 run (local chat and release candidate):**
   [43768080004](https://github.com/NeonMC23/Fluent/actions/runs/43768080004)
