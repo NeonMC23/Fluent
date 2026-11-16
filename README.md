@@ -1,512 +1,935 @@
-# ✦ Fluent
+# Fluent
 
-**Private AI translation. No cloud. Your machine.**
+**Local-first translation and local AI chat for your desktop.**
 
 _Development version 0.2.0 · last published 0.1.0_
 
-A native, local-first translation application powered by NLLB-200, MADLAD-400 and SMaLL-100 — built in Rust for Linux, Windows, and macOS.
+Fluent is a native Rust desktop application that translates text across up to
+202 language variants and runs small instruction-tuned chat models on your own
+machine. Models are downloaded only when you ask for them, and inference does
+not call a remote AI service.
 
-Translate across **190+ languages and dialects** with a clean desktop interface, selectable translation modes, and optional GPU acceleration.
+[![Version](https://img.shields.io/badge/version-0.2.0%20unreleased-0F9E8E?style=flat-square&labelColor=171717)](#status)
+[![Rust](https://img.shields.io/badge/Rust-native-FF66C4?style=flat-square&labelColor=171717)](https://www.rust-lang.org/)
+[![Licence](https://img.shields.io/badge/Fluent%20source-MIT-A3E635?style=flat-square&labelColor=171717)](LICENSE)
+[![Platforms](https://img.shields.io/badge/Linux-validated-A3E635?style=flat-square&labelColor=171717)](#install-fluent)
 
-[![Rust](https://img.shields.io/badge/Rust-Native-FF66C4?style=flat-square&labelColor=171717)](https://www.rust-lang.org/) [![Languages](https://img.shields.io/badge/Languages-190%2B-A3E635?style=flat-square&labelColor=171717)](#-features) [![AI](https://img.shields.io/badge/AI-NLLB--200-FF66C4?style=flat-square&labelColor=171717)](https://github.com/facebookresearch/fairseq/tree/nllb) [![License](https://img.shields.io/badge/License-MIT-A3E635?style=flat-square&labelColor=171717)](LICENSE)
+<p align="center">
+  <img src="src/logo/banner.png" alt="Fluent — local translation and chat" width="100%">
+</p>
 
-<p align="center"><img src="src/logo/banner.png" alt="Fluent — Local Translation" width="100%"></p>
+## Contents
 
----
+- [What is Fluent?](#what-is-fluent)
+- [Screenshots](#screenshots)
+- [Features](#features)
+- [How Fluent works](#how-fluent-works)
+- [Install Fluent](#install-fluent)
+- [First launch and model installation](#first-launch-and-model-installation)
+- [Translation guide](#translation-guide)
+- [Chat guide](#chat-guide)
+- [Model reference](#model-reference)
+- [Performance and system requirements](#performance-and-system-requirements)
+- [Troubleshooting and FAQ](#troubleshooting-and-faq)
+- [Privacy](#privacy)
+- [Development and contributing](#development-and-contributing)
+- [Licence, models and provenance](#licence-models-and-provenance)
+- [Documentation index](#documentation-index)
 
-## ◈ Preview
+## What is Fluent?
 
-![Fluent — Branded translation interface](./src/image1.png)
+Fluent is a desktop front end for local machine translation and local
+instruction-model chat. It is built in Rust with `egui`/`eframe` and runs on
+the CPU. The application is deliberately split into two independent
+capabilities:
 
-*Powerful translation. A native interface. Your data stays yours.*
+- **Translation** uses multilingual encoder-decoder models: NLLB-200,
+  MADLAD-400 or SMaLL-100.
+- **Chat** uses a Qwen2.5 Instruct model in GGUF format. Chat models are never
+  used for translation, and translation models are never used for chat.
 
----
+The application itself is small. The models are separate, large downloads with
+their own licences and storage requirements. Keeping them separate keeps the
+application archive small, lets you choose between speed and quality, and avoids
+redistributing weights under unclear terms. Fluent does not bundle model weights
+in the application, installer, portable archive or CI artifact.
 
-## ✦ Features
+### Local-first by design
 
-| Feature | Description |
-| --- | --- |
-| 🌍 **200+ languages** | NLLB-200 covers 202 language and script variants. |
-| 🧠 **Local AI inference** | Run translation and chat models locally, without a server or cloud API. |
-| 💬 **Local chat** | A separate Qwen2.5 Instruct model for on-device conversation, with streaming and cancellation. |
-| 🧬 **Three model families** | Choose NLLB-200 for broad coverage, MADLAD-400 for T5 translation, or SMaLL-100 for a fast 330M CPU model. |
-| 🌐 **Accurate language lists** | The source and target pickers show only the languages the selected model can actually translate. |
-| 📦 **Model Manager** | Detect, download, verify, load and safely remove models from the desktop app. |
-| ⚡ **NLLB-200 1.3B** | Balanced CPU translation with a 1.3B-parameter model. |
-| 🎯 **NLLB-200 3.3B** | Higher-quality, resource-intensive translation; CPU auto uses Q8. |
-| 🔎 **Automatic detection** | Detect the source language automatically. |
-| 🖥️ **Native desktop UI** | A responsive interface built with Rust and egui. |
-| 🎨 **Customizable appearance** | Light, dark, and system themes, plus accent colors. |
-| 🚀 **Optional GPU acceleration** | CUDA on supported NVIDIA systems or Metal on Apple Silicon. |
-| 🔒 **Local-first privacy** | Translation and chat inference run on your device; chat history is session-only. |
-| 🧩 **Clean per-user installation** | The application, configuration, and models live in separate, predictable locations. Uninstall never deletes your models or settings. |
+- No account and no cloud translation or chat API are required for inference.
+- Translation and chat text is processed on your device.
+- Model downloads require network access; after the files are installed,
+  translation and chat run offline.
+- The application has no telemetry or analytics.
+- Chat conversation history is session-only.
+- Fluent’s source is MIT-licensed. Each model keeps its own licence; NLLB-200
+  is **non-commercial** (CC-BY-NC-4.0).
 
-## ▸ Getting Started
+### What Fluent is not
 
-### Requirements
+Fluent is not a cloud service, a mobile app, a model host, or a general-purpose
+AI assistant. The current release does not provide:
 
-- Rust 1.85 or newer and Cargo, plus `bash` for the installer.
-- A C/C++ toolchain, `pkg-config` and `cmake` for native dependencies.
-- Sufficient disk space and memory for the model you intend to use.
-- On Linux, X11 or Wayland development libraries and an OpenGL 3.3-capable driver when building from source.
-- On Windows and macOS, see the platform guides linked below. Linux is the validated target; Windows and macOS have not been runtime-tested.
+- persistent chat history;
+- tool/function calling, RAG, web access or browsing;
+- GPU chat inference;
+- a Windows installer, a macOS DMG, an AppImage or a Flatpak;
+- physical Windows or macOS runtime validation;
+- Intel macOS binaries;
+- a public GitHub Release for version 0.2.0.
 
-The installer builds the desktop application, but **does not download model weights**. You must provide the supported model files separately, or use the native Model Manager after installation. NLLB licensing is documented in [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md); MADLAD acquisition, the pinned q4_k file and Apache-2.0 licensing are documented in [docs/MADLAD.md](docs/MADLAD.md); the lightweight SMaLL-100 model, its MIT licence and its 98-language mapping are documented in [docs/SMALL100.md](docs/SMALL100.md).
+### Quick start
 
-### 1. Clone the repository
+1. [Install Fluent](#install-fluent) for Linux, Windows or macOS.
+2. Open **Models** in the header and download one translation model or one chat
+   model. Models are not included in the application archive.
+3. Use **Translate** for text translation or **Chat** for local conversation.
+   See [First launch](#first-launch-and-model-installation).
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/main-small.png" alt="Fluent Translate view with SMaLL-100 selected" width="760"><br>
+  <em>Translate view. The language pickers are filtered by the selected model.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/chat-conversation.png" alt="Fluent Chat view with an English answer and a French follow-up" width="760"><br>
+  <em>Chat view. Replies stream locally; the French follow-up uses conversation context.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/model-manager.png" alt="Fluent Model Manager with storage, catalogue and installed models" width="760"><br>
+  <em>Model Manager. Storage, catalogue state, model size, licence and verification live here.</em>
+</p>
+
+All screenshots show the Linux build. Layout and fonts may differ slightly on
+other platforms.
+
+## Features
+
+### Translation
+
+- **Four translation models** across three families: NLLB-200 1.3B, NLLB-200
+  3.3B, MADLAD-400 3B and SMaLL-100.
+- **Model-dependent language lists.** NLLB-200 exposes 202 variants, SMaLL-100
+  98 and MADLAD-400 72. The source and target selectors only show languages the
+  selected model actually supports.
+- **Automatic source detection**, or an explicit source language.
+- **Simplified and Traditional Chinese** on NLLB-200 and MADLAD-400; SMaLL-100
+  maps only Simplified Chinese.
+- **Beam search** for NLLB-200 and SMaLL-100; deterministic greedy decoding for
+  MADLAD-400.
+- **Cancellable loading and generation**, with progress and a visible result
+  limit.
+- **Output policies**: Automatic, Custom limit and No limit.
+- **Copy-friendly results** and keyboard submission with `Ctrl+Enter`.
+
+### Local chat
+
+- **Qwen2.5 1.5B Instruct** for better-quality chat and **Qwen2.5 0.5B
+  Instruct** for a lighter, faster option.
+- **Streaming replies**, one text delta at a time.
+- **Multi-message context** within the current session.
+- **Cancellation** while loading or generating.
+- **Context truncation notices** and a separate output-limit notice.
+- **Independent chat model selection**: changing the chat model never changes
+  the translation model.
+- **Session-only history**: closing the application clears the conversation.
+
+### Model Manager
+
+- **Remote catalogue** with a pinned, validated schema.
+- **Model details** including family, size, licence, language count and
+  recommended use.
+- **Progress, speed and ETA** during downloads.
+- **Resumable downloads** using a `.part` file.
+- **SHA-256 verification** and atomic promotion.
+- **Cancellation** without presenting a partial model as installed.
+- **Verify and Repair** actions for an existing installation.
+- **Safe removal** confined to the selected managed model directory.
+- **Custom storage root** for users who keep models on another disk.
+
+### Desktop experience
+
+- Native window, turquoise Fluent mark and platform icons.
+- Light, dark and system themes with selectable accent colours.
+- Searchable language pickers and explicit model names.
+- Keyboard shortcuts (`Ctrl+Enter`, `Esc`, `Enter`, `Shift+Enter`) and
+  labelled controls. A formal screen-reader audit has not been performed.
+- Application-only archives: no model weights, configuration or user data.
+
+## How Fluent works
+
+```mermaid
+flowchart LR
+    UI[Fluent desktop UI<br/>egui / eframe]
+    TW[Translation worker]
+    CW[Chat worker]
+    MM[Model Manager]
+    CORE[fluent-core engine]
+    CHAT[Chat engine]
+    FS[(Local model files)]
+
+    UI --> TW
+    UI --> CW
+    UI --> MM
+    TW --> CORE
+    CW --> CHAT
+    MM --> FS
+    CORE --> FS
+    CHAT --> FS
+```
+
+### Application and models are separate
+
+Installing Fluent does not install a model. The application starts without any
+model and shows guidance in Translate and Chat. You then use the Model Manager
+to inspect, download and verify a model. The same split applies to updates and
+uninstallation: application files can be replaced without touching the model
+directory, and removing a model does not remove the application.
+
+### One heavyweight model at a time
+
+Translation and chat use separate workers and separate engines. Switching to
+Chat unloads the translation engine; switching to Translate unloads the chat
+engine. Only one heavyweight model is intentionally resident at a time.
+
+After an unload, the operating system allocator may keep freed memory mapped in
+the process. That is allocator behaviour, not a second model still running. See
+[Performance and system requirements](#performance-and-system-requirements)
+for the measured evidence.
+
+### Model lifecycle
+
+```text
+Not installed
+    │ Download
+    ▼
+Downloading ──Cancel──► Not installed (partial .part retained)
+    │ Complete
+    ▼
+Verifying (size + SHA-256)
+    │ Pass                    │ Fail
+    ▼                         ▼
+Installed                  Needs repair / Incomplete
+    │ Load (first use or Load now)
+    ▼
+Loaded
+    │ Switch view / Unload / Remove
+    ▼
+Installed
+```
+
+The Model Manager performs a cheap size check when it lists models. A download
+is promoted only after the required files pass SHA-256 verification. An
+existing directory may show **Installed** after the size check; use **Verify**
+for the full checksum pass, which reports **Installed · verified**.
+
+## Install Fluent
+
+### Status
+
+Version **0.2.0 is unreleased**; the last published version was **0.1.0**.
+There is no public GitHub Release, tag or downloadable release asset for 0.2.0.
+Current builds are produced as **GitHub Actions workflow artifacts** (14-day
+retention) or built from source.
+
+| Platform | Artifact | Runtime status |
+|---|---|---|
+| Linux x86-64 | `fluent-0.2.0-linux-x86_64.tar.gz` | **Validated** on physical Linux and in CI |
+| Windows x86-64 | `fluent-0.2.0-windows-x86_64.zip` | CI build and packaged self-test pass; **physical GUI/runtime NOT EXECUTED** |
+| macOS arm64 | `Fluent-0.2.0-macos-arm64.zip` | CI build and bundle smoke test pass; **physical GUI/runtime NOT EXECUTED** |
+
+Artifacts are not release assets. Treat a downloaded workflow artifact as a
+test build until the owner has verified its checksum and explicitly published a
+release. See [docs/RELEASE.md](docs/RELEASE.md).
+
+### Linux (x86-64, glibc 2.35 baseline)
+
+The validated artifact is an application-only `tar.gz` containing `bin/fluent`,
+`LICENSE` and `README.txt`. It requires Linux x86-64 with glibc 2.35 or newer,
+X11 or Wayland, and an OpenGL 3.3-capable driver. Typical desktop runtime
+libraries include `libxkbcommon`, `fontconfig` and the X11/Wayland libraries
+loaded by `winit`/`glutin`.
+
+1. Download the `fluent-linux-x86_64` workflow artifact from a successful CI
+   run, extract the inner `fluent-0.2.0-linux-x86_64.tar.gz` and its `.sha256`
+   file, or build the archive locally.
+2. Verify the archive:
+
+   ```bash
+   sha256sum -c fluent-0.2.0-linux-x86_64.tar.gz.sha256
+   ```
+
+3. If a `.minisig` file is present, verify it with the project public key
+   (`docs/keys/minisign.pub` in the source repository):
+
+   ```bash
+   minisign -Vm fluent-0.2.0-linux-x86_64.tar.gz \
+     -p /path/to/minisign.pub
+   ```
+
+   CI artifacts are currently **unsigned**. The locally produced Linux
+   candidate is Minisign-signed and verifies against key ID
+   `B504F2189BB21013`. A checksum proves integrity relative to the channel that
+   supplied it; only a signature provides authenticity.
+
+4. Extract and run:
+
+   ```bash
+   tar -xzf fluent-0.2.0-linux-x86_64.tar.gz
+   cd fluent-0.2.0-linux-x86_64
+   ./bin/fluent
+   ```
+
+5. Install models with **Models** in the header (see
+   [First launch](#first-launch-and-model-installation)).
+
+For desktop-menu integration, the source installer builds and installs Fluent
+per user without root:
 
 ```bash
 git clone https://github.com/NeonMC23/Fluent.git
 cd Fluent
-```
-
-### 2. Run the installer
-
-```bash
-chmod +x install.sh
 ./install.sh
 ```
 
-On Linux the default layout separates each kind of file:
+The default layout is:
 
 ```text
-~/.local/lib/fluent/fluent                 application
-~/.local/bin/fluent                        launcher
-~/.config/fluent/config.json               configuration (user-owned)
-~/.config/fluent/settings.json             preferences
-~/.local/share/fluent/models/              models (user-owned)
+~/.local/lib/fluent/fluent                  application binary
+~/.local/bin/fluent                         launcher
+~/.config/fluent/config.json                configuration
+~/.config/fluent/settings.json              preferences
+~/.local/share/fluent/models/               models
 ~/.local/share/applications/io.fluent.Fluent.desktop
 ```
 
-`XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME` are respected. The
-installer requires no root privileges, is safe to run again, preserves existing
-configuration and models, and never deletes user data. See
-[docs/LINUX.md](docs/LINUX.md) for the full Linux guide.
-
-### 3. Add the models
-
-Fluent supports four translation choices across three model families:
-
-| Model | Upstream | Approximate storage | Intended use |
-| --- | --- | ---: | --- |
-| ⚡ **NLLB-200 1.3B** | `facebook/nllb-200-1.3B` | 5.2 GB | Balanced CPU translation |
-| 🎯 **NLLB-200 3.3B** | `facebook/nllb-200-3.3B` | 17.5 GB | Higher-quality, resource-intensive translation |
-| 🧬 **MADLAD-400 3B** | `google/madlad400-3b-mt` q4_k | 1.7 GB | Alternative multilingual translation model |
-| 🪶 **SMaLL-100** | `alirezamsh/small100` | 1.3 GB | Lightweight and fast |
-
-Chat uses separate instruct models:
-
-| Chat model | Upstream | Approximate storage | Intended use |
-| --- | --- | ---: | --- |
-| 💬 **Qwen2.5 1.5B Instruct** | `Qwen/Qwen2.5-1.5B-Instruct-GGUF` Q4_K_M | 1.1 GB | Better-quality local chat |
-| ⚡ **Qwen2.5 0.5B Instruct** | `Qwen/Qwen2.5-0.5B-Instruct-GGUF` Q4_0 | 0.4 GB | Fastest local chat |
-
-> **Model licenses:** Meta releases the NLLB-200 weights under
-> **CC BY-NC 4.0 (non-commercial)**. MADLAD-400 is **Apache-2.0**. SMaLL-100 is
-> released under the **MIT** licence by its authors. Qwen2.5 Instruct is
-> **Apache-2.0**. Fluent's MIT license covers the application code only. Fluent
-> does not bundle or redistribute model weights. See [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md),
-> [docs/MADLAD.md](docs/MADLAD.md) and [docs/SMALL100.md](docs/SMALL100.md).
-> CPU, quality and memory measurements are in
-> [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
-
-This repository intentionally contains **no** model weights, tokenizer, or
-model configuration files. Place each model's files in the corresponding
-directory:
-
-```text
-~/.local/share/fluent/models/
-├── nllb-200-1.3b/
-│   ├── config.json
-│   ├── tokenizer.json
-│   └── pytorch_model.bin   (or safetensors / sharded checkpoint)
-├── nllb-200-3.3b/
-├── madlad400-3b-mt/
-│   ├── config.json
-│   ├── tokenizer.json
-│   └── model-q4k.gguf
-└── qwen2.5-1.5b-instruct/
-    ├── qwen2.5-1.5b-instruct-q4_k_m.gguf
-    ├── tokenizer.json
-    └── tokenizer_config.json
-```
-
-The native **Model Manager** can download and verify the four translation
-models and the two chat models. Open **Models** in the application header (or
-**Settings → Manage models…**), choose a model, review its license and download
-size, and confirm. Existing model directories are detected without moving or
-downloading them again. See [docs/MODEL_MANAGER.md](docs/MODEL_MANAGER.md).
-
-To use chat, select **Chat** in the header, install either Qwen2.5 Instruct
-model under **Models → Chat models**, and type a message. Chat is separate from
-translation: changing the chat model never changes the translation model, and
-chat history is session-only. See [docs/CHAT.md](docs/CHAT.md).
-
-The MADLAD command-line acquisition remains available as an optional fallback:
-
-```bash
-python3 scripts/fetch-madlad.py
-```
-
-Each model directory must contain `config.json`, `tokenizer.json`, and the
-supported checkpoint files. Sharded checkpoints are supported; extra files from
-a Hugging Face download are ignored. The installer validates the package and
-refuses to install placeholder-only directories. See
-[docs/MODEL_PACKAGE.md](docs/MODEL_PACKAGE.md) for the exact contract.
-
-Alternatively, point the installer at an existing model source:
-
-```bash
-./install.sh --models-src /path/to/models
-```
-
-A legacy `~/.fluent/models` directory is detected automatically and used as a
-read-only source. The old directory is never modified or deleted.
-
-### 4. Launch Fluent
-
-```bash
-~/.local/bin/fluent
-```
-
-Or launch **Fluent** from the desktop application menu. The models are loaded
-on demand when you perform your first translation. The GUI starts even when no
-model is installed and shows an actionable error on the first translation.
-
-### Portable archive (Linux)
-
-For a no-install layout, build the application archive locally:
-
-```bash
-./scripts/package-linux.sh
-sha256sum -c dist/fluent-*-linux-*.tar.gz.sha256
-tar -xzf dist/fluent-*-linux-*.tar.gz
-cd fluent-*-linux-*/
-./bin/fluent
-```
-
-The archive contains only the executable, `LICENSE` and a runtime README. It
-does not include models or tokenizer assets. The canonical build targets
-Ubuntu 22.04 / glibc 2.35. See [docs/LINUX.md](docs/LINUX.md) for details.
-
-### Uninstall
+`XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and `XDG_BIN_HOME` are
+respected. The installer preserves existing configuration and models, never
+uses `sudo`, and never downloads model weights. Uninstall preserves
+configuration and models:
 
 ```bash
 ./uninstall.sh
 ```
 
-This removes the application, launcher, desktop entry and installer-provided
-icon. It always preserves `config.json`, `settings.json` and the model
-directory. See [docs/LINUX.md](docs/LINUX.md) for migration from the old
-`~/.fluent` layout.
+See [docs/LINUX.md](docs/LINUX.md) for dependencies, installer options,
+migration and troubleshooting.
 
-### Installer options
+### Windows (x86-64, portable ZIP)
 
-| Option | Purpose |
-| --- | --- |
-| `--cuda` | Build with NVIDIA CUDA support; requires the CUDA toolkit and `nvcc`. |
-| `--metal` | Build with Metal support (macOS only). |
-| `--binary FILE` | Install a prebuilt executable instead of building. |
-| `--skip-build` | Reuse an existing `target/release/fluent` binary. |
-| `--models-src DIR` | Model source containing `nllb-200-1.3b/` and `nllb-200-3.3b/` (the repository default `./models` is empty in a fresh checkout). |
-| `--skip-models` | Create empty model directories only. |
-| `--icon FILE` | Install an SVG or PNG icon; the bundled 256×256 Fluent icon is used by default. |
-| `--no-desktop` | Skip desktop integration. |
-| `--reset-config` | Regenerate `config.json` (otherwise preserved). |
-| `--uninstall` | Same as `uninstall.sh`; preserves configuration and models. |
-| `--app-dir`, `--bin-dir`, `--config-dir`, `--models-dir` | Override individual locations. |
-| `--install-dir DIR` | Legacy alias for `--app-dir`. |
+1. Download the `fluent-windows-x86_64` workflow artifact from a successful CI
+   run and extract the inner `fluent-0.2.0-windows-x86_64.zip`.
+2. Optionally verify its SHA-256:
 
-## ⬇️ Downloads and CI artifacts
+   ```powershell
+   Get-FileHash .\fluent-0.2.0-windows-x86_64.zip -Algorithm SHA256
+   ```
 
-There is no public GitHub Release for the unreleased `0.2.0` development
-version. Test builds are produced as **GitHub Actions workflow artifacts**:
+3. Extract the ZIP and run `fluent.exe`. No installer, Start Menu shortcut or
+   uninstaller is provided.
+4. Install models with **Models** in the header.
 
-1. Open <https://github.com/NeonMC23/Fluent/actions>.
-2. Choose **CI and build artifacts** and a successful run.
-3. Download `fluent-linux-x86_64`, `fluent-windows-x86_64`,
-   `fluent-macos`, or the combined `fluent-release-candidate` artifact
-   from the run summary. They expire after 14 days.
+The executable is **unsigned**; there is no Authenticode certificate and no
+SmartScreen reputation. Windows may warn about an unknown publisher. Only run a
+ZIP you obtained from a trusted source and verified. This project does not claim
+that SmartScreen will accept the build.
 
-These are not release assets. Successful runs include
-[43605074905](https://github.com/NeonMC23/Fluent/actions/runs/43605074905)
-(code commit `ae1dfcb`), the documentation follow-up
-[43606018556](https://github.com/NeonMC23/Fluent/actions/runs/43606018556),
-the final path-remapping build
-[43606646499](https://github.com/NeonMC23/Fluent/actions/runs/43606646499)
-(`af7dbca`), the Cycle 11 packaged-smoke run
-[43621221912](https://github.com/NeonMC23/Fluent/actions/runs/43621221912)
-(`09a71e9`), the Cycle 12 `main` run
-[43658280679](https://github.com/NeonMC23/Fluent/actions/runs/43658280679)
-(`8186e04`), the Cycle 13 MADLAD run
-[43666915254](https://github.com/NeonMC23/Fluent/actions/runs/43666915254)
-(`e5fda1f`), the Cycle 14 quality/performance run
-[43682638997](https://github.com/NeonMC23/Fluent/actions/runs/43682638997)
-(`d554f5d`), the Cycle 15 Model Manager run
-[43710941404](https://github.com/NeonMC23/Fluent/actions/runs/43710941404)
-(`6f06329`), the Cycle 16 SMaLL-100/catalogue run
-[43727254932](https://github.com/NeonMC23/Fluent/actions/runs/43727254932)
-(`5200ab5`), the Cycle 17 branding/language run
-[43747547053](https://github.com/NeonMC23/Fluent/actions/runs/43747547053)
-(`23a7c94`), the Cycle 18 local-chat release-candidate run
-[43768080004](https://github.com/NeonMC23/Fluent/actions/runs/43768080004)
-(`5a7f96a`), and the Cycle 19 final-validation run
-[43781201073](https://github.com/NeonMC23/Fluent/actions/runs/43781201073)
-(`27a4a3d`): Linux, Windows, macOS and the aggregate release candidate all
-passed. The Linux artifact is an application-only tar.gz;
-Windows is a portable ZIP; macOS is an `.app` ZIP whose filename records the
-runner architecture (the current `macos-latest` matrix produces arm64). Models
-are never included. Every build supports:
+**Physical Windows runtime validation has not been performed.** CI builds the
+EXE and runs the packaged `--version` and `--self-test`, but the hosted runner
+cannot create an OpenGL context, so the GUI window is not exercised there. See
+[docs/WINDOWS.md](docs/WINDOWS.md).
 
-```bash
-fluent --version          # version, OS and architecture
-fluent --self-test        # icon, config, language and model checks
-fluent --smoke-test-gui   # open a window, paint once and exit
-```
+### macOS (Apple Silicon, arm64)
 
-The Minisign public key is committed at `docs/keys/minisign.pub` (key ID
-`B504F2189BB21013`). CI artifacts are currently **unsigned** until the
-`MINISIGN_SECRET_KEY` Actions secret is configured. The local Linux candidate
-is Minisign-signed, verifies against that public key, and is byte-identical to
-the Cycle 19 CI inner archive. Verify checksums and, when present, signatures
-with [docs/RELEASE.md](docs/RELEASE.md).
+1. Download the `fluent-macos` workflow artifact from a successful CI run and
+   extract the inner `Fluent-0.2.0-macos-arm64.zip`.
+2. Optionally verify its SHA-256.
+3. Extract the archive and open `Fluent.app`.
+4. Install models with **Models** in the header.
 
-## ⌁ Using Fluent
+The app is **unsigned and not notarized**. Gatekeeper may block the first
+launch. If you trust the build and have verified it, use the standard Finder or
+System Settings privacy flow to allow that specific app; do not disable
+Gatekeeper globally. No Developer ID, hardened-runtime signature, notarization
+or stapling is provided.
 
-1. Select a source language or leave automatic detection enabled.
-2. Choose your target language using the searchable language selector.
-3. Enter or paste the text you want to translate.
-4. Click **Translate** or press `Ctrl + Enter`.
-5. Copy the translated result when you're ready.
+**Physical macOS runtime validation has not been performed.** CI builds the
+arm64 bundle, validates the plist and Mach-O architecture, and opens the bundle
+in a runner smoke test. Intel macOS and universal binaries are not produced.
+See [docs/MACOS.md](docs/MACOS.md).
 
-The interface displays model-loading and generation progress. Operations can be cancelled while loading or generating.
+### Building from source
 
-## ⚙️ Configuration
+Prerequisites:
 
-Fluent stores application settings separately from the model files.
-
-| Platform | Settings location |
-| --- | --- |
-| Linux | `~/.config/fluent/settings.json` |
-| Windows | `%APPDATA%\fluent\Fluent\config\settings.json` |
-| macOS | `~/Library/Application Support/io.fluent.Fluent/settings.json` |
-
-For an installed copy, `config.json` lives in the platform configuration directory and is user-owned: the installer writes it once and leaves it untouched on later runs (`--reset-config` regenerates it). The root `config.json` is the development default used when running from the source tree.
-
-Example:
-
-```json
-{
-  "models": {
-    "fast": "/home/you/.local/share/fluent/models/nllb-200-1.3b",
-    "accurate": "/home/you/.local/share/fluent/models/nllb-200-3.3b",
-    "madlad": "/home/you/.local/share/fluent/models/madlad400-3b-mt",
-    "small": "/home/you/.local/share/fluent/models/small100",
-    "chat": "/home/you/.local/share/fluent/models/qwen2.5-1.5b-instruct"
-  },
-  "generation": {
-    "max_length": 512,
-    "num_beams": 4,
-    "unlimited_output": false
-  }
-}
-```
-
-The application searches `FLUENT_CONFIG`, the executable directory and its
-parent, the platform configuration directory, then the current directory.
-
-`max_length` is the maximum number of **source** tokens; longer input is truncated explicitly and flagged in the interface.
-
-Generated output is controlled by the **Output limit** setting in Settings or by `config.json`:
-
-- **Automatic** (default): derives a finite budget from the input (`min(512, source_tokens * 2 + 16)`) so short sentences finish quickly. This preserves the previous behavior.
-- **Custom limit**: uses `"max_new_tokens": N` as a finite ceiling, even if the model has not emitted EOS. Requests are capped by the model’s positional capacity.
-- **No limit**: set `"unlimited_output": true`. Fluent imposes no token ceiling and generates until EOS, cancellation, an inference error, or the model's capacity. For NLLB's 1024-position table this is about 1022 generated tokens after the two prompt tokens; MADLAD has no fixed positional cap, so memory and time are the practical limits. Long outputs require more memory and time; it is not infinite hardware capacity.
-
-Existing configuration files without these fields remain on **Automatic**. The GUI persists the selected mode in `settings.json`.
-
-## 🚀 GPU Acceleration
-
-Fluent runs on the CPU by default. Optional acceleration can be enabled at build time.
-
-### NVIDIA — CUDA
-
-```bash
-cargo build --release -p fluent-gui --features cuda
-```
-
-Requires a compatible NVIDIA GPU, CUDA toolkit, and `nvcc`.
-
-### Apple Silicon — Metal
-
-```bash
-cargo build --release -p fluent-gui --features metal
-```
-
-Requires a supported Apple Silicon environment.
-
-When the corresponding feature is enabled, select the desired device in **Settings → Device**. Otherwise, use CPU inference.
-
-## ⚡ CPU Performance
-
-On CPU, Fluent keeps the model weights in memory as 8-bit blocks (Q8) instead of f32. A block of 32 values shares one f32 scale, which cuts weight traffic and resident memory by about 3.5×. The inner loop is an integer `i8 × i8` multiply-accumulate; the block result is then scaled in f32, so accuracy stays close to the f32 reference at block granularity. On x86-64 an AVX2/FMA kernel is selected at runtime when the processor supports it; a portable scalar kernel is always available, so the build does not require a particular instruction set.
-
-- The model file on disk is **never modified**. Quantization happens once while loading and the f32 weights are released immediately.
-- The Q8 path is used automatically only for CPU inference in f32. CUDA, Metal and explicit f16 keep the existing path.
-- Encoder prefill processes eight source rows per quantized weight-block traversal, which keeps the activation tile in cache and cut encoder time by about 20% on the reference machine.
-- Decoding uses a fused attention kernel and a preallocated per-beam KV cache instead of rebuilding and broadcasting tensors every step. Logits are normalized on demand with a bit-identical log-sum-exp, so the full vocabulary is never materialized during beam search.
-
-Two environment overrides are available for diagnosis:
-
-| Variable | Effect |
-| --- | --- |
-| `FLUENT_QUANT=off` | Disable the Q8 path and use the f32 weights (higher memory, slower on CPU) |
-| `FLUENT_QUANT_SIMD=off` | Keep Q8 but force the portable scalar kernels |
-
-The checked-in benchmark measures generation separately from model loading and covers short, medium and long inputs with fixed 32/64/128/200-token budgets:
-
-```bash
-cargo run --release -p fluent-core --example bench -- \
-    models/nllb-200-1.3b --reps 3 --budgets 32,64,128,200 \
-    --json /tmp/fluent-bench.json
-```
-
-See [PERFORMANCE.md](PERFORMANCE.md) for the measured environment, baseline and final results, quality comparison and remaining limitations.
-
-## 🛠️ Building from Source
-
-### Linux — Fedora / Nobara
-
-Install the required system packages:
-
-```bash
-sudo dnf install gcc gcc-c++ make cmake pkgconf-pkg-config \
-    libxkbcommon-devel libxkbcommon-x11 wayland-devel mesa-libGL-devel \
-    fontconfig-devel libX11-devel libXcursor-devel libXi-devel libXrandr-devel
-```
-
-The complete Linux installation, validation and migration guide is
-[docs/LINUX.md](docs/LINUX.md).
+- Rust and Cargo. The workspace requires Rust 1.85 or newer; CI and the
+  validated builds use Rust 1.99.0.
+- A C/C++ toolchain, `pkg-config` and `cmake`.
+- Linux: X11/Wayland development headers, OpenGL development libraries and
+  `fontconfig`.
+- Windows: Visual Studio 2022 Build Tools with the Desktop development with C++
+  workload and the Windows SDK.
+- macOS: Xcode Command Line Tools.
 
 Build and run:
 
 ```bash
-cargo build --release -p fluent-gui
+cargo build --release --locked -p fluent-gui
 ./target/release/fluent
 ```
 
-### Windows
+Linux development packages and platform details are in
+[docs/LINUX.md](docs/LINUX.md), [docs/WINDOWS.md](docs/WINDOWS.md) and
+[docs/MACOS.md](docs/MACOS.md).
 
-Windows x86-64 is built and smoke-tested by CI (executable startup, version,
-icon and self-test); the hosted runner cannot create an OpenGL context, so the
-GUI window is not validated there. No Windows installer is provided. See
-[docs/WINDOWS.md](docs/WINDOWS.md) for prerequisites, the MSVC build command,
-and configuration/model paths.
+## First launch and model installation
 
-### macOS
+Fluent starts even when no model is installed. Translate shows the selected
+translation model and a “not installed” message; Chat shows the selected chat
+model and an **Open Models** action.
 
-macOS arm64 is built and its `.app` bundle is smoke-tested by CI, including a
-temporary GUI window. Intel macOS, universal binaries, signing and notarization
-are not provided. See [docs/MACOS.md](docs/MACOS.md) for the CPU-only and Metal
-build commands and remaining bundle/signing work.
+1. **Launch Fluent.** The header switches between **Translate** and **Chat**.
+2. **Open Model Manager.** Select **Models** in the header, or use
+   **Settings → Manage models…**.
+3. **Review storage.** The default root is shown with free space and total model
+   usage. To use another disk, enter a folder and click **Apply folder**.
+   Existing models are **not moved**. **Use config paths** returns to the paths
+   in `config.json`. A storage folder inside a Git repository is rejected.
+4. **Choose a model.** Cards show the display name, architecture, parameter
+   count, download size, licence and a short description.
+5. **Review the confirmation.** The dialog shows the exact download size, free
+   disk space, destination and licence note.
+6. **Download.** Progress shows downloaded bytes, total size, speed, ETA and a
+   **Cancel** action. Downloads use a `.part` file and resume from the existing
+   bytes when possible.
+7. **Wait for verification.** Downloaded files are checked against pinned
+   sizes and SHA-256, then promoted atomically. A failed or cancelled download
+   is never presented as installed. Existing/manual directories start with a
+   size check; **Verify** performs the full checksum pass.
+8. **Load the model.** Translation loads on the first translation, or with
+   **Load now**. Chat loads on the first message. The status changes to
+   **Ready** when the engine is loaded.
+9. **Switch models.** Changing the translation model clamps the language pair
+   to the new model’s capabilities and announces the adjustment. Changing the
+   chat model starts a new conversation.
+10. **Maintain the model.** **Verify** runs the full checksum pass. **Repair**
+    requests missing or invalid files. **Remove** deletes only the selected
+    managed model directory and asks for confirmation.
 
-### CLI example
+Application installation and model installation are separate. A model can be
+much larger than Fluent itself: the smallest chat model is about 0.44 GB and
+the largest translation model about 17.6 GB.
 
-The core crate also includes a command-line translation example:
+<p align="center">
+  <img src="docs/screenshots/model-manager-confirm.png" alt="Fluent download confirmation with size, free space and licence" width="760"><br>
+  <em>Download confirmation. Nothing is downloaded before you confirm.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/chat-download-progress.png" alt="Fluent chat model download progress with speed, ETA and cancel" width="760"><br>
+  <em>Download progress. Interrupted downloads can be resumed from the same card.</em>
+</p>
+
+## Translation guide
+
+1. Select **Translate**.
+2. Choose a translation model in the **Model** selector. If it is not installed,
+   use **Open Models** first.
+3. Choose a source language, or leave **Automatic detection** enabled.
+4. Choose a target language. The picker is filtered to the selected model.
+5. Enter or paste text. **Clear** removes the source; **Clear all** also clears
+   the result.
+6. Click **Translate** or press `Ctrl + Enter`.
+7. Read the result, then use **Copy** when needed.
+
+Loading and generation show progress. Use **Cancel** or `Esc` while a task is
+running. Switching views is blocked until an active translation is finished or
+cancelled.
+
+### Language coverage
+
+| Model | Supported Fluent variants | Notes |
+|---|---:|---|
+| NLLB-200 1.3B | **202** | Broadest coverage; beam search |
+| NLLB-200 3.3B | **202** | Same language table; higher quality and memory cost |
+| MADLAD-400 3B | **72** | Curated, tokenizer-verified subset; greedy decoding |
+| SMaLL-100 | **98** | Fast, small; Simplified Chinese only |
+
+Language counts are not quality guarantees. A model can support a language and
+still produce weak output for a particular domain. Model quality also differs
+by direction and sentence length. See [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+
+### Chinese and Cantonese
+
+| Model | Simplified Chinese | Traditional Chinese | Cantonese / Yue |
+|---|---|---|---|
+| NLLB-200 | Yes (`zho_Hans`) | Yes (`zho_Hant`) | Yes (`yue_Hant`) |
+| MADLAD-400 | Yes (`zho_Hans`) | Yes (`zho_Hant`) | Not offered |
+| SMaLL-100 | Yes (`zho_Hans`) | **No** | **No** |
+
+The selectors use the same capability registry as the engine. A saved language
+that is unsupported by a newly selected model is adjusted at switch or startup,
+and the interface announces the change.
+
+### Output limits
+
+| Mode | Behaviour |
+|---|---|
+| **Automatic** (default) | Derives a finite budget from the input, capped at 512 generated tokens for translation. Short inputs finish sooner. |
+| **Custom limit** | Uses the configured maximum even if the model has not emitted EOS. |
+| **No limit** | Generates until EOS, cancellation, an inference error or the model’s positional capacity. NLLB has a 1024-position table; MADLAD has no fixed positional cap, so time and memory are the practical limits. |
+
+The default maximum source length is 512 tokens. Longer input is truncated
+explicitly and reported. NLLB’s position table allows up to 1024 source
+positions, but the application keeps a 512-token default for predictable
+latency. Very long “No limit” generations require more memory and time; this is
+not infinite hardware capacity.
+
+MADLAD uses deterministic greedy decoding and does not expose beam search.
+NLLB and SMaLL-100 use the configured beam count (default 4).
+
+## Chat guide
+
+1. Select **Chat** in the header.
+2. Choose **Qwen2.5 1.5B Instruct** (default, better quality) or
+   **Qwen2.5 0.5B Instruct** (lighter and faster).
+3. If the model is not installed, open **Models → Chat models** and download it.
+4. Type a message in **Message Fluent…** and press `Enter`, or use **Send**.
+   `Shift + Enter` inserts a new line.
+5. The reply streams into the conversation. Use **Cancel** while generating.
+6. Continue the conversation to use prior messages as context.
+7. Use **New chat** to clear the session immediately.
+8. Switch to **Translate** when you want to translate. The chat engine is
+   unloaded; returning to Chat shows **Chat model not loaded** until the next
+   message reloads it.
+
+### Chat limits
+
+| Limit | Value |
+|---|---:|
+| Prompt plus generated context | **4096 tokens** |
+| Maximum generated tokens per reply | **512 tokens** |
+| History persistence | **None** (session-only) |
+
+When the conversation exceeds the prompt budget, older turns are dropped first
+and the interface reports that older turns were omitted. If one message is
+still too long, Fluent keeps the beginning of the message and appends the
+assistant suffix. Reaching the 512-token reply limit is reported separately.
+
+### Chat quality
+
+Both Qwen models are compact. They can be fluent, helpful and wrong:
+factual errors, invented details and weak reasoning are possible, especially in
+the 0.5B model and on detailed science or current-events questions. Verify
+important claims independently. Chat does not have tool calling, retrieval,
+web access, vision or a knowledge base.
+
+Decoding is deterministic greedy with a repetition penalty; there are no
+temperature or top-p controls. Chat is CPU-only in the validated release.
+Conversation text is not written to `settings.json`, the model directory or any
+other file.
+
+## Model reference
+
+All sizes are approximate decimal downloads from the pinned manifests. A model
+directory may use slightly different on-disk space depending on the file
+system.
+
+**Translation models**
+
+| Model | Family | Download | Languages | Licence | Recommended use |
+|---|---|---|---:|---|---|
+| **NLLB-200 1.3B** | NLLB-200 | 5.51 GB | 202 | CC-BY-NC-4.0 | Balanced CPU translation; broad coverage |
+| **NLLB-200 3.3B** | NLLB-200 | 17.60 GB | 202 | CC-BY-NC-4.0 | Highest-quality NLLB option; large RAM/disk |
+| **MADLAD-400 3B** | T5 | 1.68 GB | 72 | Apache-2.0 | Alternative T5 translation; CPU-only, greedy |
+| **SMaLL-100** | M2M-100 (12/3) | 1.34 GB | 98 | MIT | Fast, lightweight translation |
+
+Quantization: NLLB-200 uses FP32 checkpoints with CPU Q8 at runtime; MADLAD-400
+uses a q4_k GGUF; SMaLL-100 uses FP32 safetensors with CPU Q8 at runtime.
+
+**Chat models**
+
+| Model | Download | Quantization | Context used | Licence | Recommended use |
+|---|---:|---|---:|---|---|
+| **Qwen2.5 1.5B Instruct** | 1.12 GB | Q4_K_M GGUF | 4096 tokens | Apache-2.0 | Default local chat; better coherence |
+| **Qwen2.5 0.5B Instruct** | 0.44 GB | Q4_0 GGUF | 4096 tokens | Apache-2.0 | Fastest local chat; lower quality |
+
+Known limitations:
+
+- **NLLB-200** is non-commercial and can omit clauses or sentences on some
+  inputs. The 3.3B model is much more memory-hungry.
+- **MADLAD-400** uses a curated 72-language subset, greedy decoding, and can add
+  or repeat content. It is slow on CPU.
+- **SMaLL-100** does not support Traditional Chinese or Cantonese; its 256-token
+  training target means very long outputs are outside its normal range.
+- **Qwen2.5** models are CPU-only, compact, and can fabricate facts. Chat
+  history and GPU inference are not provided.
+
+### Where models are stored
+
+The active model root depends on how Fluent was started:
+
+- **Installed Linux build:** the installer writes `config.json` with model
+  paths under `~/.local/share/fluent/models/` (or
+  `$XDG_DATA_HOME/fluent/models/`).
+- **Portable archive or ZIP with no `config.json`:** Fluent starts with the
+  default path `models/` relative to its working directory. This is usually the
+  extracted application folder. Use **Models → Storage** and **Apply folder**
+  to choose an explicit location before downloading.
+- **Existing configuration:** the model paths in `config.json` take precedence
+  when no custom storage root is set.
+
+A custom storage root changes where Fluent looks for model subdirectories; it
+does not move existing files. Each model has its own subdirectory:
+`nllb-200-1.3b`, `nllb-200-3.3b`, `madlad400-3b-mt`, `small100`,
+`qwen2.5-1.5b-instruct` and `qwen2.5-0.5b-instruct`. Use **Models → Storage**
+to see the active root and free space.
+
+## Performance and system requirements
+
+### Reference host
+
+These measurements are from the canonical development host, not a universal
+guarantee:
+
+- Intel Core i5-11400H (6 cores / 12 threads)
+- 15 GiB RAM
+- NVIDIA RTX 3050 Laptop, 4 GB VRAM — **not used**
+- Nobara Linux 44, CPU-only builds
+- Rust 1.99.0, Candle 0.11
+
+### Representative measurements
+
+| Workload | Load time | Resident memory | Generation |
+|---|---:|---:|---:|
+| Qwen2.5 1.5B chat | ~1.9 s | ~1.95 GB after load; ~2.02 GB peak | 3.3–4.9 s to first output; 4–7 tok/s |
+| Qwen2.5 0.5B chat | ~1.0 s | ~0.94 GB after load; ~0.96 GB peak | 2.6–3.2 s to first output; 5–8 tok/s |
+| NLLB-200 1.3B, 60-case sample | 9.6 s | 2.29 GB peak | 3.3 s median total; 0.47 s TTFT |
+| NLLB-200 3.3B Q8, 60-case sample | 14.8 s | 4.57 GB peak | 5.9 s median total; 0.95 s TTFT |
+| MADLAD-400 3B q4_k, 60-case sample | 2.0 s | 2.75 GB peak | 30.2 s median total; 3.0 s TTFT |
+| SMaLL-100, 42-case sample | 1.0 s | 0.42 GB after load; 1.67 GB peak | 0.44 s median total; 98 ms TTFT |
+
+In the GUI, the 1.5B chat workload reached about **2.09 GB** RSS and a real
+NLLB-200 1.3B translation reached about **1.74 GB**. With forced allocator
+trimming, RSS fell to about **0.14 GB** after chat unload and **0.18 GB** after
+translation unload; under the default allocator, higher RSS after unload is
+retained arena memory, not a resident model.
+
+TTFT and generation speed vary with prompt length. Short chat replies are
+prefill-bound: a two-token answer can take several seconds end to end despite a
+higher steady-state decode rate. Long chat contexts increase prefill time.
+Model size affects both storage and RAM.
+
+### Practical system guidance
+
+These are practical recommendations derived from the measurements above, not
+certified minimums:
+
+| Resource | Guidance |
+|---|---|
+| OS | Linux x86-64 with glibc 2.35+ is validated. Windows 10/11 x86-64 and macOS 12+ arm64 have CI builds only. |
+| CPU | x86-64 with AVX2/FMA is preferred; the portable scalar Q8 path remains available. |
+| RAM | 8 GB is workable for SMaLL-100, Qwen2.5 0.5B/1.5B and NLLB-200 1.3B. 16 GB is recommended for NLLB-200 3.3B and comfortable multitasking. |
+| Disk | Application archives are roughly 7.5–10 MB. Models range from about 0.44 GB to 17.60 GB. |
+| GPU | No validated GPU inference. NVIDIA CUDA and Apple Metal are optional build features for some translation paths; chat is CPU-only. |
+| Display | X11 or Wayland with an OpenGL 3.3-capable driver on Linux. |
+
+Available RAM matters more than the nominal installed figure: other
+applications, the desktop, and the model’s working set all compete for memory.
+If RAM is tight, Fluent warns that the system may swap and become very slow.
+The model loader also performs a pre-load estimate for supported models.
+
+## Troubleshooting and FAQ
+
+### The model is not installed
+
+Open **Models**, choose the required translation or chat model, review its
+licence and size, and download it. Fluent shows **Open Models** in Translate
+and Chat when a model is missing.
+
+### The model is installed but not loaded
+
+This is normal after switching views or starting Fluent. Translation loads on
+the first translation (or **Load now**); Chat loads on the first message.
+**Installed** means the files are present. **Ready** means the engine is loaded.
+
+### A download was interrupted
+
+Click **Download** again. Fluent keeps a `.part` file and resumes from the
+bytes already present when the server supports range requests. A cancelled
+download remains **Not installed** and shows the partial disk usage.
+
+### Verification or hash check failed
+
+The model is not promoted. Use **Verify** to see the failure, then **Repair** to
+request missing or invalid files. A corrupt existing file is preserved with an
+`.invalid-<timestamp>` suffix rather than silently deleted. If repair cannot
+recover the installation, remove that model and download it again.
+
+### There is not enough disk space
+
+The download confirmation and Model Manager show free space. Free disk space
+or choose another storage folder with **Apply folder**. Fluent checks space
+before writing and stops with an error if the destination is insufficient.
+
+### A language is missing from the picker
+
+The selector is intentionally filtered by the selected model. NLLB-200 has 202
+variants, SMaLL-100 98 and MADLAD-400 72. SMaLL-100 does not offer Traditional
+Chinese or Cantonese. Switch models if you need another language.
+
+### The first response is slow
+
+Model loading and prompt prefill happen before the first token. NLLB-200 1.3B
+loads in roughly 6–10 seconds on the reference CPU; the 3.3B model takes about
+15–21 seconds. Chat TTFT is roughly 3–5 seconds for short prompts. Later tokens
+usually arrive faster.
+
+### Long chat conversations are slow
+
+Fluent uses a 4096-token prompt-plus-output budget. Prefill cost grows with the
+conversation, and older turns are dropped when the budget is exceeded. Start a
+**New chat** for a new topic if the conversation becomes slow.
+
+### The chat answer is wrong or invented details
+
+Both Qwen models are compact and can fabricate facts. Use the 1.5B model for
+better coherence, keep questions focused, and verify important claims. Chat is
+not a search engine or a substitute for professional advice.
+
+### Memory usage stays high after switching views
+
+The other engine is unloaded, but the system allocator may retain freed memory
+in the process. Forced trimming showed RSS falling to about 0.14–0.18 GB after
+unload; the higher default value is retained arena memory. If the system is
+under pressure, close other applications or restart Fluent.
+
+### Switching between Translate and Chat
+
+Switching views unloads the other heavyweight model. An active translation must
+finish or be cancelled before switching. Chat can be cancelled independently.
+The chat model remains installed on disk.
+
+### Linux: the binary will not start
+
+Check that the system has glibc 2.35 or newer and an OpenGL 3.3-capable driver.
+Run `ldd bin/fluent` to inspect shared-library dependencies. On X11 install the
+distribution’s `libxkbcommon-x11` package. The canonical build targets Ubuntu
+22.04; other distributions and older glibc versions are not validated.
+
+### Windows: SmartScreen warns about the executable
+
+The ZIP is not Authenticode-signed and has no SmartScreen reputation. Only run
+a build you obtained from a trusted source and verified. This project does not
+claim that SmartScreen will accept it.
+
+### macOS: Gatekeeper blocks the app
+
+The app is unsigned and not notarized. If you trust the verified build, use the
+standard Finder or System Settings flow to allow that specific application. Do
+not disable Gatekeeper globally. No notarized build is currently provided.
+
+### Where are models stored?
+
+The default roots are listed in
+[Where models are stored](#where-models-are-stored). Use **Models → Storage** to
+see the active root and free space, or to choose another folder. Models are not
+stored inside the application archive.
+
+### Are conversations saved?
+
+No. Chat history is session-only and is cleared when Fluent closes or when you
+select **New chat**. The last translation source text is restored on startup
+from `settings.json`; chat messages are not persisted.
+
+### Does Fluent send my text to a server?
+
+No. Translation and chat inference run locally and do not call a remote AI
+service. Network access is used only for explicit model downloads, catalogue
+refresh and other normal application networking. Your operating system and
+other software may still have their own network activity.
+
+## Privacy
+
+- **Local inference.** Text is processed by local model files.
+- **No account or API key.** Fluent does not require a cloud account.
+- **No telemetry.** The application contains no analytics.
+- **Chat is session-only.** No chat text is written to disk.
+- **Translation source is restored.** The last source text is stored in
+  `settings.json` so the field can be restored on startup; clear it if you do
+  not want that local copy.
+- **Model downloads are ordinary HTTPS requests** to pinned Hugging Face
+  repositories. The model choice and your IP address are visible to that
+  service, as with any download.
+- **Offline after installation.** Once the required files are present,
+  translation and chat do not need a network connection.
+
+Fluent’s local inference does not make the whole machine offline. Your
+operating system, drivers and other applications may still communicate over the
+network.
+
+## Development and contributing
+
+### Workspace layout
+
+| Path | Purpose |
+|---|---|
+| `crates/fluent-core` | Translation engines, chat engine, model registry, tokenizers, downloader and catalogue |
+| `crates/fluent-gui` | Native `egui`/`eframe` desktop interface |
+| `catalogue/` | Versioned remote model catalogue |
+| `scripts/` | Packaging, verification, benchmarks and acquisition helpers |
+| `docs/` | Technical documentation |
+| `benchmarks/` | Committed evaluation corpora and harness inputs |
+
+### Build and test
+
+```bash
+cargo build --release --locked -p fluent-gui
+cargo test --workspace --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo fmt --all -- --check
+```
+
+Installer regression tests:
+
+```bash
+bash scripts/test-installer.sh
+```
+
+Gated real-model tests require local model paths and are skipped in ordinary
+CI:
+
+```bash
+FLUENT_TEST_MODEL="$HOME/.local/share/fluent/models/nllb-200-1.3b" \
+  cargo test --release -p fluent-core --test reliability -- --nocapture
+
+FLUENT_MADLAD_MODEL="$HOME/.local/share/fluent/models/madlad400-3b-mt" \
+  cargo test --release -p fluent-core --test madlad -- --nocapture
+
+FLUENT_SMALL100_MODEL="$HOME/.local/share/fluent/models/small100" \
+  cargo test --release -p fluent-core --test small100 -- --nocapture
+
+FLUENT_CHAT_MODEL="$HOME/.local/share/fluent/models/qwen2.5-1.5b-instruct" \
+  cargo test --release -p fluent-core --test chat -- --nocapture
+
+FLUENT_TEST_MODELS_ROOT="$HOME/.local/share/fluent/models" \
+  cargo test --release -p fluent-core --test model_manager -- --nocapture
+```
+
+### Command-line examples
+
+Translate from the core crate:
 
 ```bash
 cargo run --release -p fluent-core --example translate -- \
-    "Hello, how are you?" eng_Latn fra_Latn models/nllb-200-1.3b \
-    cpu auto
+  "Hello, how are you?" eng_Latn fra_Latn \
+  "$HOME/.local/share/fluent/models/nllb-200-1.3b" cpu auto
 ```
 
-Optional environment variables:
+Run the chat benchmark:
 
-- `FLUENT_BEAMS` — beam width; defaults to `4`.
-- `FLUENT_MAX_NEW` — maximum number of generated tokens.
+```bash
+cargo run --release -p fluent-core --example chat_eval -- \
+  --model "$HOME/.local/share/fluent/models/qwen2.5-1.5b-instruct" \
+  --id qwen2.5-1.5b-instruct --out /tmp/chat.json
+```
 
-## ⛭ Technology
+Build a portable Linux archive:
 
-| Component | Technology |
-| --- | --- |
-| Language | Rust |
-| Desktop interface | egui / eframe |
-| Inference engine | Candle |
-| Translation models | Meta NLLB-200 |
-| Tokenization | Hugging Face `tokenizers` |
-| Language detection | `whatlang` |
-| Configuration | JSON and Serde |
-| GPU acceleration | Optional CUDA / Metal |
-| CPU acceleration | Q8 weights, AVX2/FMA with scalar fallback |
+```bash
+./scripts/package-linux.sh
+```
 
-The Rust application is independent of the legacy Python backend and web frontend, which remain in the repository for reference.
+### Contributing
 
-## 🔒 Privacy by Design
+Contributions, bug reports and documentation improvements are welcome through
+the repository’s GitHub issues and pull requests. For substantial changes,
+open an issue to discuss the approach first. No issue template, CLA or
+contribution licence agreement is currently defined in the repository.
 
-Fluent is designed to keep translation local.
+Please do not commit model weights, tokenizer assets, credentials, private keys
+or build output. See [docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md) for
+model provenance and [docs/VERSIONING.md](docs/VERSIONING.md) for release and
+version rules.
 
-- **No cloud translation API** is required for inference.
-- **No account** is needed.
-- **No dedicated application backend** is required by the native translation engine.
-- **Your text stays on your device** during local inference.
-- **Model downloads require network access**, but translation itself can run offline once the required files are available.
+## Licence, models and provenance
 
-Your operating system and other software may still have their own network activity; Fluent's local inference does not mean the entire machine is offline.
+Fluent’s source code is distributed under the [MIT License](LICENSE). This does
+**not** relicense model weights, tokenizers or brand assets.
 
-## 🗺️ Roadmap
+| Asset | Licence | Notes |
+|---|---|---|
+| Fluent source code | MIT | Application code only |
+| NLLB-200 1.3B / 3.3B | CC-BY-NC-4.0 | Non-commercial; user-supplied or downloaded after confirmation |
+| MADLAD-400 3B | Apache-2.0 | User-supplied or downloaded after confirmation |
+| SMaLL-100 | MIT | User-supplied or downloaded after confirmation |
+| Qwen2.5 Instruct | Apache-2.0 | User-supplied or downloaded after confirmation |
+| Fluent branding | Project-provided | Redistribution rights not independently documented; owner confirmation required |
 
-Potential future improvements:
+Fluent does not bundle or redistribute model weights. The Model Manager
+downloads only the pinned files listed in the registry, verifies their exact
+sizes and SHA-256 values, and stores them outside the application payload.
 
-- [ ] More model choices and inference optimizations.
-- [ ] Additional interface customization.
-- [ ] Improved model management and setup guidance.
-- [ ] Further performance and usability refinements.
+### Provenance caveats
 
-These are possible future directions, not promises of features already implemented.
+Two items still require owner review before public distribution:
 
-## 🤝 Contributing
+1. **Historical NLLB assets.** The current working tree contains no NLLB
+   weights or tokenizer assets, but earlier Git commits still contain NLLB
+   tokenizer/configuration files. A public full-history clone still downloads
+   them. Resolving this requires a history decision (sanitized mirror or
+   source-only archive); no history rewrite was performed. See
+   [docs/RELEASE_INTEGRITY.md](docs/RELEASE_INTEGRITY.md).
+2. **Branding rights.** The logo and banner are project-provided, but their
+   authorship and redistribution licence are not independently documented. Do
+   not assume the MIT source licence covers them; owner confirmation is
+   required before public distribution. See [docs/ASSETS.md](docs/ASSETS.md).
 
-Contributions, bug reports, and suggestions are welcome.
+Nothing in this document is legal advice. Model licences apply to the model
+assets, not to Fluent’s source code.
 
-- Report bugs and unexpected translation results.
-- Suggest interface and usability improvements.
-- Help improve documentation and cross-platform support.
-- Propose performance optimizations.
+### Acknowledgements
 
-For substantial changes, open an issue to discuss the approach before submitting a pull request.
+Fluent builds on open research and open-source software:
 
-## 📄 License
+- **Meta AI** for NLLB-200 and the original NLLB tokenizer and model cards.
+- **Google Research** for MADLAD-400 and its Apache-2.0 GGUF release.
+- **Alireza Mohammadshahi and co-authors** for SMaLL-100.
+- **Alibaba Qwen** for the Qwen2.5 Instruct models.
+- **Hugging Face** for model hosting and the `tokenizers` crate.
+- The **Candle** project for the Rust inference primitives.
+- **egui / eframe**, **whatlang**, and the wider Rust open-source community.
 
-Fluent's source code is distributed under the [MIT License](LICENSE). The
-NLLB-200 model and tokenizer assets are **not** MIT-licensed: they are
-CC-BY-NC-4.0 and are not bundled with Fluent. See
-[docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md) for the asset table and
-the unresolved tokenizer-redistribution question.
+Model and dependency licences remain with their respective authors. See
+[docs/MODEL_PROVENANCE.md](docs/MODEL_PROVENANCE.md) for the project’s model
+licence record.
 
-## 📦 Distribution Documentation
+## Documentation index
 
-- [Distribution audit and architecture](docs/DISTRIBUTION_AUDIT.md)
+- [Linux installation and validation](docs/LINUX.md)
+- [Windows build and packaging status](docs/WINDOWS.md)
+- [macOS build and packaging status](docs/MACOS.md)
 - [Platform support matrix](docs/PLATFORM_SUPPORT.md)
-- [Release integrity and historical assets](docs/RELEASE_INTEGRITY.md)
-- [Linux installation](docs/LINUX.md)
-- [Windows build guide](docs/WINDOWS.md)
-- [macOS build guide](docs/MACOS.md)
-- [Model Manager, storage and safe removal](docs/MODEL_MANAGER.md)
-- [Language support and the capability registry](docs/LANGUAGES.md)
-- [Remote catalogue schema and maintainer workflow](docs/CATALOGUE.md)
-- [SMaLL-100 setup, languages and licence](docs/SMALL100.md)
-- [Local chat, models and performance](docs/CHAT.md)
-- [MADLAD-400 setup, languages and measurements](docs/MADLAD.md)
-- [Quality and performance benchmarks (Cycle 14 and Cycle 16)](docs/BENCHMARKS.md)
-- [Model backend architecture decision](docs/ADR-001-model-backends.md)
+- [Model Manager and storage](docs/MODEL_MANAGER.md)
+- [Local chat architecture and limits](docs/CHAT.md)
+- [Language capability registry](docs/LANGUAGES.md)
 - [Model package specification](docs/MODEL_PACKAGE.md)
+- [MADLAD-400 setup and measurements](docs/MADLAD.md)
+- [SMaLL-100 setup, languages and licence](docs/SMALL100.md)
+- [Translation benchmarks](docs/BENCHMARKS.md)
+- [Historical CPU optimisation notes](PERFORMANCE.md)
+- [Remote catalogue schema](docs/CATALOGUE.md)
 - [Model provenance and licensing](docs/MODEL_PROVENANCE.md)
-- [Branding assets and icon integration](docs/ASSETS.md)
-- [Versioning](docs/VERSIONING.md)
+- [Release integrity and historical assets](docs/RELEASE_INTEGRITY.md)
 - [Builds, CI artifacts, signing and release verification](docs/RELEASE.md)
+- [Versioning](docs/VERSIONING.md)
+- [Branding assets](docs/ASSETS.md)
+- [Model backend architecture decision](docs/ADR-001-model-backends.md)
+- [Changelog](CHANGELOG.md)
 
 ---
 
 *Your language. Your machine. Your privacy.*
-
-**Fluent — Translation without the cloud.**
