@@ -287,6 +287,22 @@ No artifact contains model weights, tokenizer assets, user configuration,
 caches or development files. The application needs a user-supplied model
 package; see [MODEL_PACKAGE.md](MODEL_PACKAGE.md).
 
+### Reproducibility of platform archives
+
+Linux and macOS inner archives were byte-stable across the Cycle 19 rebuilds:
+Linux
+`475b2a83d1e27d56312c769b5998d8ef884ad198ebc24011e78a56b6112325d4`
+(9,725,187 B) and macOS
+`d903b2c801acaabf8625bfaa6a54df3503962c7ff2c49648a0c8761b6291fa39`
+(7,905,926 B). The Windows PE archive is not byte-reproducible: two runs from
+the same source produced 7,618,508 B
+(`eafbc65ac0ae06133cecf3dd8550493298c405fc894e606194641e9a3be4b7fa`) and
+7,618,515 B
+(`d4206fcc690f1d8e7cbd7290f661e9995fffc77ebbe24870d6f48a608b8f6fe6`)
+because the linker embeds build-specific data. Always verify the `.sha256`
+published with the exact ZIP you downloaded; do not compare a Windows hash
+with a different run.
+
 ## 4. Checksum verification
 
 Linux/macOS:
