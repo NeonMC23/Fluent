@@ -9,7 +9,10 @@ use eframe::egui;
 use fluent_core::ProjectConfig;
 
 const HELP: &str = "\
-Fluent - local NLLB-200 translation
+Fluent - local multilingual translation and chat
+
+Translate text or chat with local instruction models. Models are downloaded
+from the Model Manager; inference runs locally after they are installed.
 
 Usage:
   fluent                     Open the graphical interface

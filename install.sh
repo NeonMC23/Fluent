@@ -682,7 +682,7 @@ if [ "$DO_DESKTOP" -eq 1 ]; then
         printf '%s\n' 'Type=Application'
         printf '%s\n' 'Name=Fluent'
         printf '%s\n' 'GenericName=Translation'
-        printf '%s\n' 'Comment=Local-first, offline translation with NLLB-200'
+        printf '%s\n' 'Comment=Local-first translation and chat with downloadable local models'
         printf 'Exec=%s\n' "$EXEC_LINE"
         printf 'Path=%s\n' "$HOME"
         if [ -n "$ICON_FILE" ]; then
@@ -690,7 +690,7 @@ if [ "$DO_DESKTOP" -eq 1 ]; then
         fi
         printf '%s\n' 'Terminal=false'
         printf '%s\n' 'Categories=Utility;'
-        printf '%s\n' 'Keywords=translation;language;offline;'
+        printf '%s\n' 'Keywords=translation;chat;language;offline;'
         printf '%s\n' 'StartupWMClass=io.fluent.Fluent'
         printf 'X-Fluent-Version=%s\n' "$VERSION"
         printf '%s\n' 'X-Fluent-Installer=1'

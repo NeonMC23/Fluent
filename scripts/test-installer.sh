@@ -76,6 +76,7 @@ assert_file "$DESKTOP"
 assert_file "$ICON_DST"
 python3 -m json.tool "$CONFIG" > /dev/null || fail 'config.json is not valid JSON'
 grep -q "^Exec=\"$LAUNCHER\"" "$DESKTOP" || fail 'desktop Exec path is wrong'
+grep -q '^Comment=Local-first translation and chat with downloadable local models$' "$DESKTOP" || fail 'desktop Comment is outdated'
 if command -v desktop-file-validate >/dev/null 2>&1; then
     desktop-file-validate "$DESKTOP" > /dev/null || fail 'desktop entry validation failed'
 fi
