@@ -83,7 +83,12 @@ jobs:
           mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
           cd "$SMOKE"
           "$BIN" --version
-          "$BIN" --self-test
+          "$BIN" --help | tee fluent-help.txt
+          grep -Fq "local multilingual translation and chat" fluent-help.txt
+          grep -Fq "Model Manager" fluent-help.txt
+          "$BIN" --self-test | tee fluent-self-test.txt
+          grep -Fq "model-root: platform default" fluent-self-test.txt
+          grep -Fq "$XDG_DATA_HOME/fluent/models/nllb-200-1.3b" fluent-self-test.txt
           LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a "$BIN" --smoke-test-gui
       - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
@@ -127,13 +132,40 @@ jobs:
             $verifyExit = $LASTEXITCODE
             $verifyOutput | Tee-Object -FilePath $log -Append
             if ($verifyExit -ne 0) { throw "artifact verification failed" }
-            $smoke = Join-Path $env:RUNNER_TEMP "fluent-smoke"
+            $smoke = Join-Path $env:RUNNER_TEMP "fluent smoke ü"
             Remove-Item -Recurse -Force $smoke -ErrorAction SilentlyContinue
             New-Item -ItemType Directory -Path $smoke | Out-Null
             $zip = (Get-ChildItem dist\fluent-*.zip | Select-Object -First 1).FullName
             Expand-Archive -Path $zip -DestinationPath $smoke
             $exe = Join-Path $smoke "fluent.exe"
-            Set-Location $smoke
+            $unrelated = Join-Path $env:RUNNER_TEMP "fluent unrelated cwd"
+            New-Item -ItemType Directory -Path $unrelated -Force | Out-Null
+            "== metadata ==" | Tee-Object -FilePath $log -Append
+            $info = (Get-Item $exe).VersionInfo
+            $info | Format-List | Out-String | Tee-Object -FilePath $log -Append
+            if ($info.ProductName -ne "Fluent") { throw "unexpected ProductName: $($info.ProductName)" }
+            if ($info.FileDescription -notlike "*Local Translation and Chat*") {
+              throw "unexpected FileDescription: $($info.FileDescription)"
+            }
+            if ($info.OriginalFilename -ne "fluent.exe") {
+              throw "unexpected OriginalFilename: $($info.OriginalFilename)"
+            }
+            if ($info.FileVersion -notlike "$version*") {
+              throw "unexpected FileVersion: $($info.FileVersion)"
+            }
+            $icon = $null
+            try {
+              Add-Type -AssemblyName System.Drawing
+              $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+            } catch {
+              try {
+                Add-Type -AssemblyName System.Drawing.Common
+                $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+              } catch {
+                Write-Output "::warning title=Windows icon smoke skipped::Could not load System.Drawing to extract the embedded icon."
+              }
+            }
+            if ($null -ne $icon) { "icon: OK ($($icon.Width)x$($icon.Height))" | Tee-Object -FilePath $log -Append }
             "== version ==" | Tee-Object -FilePath $log -Append
             $versionOutput = & $exe --version 2>&1
             $versionExit = $LASTEXITCODE
@@ -142,11 +174,60 @@ jobs:
             if ($versionOutput -notlike "*Fluent $version*") {
               throw "unexpected version output: $versionOutput"
             }
-            "== self-test ==" | Tee-Object -FilePath $log -Append
-            $selfOutput = & $exe --self-test 2>&1
-            $selfExit = $LASTEXITCODE
+            "== help ==" | Tee-Object -FilePath $log -Append
+            $helpOutput = (& $exe --help 2>&1 | Out-String)
+            $helpOutput | Tee-Object -FilePath $log -Append
+            if ($LASTEXITCODE -ne 0) { throw "fluent --help failed" }
+            if ($helpOutput -notlike "*local multilingual translation and chat*") {
+              throw "product description missing from help"
+            }
+            if ($helpOutput -notlike "*Model Manager*") {
+              throw "Model Manager description missing from help"
+            }
+            "== self-test and storage ==" | Tee-Object -FilePath $log -Append
+            Push-Location $unrelated
+            try {
+              $selfOutput = (& $exe --self-test 2>&1 | Out-String)
+              $selfExit = $LASTEXITCODE
+            } finally {
+              Pop-Location
+            }
             $selfOutput | Tee-Object -FilePath $log -Append
             if ($selfExit -ne 0) { throw "fluent --self-test failed" }
+            if ($selfOutput -notmatch "model-root: platform default") {
+              throw "self-test did not report the platform default model root"
+            }
+            if ($selfOutput -notmatch "Fluent\\data\\models\\nllb-200-1.3b") {
+              throw "self-test model path is not under the per-user AppData root"
+            }
+            if ($selfOutput -match [regex]::Escape($unrelated)) {
+              throw "self-test used the unrelated working directory"
+            }
+            "== config path and Unicode ==" | Tee-Object -FilePath $log -Append
+            $configDir = Join-Path $smoke "config ü"
+            $modelDir = Join-Path $smoke "模型 with spaces"
+            New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+            $configPath = Join-Path $configDir "config.json"
+            @{ models = @{ fast = $modelDir } } | ConvertTo-Json -Depth 5 | Set-Content -Path $configPath -Encoding utf8NoBOM
+            $env:FLUENT_CONFIG = $configPath
+            Push-Location $unrelated
+            try {
+              $configOutput = (& $exe --self-test 2>&1 | Out-String)
+              $configExit = $LASTEXITCODE
+            } finally {
+              Remove-Item Env:\FLUENT_CONFIG -ErrorAction SilentlyContinue
+              Pop-Location
+            }
+            $configOutput | Tee-Object -FilePath $log -Append
+            if ($configExit -ne 0) { throw "configured self-test failed" }
+            if ($configOutput -notmatch [regex]::Escape($modelDir)) {
+              throw "explicit config path was not used"
+            }
+            "== no automatic download ==" | Tee-Object -FilePath $log -Append
+            $modelFiles = Get-ChildItem -Path (Join-Path $env:APPDATA "fluent\Fluent\data\models") -Recurse -File -ErrorAction SilentlyContinue |
+              Where-Object { $_.Extension -in ".gguf", ".safetensors", ".bin" }
+            if ($modelFiles) { throw "unexpected model files were created" }
+            Set-Location $smoke
             "== gui smoke ==" | Tee-Object -FilePath $log -Append
             $guiOutput = & $exe --smoke-test-gui 2>&1
             $guiExit = $LASTEXITCODE
@@ -218,16 +299,46 @@ jobs:
             --output dist
       - name: Verify bundle and run packaged smoke tests
         run: |
+          set -euo pipefail
           python3 scripts/verify-artifacts.py --dir dist --version "$(./scripts/version.sh)"
           SMOKE="$(mktemp -d)"
           ditto -x -k dist/Fluent-*.zip "$SMOKE"
           APP="$SMOKE/Fluent.app"
+          PLIST="$APP/Contents/Info.plist"
           test -x "$APP/Contents/MacOS/fluent"
-          plutil -lint "$APP/Contents/Info.plist"
-          lipo -info "$APP/Contents/MacOS/fluent"
-          cd "$SMOKE"
-          "$APP/Contents/MacOS/fluent" --version
-          "$APP/Contents/MacOS/fluent" --self-test
+          test -s "$APP/Contents/Resources/Fluent.icns"
+          test "$(cat "$APP/Contents/PkgInfo")" = "APPL????"
+          plutil -lint "$PLIST"
+          test "$(plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = "io.fluent.Fluent"
+          test "$(plutil -extract CFBundleShortVersionString raw -o - "$PLIST")" = "$(./scripts/version.sh)"
+          test "$(plutil -extract CFBundleVersion raw -o - "$PLIST")" = "$(./scripts/version.sh)"
+          test "$(plutil -extract CFBundleExecutable raw -o - "$PLIST")" = "fluent"
+          test "$(plutil -extract CFBundleIconFile raw -o - "$PLIST")" = "Fluent.icns"
+          test "$(plutil -extract LSMinimumSystemVersion raw -o - "$PLIST")" = "12.0"
+          lipo -archs "$APP/Contents/MacOS/fluent" | tr -d '[:space:]' | grep -qx "arm64"
+          file "$APP/Contents/MacOS/fluent" | grep -q "Mach-O 64-bit executable arm64"
+          find "$APP" -type f | sort > "$SMOKE/app-before.txt"
+          export HOME="$SMOKE/home"
+          mkdir -p "$HOME"
+          UNRELATED="$(mktemp -d)"
+          cd "$UNRELATED"
+          "$APP/Contents/MacOS/fluent" --version | tee "$SMOKE/version.txt"
+          "$APP/Contents/MacOS/fluent" --help | tee "$SMOKE/help.txt"
+          grep -Fq "local multilingual translation and chat" "$SMOKE/help.txt"
+          grep -Fq "Model Manager" "$SMOKE/help.txt"
+          "$APP/Contents/MacOS/fluent" --self-test | tee "$SMOKE/self-test.txt"
+          grep -Fq "model-root: platform default" "$SMOKE/self-test.txt"
+          grep -Fq "Library/Application Support/io.fluent.Fluent/models/nllb-200-1.3b" "$SMOKE/self-test.txt"
+          if grep -F "fast-model:" "$SMOKE/self-test.txt" | grep -Fq "$APP"; then
+            echo "application bundle was used for model storage" >&2
+            exit 1
+          fi
+          find "$APP" -type f | sort > "$SMOKE/app-after.txt"
+          cmp "$SMOKE/app-before.txt" "$SMOKE/app-after.txt"
+          if find "$APP" -type f \( -name '*.gguf' -o -name '*.safetensors' -o -name 'config.json' \) | grep -q .; then
+            echo "mutable or model data found inside the app bundle" >&2
+            exit 1
+          fi
           "$APP/Contents/MacOS/fluent" --smoke-test-gui
       - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
@@ -305,6 +416,8 @@ jobs:
             --dir dist
             --version "$(./scripts/version.sh)"
             --public-key docs/keys/minisign.pub
+            --expected-commit "$GITHUB_SHA"
+            --expected-run-id "$GITHUB_RUN_ID"
           )
           if [ "$SIGNED" = "true" ]; then
             ARGS+=(--require-signatures)

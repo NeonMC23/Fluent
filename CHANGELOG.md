@@ -124,7 +124,8 @@ versions until a release is explicitly published.
 - `fluent --help` now describes local multilingual translation and local chat
   instead of NLLB-200 translation only.
 - The Linux desktop entry describes translation and chat with downloadable
-  local models.
+  local models. The Windows executable metadata uses the same product
+  description.
 - Without `config.json`, Fluent now uses a platform-native per-user model root
   (XDG data on Linux, per-user application data on Windows, Application Support
   on macOS) instead of the process working directory. Existing populated

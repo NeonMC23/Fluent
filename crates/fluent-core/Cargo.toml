@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "Local NLLB-200, MADLAD-400 and SMaLL-100 translation engine written in pure Rust"
+description = "Local translation and chat engines written in pure Rust"
 
 [dependencies]
 candle-core = "0.11"

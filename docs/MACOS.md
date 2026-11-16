@@ -80,16 +80,45 @@ The CI workflow defines a native `macos-latest` job that runs
 `cargo test --workspace`, a release GUI build, `scripts/package-macos.sh` and
 `scripts/package-macos-archive.py`. It uploads the `fluent-macos` workflow
 artifact containing an unsigned `Fluent-<version>-macos-<arch>.zip` (14-day
-retention; the current runner is arm64). It executed successfully in GitHub
-Actions run `43785992390` (commit `c91523c`), including plist/Mach-O
-validation and a bundled GUI smoke test on the runner. The Cycle 19 inner ZIP
-is 7,905,926 B with SHA-256
-`d903b2c801acaabf8625bfaa6a54df3503962c7ff2c49648a0c8761b6291fa39`. Metal,
-Intel macOS, universal binaries, signing and notarization remain untested;
-this is not notarized Gatekeeper or physical-hardware validation.
+retention; the current runner is arm64). The packaged check now verifies arm64
+Mach-O architecture and executable permissions, `.app` structure, Info.plist
+values, PkgInfo, ICNS presence,
+archive contents/checksum, CLI help/version, `--self-test`,
+`~/Library/Application Support/io.fluent.Fluent/models`, an unrelated working
+directory, and that no files or model data are written inside the app bundle.
+The bundled GUI smoke test also runs on the runner. Metal, Intel macOS,
+universal binaries, signing and notarization remain untested; this is not
+notarized Gatekeeper or physical-hardware validation.
 
 The ZIP contains the staged `Fluent.app` bundle (Info.plist, executable,
-Fluent.icns, PkgInfo). Models and user configuration are excluded. Intel macOS is not produced by the current matrix.
+Fluent.icns, PkgInfo). Models and user configuration are excluded. Intel macOS
+is not produced by the current matrix.
+
+## Manual physical validation procedure
+
+Run the following on an Apple Silicon Mac. It requires no administrator access
+and does not download a model:
+
+1. Download the `fluent-macos` workflow artifact and extract
+   `Fluent-0.2.0-macos-arm64.zip`.
+2. Move `Fluent.app` to `/Applications` or another normal application folder.
+3. Launch through Finder. Confirm the icon, name and window identity. If
+   Gatekeeper blocks the unsigned/not-notarized build, do not disable Gatekeeper
+   globally; use the per-app Finder/System Settings flow only for a verified
+   artifact.
+4. Launch the executable from Terminal with an unrelated working directory, for
+   example:
+   `cd /tmp && /Applications/Fluent.app/Contents/MacOS/fluent --self-test`.
+5. Confirm the self-test reports
+   `~/Library/Application Support/io.fluent.Fluent/models` and does not use the
+   `.app` bundle or `/models`.
+6. Open **Models**, inspect the storage path and free space, and confirm no
+   download starts automatically.
+7. Quit and relaunch through Finder; confirm the app still starts without a
+   model.
+
+Record which steps executed. Steps not performed must be reported as
+**NOT EXECUTED**.
 
 ## Application icon and bundle staging
 

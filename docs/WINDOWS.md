@@ -99,12 +99,15 @@ The CI workflow defines a native `windows-latest` job that runs
 `cargo test --workspace`, a release GUI build with the embedded icon/resource,
 and `scripts/package-windows.py`. It uploads the
 `fluent-<version>-windows-x86_64.zip` workflow artifact (14-day retention).
-It executed successfully in GitHub Actions run `43785992390` (commit
-`c91523c`), uploaded the ZIP artifact, and ran the packaged `fluent.exe`
-`--version` and `--self-test`. The GUI-window smoke is SKIPPED because the
-hosted runner has no OpenGL 2.0+ context; this is not physical-device GUI
-validation. The Cycle 19 inner ZIP was 7,618,513 B with SHA-256
-`f3587e8066c788c80de7245bfbe9cc99dcb819a28b3486dee5b2702266cc200a`.
+The packaged check now verifies PE32+ format and x86-64 architecture, the
+non-empty `.rsrc` icon/version resource section, exact archive contents and
+SHA-256 sidecar, product metadata, the associated icon, CLI help/version,
+`--self-test`, an unrelated working directory, a Unicode/space-containing
+extraction path, explicit Unicode config paths, default per-user model storage
+and the absence of automatic model files. The GUI-window smoke is SKIPPED
+because the hosted runner has no OpenGL 2.0+ context; this is not
+physical-device GUI validation.
+
 Windows PE archives are not byte-reproducible across rebuilds because the
 linker embeds build-specific data; always verify the `.sha256` published with
 the exact ZIP you downloaded.
@@ -118,6 +121,30 @@ model-file locking and real inference therefore remain unvalidated on Windows.
 The ZIP contains `fluent.exe`, `LICENSE` and `README.txt`; models and user
 configuration are excluded. There is no authenticated installer or Start Menu
 integration.
+
+## Manual physical validation procedure
+
+Run the following on a normal Windows 10/11 x86-64 machine. It requires no
+administrator privileges and does not download a model:
+
+1. Download the `fluent-windows-x86_64` workflow artifact and extract the ZIP
+   to a normal user folder (preferably a path containing a space and a
+   non-ASCII character).
+2. Verify the adjacent `.sha256` with:
+   `Get-FileHash .\fluent-0.2.0-windows-x86_64.zip -Algorithm SHA256`.
+3. Run `fluent.exe`. Confirm the Fluent name, icon, window and taskbar identity.
+4. If SmartScreen appears, only continue for a verified artifact from a trusted
+   source. Do not disable Windows security globally.
+5. Run `fluent.exe --self-test` and confirm `SELF-TEST OK`, the default
+   `%APPDATA%\fluent\Fluent\data\models` path and no model list entry claims
+   an automatic download.
+6. Open **Models**, confirm the storage path and free space, and cancel before
+   downloading anything. Confirm no download starts on its own.
+7. Close the window, relaunch `fluent.exe`, and confirm it starts without a
+   model.
+
+Record which steps executed. Steps not performed must be reported as
+**NOT EXECUTED**, not inferred from CI.
 
 ## What is missing
 

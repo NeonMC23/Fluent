@@ -6,7 +6,7 @@ fn main() {
         let mut resource = winres::WindowsResource::new();
         resource.set_icon("../../src/logo/generated/windows/fluent.ico");
         resource.set("ProductName", "Fluent");
-        resource.set("FileDescription", "Fluent - Local Translation");
+        resource.set("FileDescription", "Fluent - Local Translation and Chat");
         resource.set("OriginalFilename", "fluent.exe");
         resource.set("CompanyName", "Fluent");
 

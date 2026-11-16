@@ -130,6 +130,21 @@ def check_pe(data: bytes, arch: str) -> None:
     if optional_magic != 0x20B:
         fail("Windows executable is not PE32+")
 
+    section_count = struct.unpack_from("<H", data, pe_offset + 6)[0]
+    optional_size = struct.unpack_from("<H", data, pe_offset + 20)[0]
+    section_offset = pe_offset + 24 + optional_size
+    resources = False
+    for index in range(section_count):
+        offset = section_offset + index * 40
+        if offset + 40 > len(data):
+            fail("Windows PE section table is truncated")
+        name = data[offset : offset + 8].rstrip(b"\0")
+        raw_size = struct.unpack_from("<I", data, offset + 16)[0]
+        if name == b".rsrc" and raw_size > 0:
+            resources = True
+    if not resources:
+        fail("Windows executable has no non-empty .rsrc resource section")
+
 
 def check_macho(data: bytes, arch: str) -> None:
     expected = CPU_MACHO.get(arch)
@@ -246,11 +261,26 @@ def inspect_macos(archive: Path, version: str, arch: str) -> None:
             fail("unexpected CFBundleIconFile")
 
 
+def classify_archive(name: str) -> tuple[str, str, str]:
+    match = re.fullmatch(r"fluent-[0-9.]+-linux-(x86_64|aarch64)\.tar\.gz", name)
+    if match:
+        return "linux", match.group(1), "tar.gz"
+    match = re.fullmatch(r"fluent-[0-9.]+-windows-(x86_64)\.zip", name)
+    if match:
+        return "windows", match.group(1), "zip"
+    match = re.fullmatch(r"Fluent-[0-9.]+-macos-(arm64|x86_64)\.zip", name)
+    if match:
+        return "macos", match.group(1), "zip"
+    return "unknown", "unknown", "unknown"
+
+
 def verify_manifest(
     directory: Path,
     version: str,
     archives: list[Path],
     signed: dict[Path, bool],
+    expected_commit: str | None,
+    expected_run_id: str | None,
 ) -> None:
     path = directory / "release-manifest.json"
     if not path.is_file():
@@ -261,24 +291,43 @@ def verify_manifest(
         fail("manifest application is not Fluent")
     if document.get("version") != version:
         fail("manifest version does not match the requested version")
-    if not document.get("git_commit"):
+    commit = document.get("git_commit")
+    if not commit:
         fail("manifest has no git commit")
+    if expected_commit and commit != expected_commit:
+        fail(f"manifest commit {commit} does not match expected {expected_commit}")
+    if expected_run_id and str(document.get("workflow_run")) != expected_run_id:
+        fail("manifest workflow run does not match the expected run")
     artifacts = document.get("artifacts")
     if not isinstance(artifacts, list):
         fail("manifest artifacts is not a list")
     by_name = {entry.get("filename"): entry for entry in artifacts}
-    if len(by_name) != len(archives):
+    if len(by_name) != len(archives) or len(artifacts) != len(archives):
         fail("manifest does not list every archive exactly once")
     for archive in archives:
         entry = by_name.get(archive.name)
         if entry is None:
             fail(f"manifest is missing {archive.name}")
+        platform, arch, fmt = classify_archive(archive.name)
+        if (entry.get("platform"), entry.get("architecture"), entry.get("format")) != (
+            platform,
+            arch,
+            fmt,
+        ):
+            fail(f"manifest platform/architecture/format metadata is wrong for {archive.name}")
         if entry.get("size_bytes") != archive.stat().st_size:
             fail(f"manifest size mismatch for {archive.name}")
         if entry.get("sha256") != sha256(archive):
             fail(f"manifest SHA-256 mismatch for {archive.name}")
-        if entry.get("signed") != signed[archive]:
+        if entry.get("checksum_file") != archive.name + ".sha256":
+            fail(f"manifest checksum filename mismatch for {archive.name}")
+        expected_signature = archive.name + ".minisig" if signed[archive] else None
+        if entry.get("signature_file") != expected_signature:
+            fail(f"manifest signature filename mismatch for {archive.name}")
+        if entry.get("signed") is not signed[archive]:
             fail(f"manifest signature status mismatch for {archive.name}")
+        if entry.get("signature_verified") and not signed[archive]:
+            fail(f"manifest claims an unsigned archive is verified: {archive.name}")
     signed_count = sum(1 for value in signed.values() if value)
     status = (
         "signed"
@@ -292,6 +341,15 @@ def verify_manifest(
         fail("manifest Minisign status does not match the archives")
     if signing.get("signed_artifacts") != signed_count:
         fail("manifest signed artifact count does not match")
+    if signing.get("total_artifacts") != len(archives):
+        fail("manifest total artifact count does not match")
+    if signing.get("signatures_verified") and not all(signed.values()):
+        fail("manifest claims verified signatures for unsigned archives")
+    for archive in archives:
+        entry = by_name[archive.name]
+        expected_verified = bool(signing.get("signatures_verified") and signed[archive])
+        if entry.get("signature_verified") is not expected_verified:
+            fail(f"manifest signature_verified flag is wrong for {archive.name}")
     print(
         "manifest: OK "
         f"(commit {str(document.get('git_commit'))[:12]}, signing {status}, "
@@ -340,6 +398,14 @@ def main() -> int:
         "--require-signatures",
         action="store_true",
         help="Fail unless every archive has a valid detached signature.",
+    )
+    parser.add_argument(
+        "--expected-commit",
+        help="Fail unless the manifest records this source commit.",
+    )
+    parser.add_argument(
+        "--expected-run-id",
+        help="Fail unless the manifest records this workflow run identifier.",
     )
     args = parser.parse_args()
 
@@ -429,7 +495,14 @@ def main() -> int:
             print(f"FAIL: {archive.name}: {error}", file=sys.stderr)
 
     try:
-        verify_manifest(directory, args.version, archives, signed)
+        verify_manifest(
+            directory,
+            args.version,
+            archives,
+            signed,
+            args.expected_commit,
+            args.expected_run_id,
+        )
     except VerificationError as error:
         failures.append(f"manifest: {error}")
         print(f"FAIL: manifest: {error}", file=sys.stderr)
