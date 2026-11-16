@@ -394,8 +394,10 @@ model and an **Open Models** action.
 1. **Launch Fluent.** The header switches between **Translate** and **Chat**.
 2. **Open Model Manager.** Select **Models** in the header, or use
    **Settings → Manage models…**.
-3. **Review storage.** The default root is shown with free space and total model
-   usage. To use another disk, enter a folder and click **Apply folder**.
+3. **Review storage.** The platform-native default root is shown with free
+   space and total model usage. If a populated model directory from an older
+   portable layout is detected, Fluent uses it without moving files and shows a
+   notice. To use another disk, enter a folder and click **Apply folder**.
    Existing models are **not moved**. **Use config paths** returns to the paths
    in `config.json`. A storage folder inside a Git repository is rejected.
 4. **Choose a model.** Cards show the display name, architecture, parameter
@@ -570,15 +572,24 @@ Known limitations:
 
 ### Where models are stored
 
-The active model root depends on how Fluent was started:
+The active model root is deterministic and independent of the process working
+directory:
 
-- **Installed Linux build:** the installer writes `config.json` with model
-  paths under `~/.local/share/fluent/models/` (or
-  `$XDG_DATA_HOME/fluent/models/`).
-- **Portable archive or ZIP with no `config.json`:** Fluent starts with the
-  default path `models/` relative to its working directory. This is usually the
-  extracted application folder. Use **Models → Storage** and **Apply folder**
-  to choose an explicit location before downloading.
+| Platform | Default model root with no `config.json` |
+|---|---|
+| Linux | `$XDG_DATA_HOME/fluent/models`, or `~/.local/share/fluent/models` |
+| Windows | `%APPDATA%\fluent\Fluent\data\models` |
+| macOS | `~/Library/Application Support/io.fluent.Fluent/models` |
+
+- **Installed Linux build:** the installer writes `config.json` with paths under
+  the Linux default root.
+- **Portable archive or ZIP with no `config.json`:** Fluent uses the
+  platform-native default above. It never writes to `/models`, the application
+  bundle or an unrelated working directory.
+- **Existing portable models:** on Linux and Windows, a populated `models/`
+  directory next to the executable or at the archive root is detected and used
+  without moving files. A historical `~/.fluent/models` directory is also
+  considered. The Model Manager shows that an existing directory was detected.
 - **Existing configuration:** the model paths in `config.json` take precedence
   when no custom storage root is set.
 
@@ -586,7 +597,7 @@ A custom storage root changes where Fluent looks for model subdirectories; it
 does not move existing files. Each model has its own subdirectory:
 `nllb-200-1.3b`, `nllb-200-3.3b`, `madlad400-3b-mt`, `small100`,
 `qwen2.5-1.5b-instruct` and `qwen2.5-0.5b-instruct`. Use **Models → Storage**
-to see the active root and free space.
+to see the active root, free space and any detected existing directory.
 
 ## Performance and system requirements
 

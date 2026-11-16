@@ -121,6 +121,14 @@ versions until a release is explicitly published.
   translation and chat model families, licences and storage behaviour.
 - The Windows portable README keeps its JSON config example literal; the
   packaging script no longer fails while formatting braces.
+- `fluent --help` now describes local multilingual translation and local chat
+  instead of NLLB-200 translation only.
+- The Linux desktop entry describes translation and chat with downloadable
+  local models.
+- Without `config.json`, Fluent now uses a platform-native per-user model root
+  (XDG data on Linux, per-user application data on Windows, Application Support
+  on macOS) instead of the process working directory. Existing populated
+  portable model directories are detected and reused without moving files.
 
 ### Documentation
 
@@ -129,9 +137,8 @@ versions until a release is explicitly published.
   privacy, development and provenance.
 - Audited the platform guides, Model Manager, provenance, package, benchmark,
   asset and release documents against the 0.2.0 implementation.
-- Clarified that model installation is separate from application installation,
-  that portable builds may start with a working-directory model root, and that
-  Linux is the only physically validated platform.
+- Clarified that model installation is separate from application installation
+  and that Linux is the only physically validated platform.
 - Documented the unresolved NLLB Git-history and branding-rights review items
   without making legal claims or rewriting history.
 

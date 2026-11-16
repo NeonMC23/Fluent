@@ -57,9 +57,11 @@ The application searches for `config.json` in this order:
 Settings live in `~/Library/Application Support/io.fluent.Fluent/`. A
 configuration written there or next to the executable can point at model
 directories. The packaged ZIP contains no `config.json`, so a fresh extraction
-starts with `models/` relative to its working directory; use
-**Models → Storage** and **Apply folder** to choose an explicit model root
-before downloading. The documented per-user data location is:
+uses `~/Library/Application Support/io.fluent.Fluent/models`, never the current
+working directory or the `.app` bundle. This works for Finder and Terminal
+launches. A historical `~/.fluent/models` directory is detected when the
+platform root is empty; use **Models → Storage** and **Apply folder** for any
+other location. The documented per-user data location is:
 
 ```text
 ~/Library/Application Support/io.fluent.Fluent/config.json

@@ -107,11 +107,15 @@ Models are stored outside the application directory, by default:
 ```
 
 Use **Models** in the header (or **Settings → Manage models…**) to install,
-verify, load or remove them. Installed builds use the XDG model directory above
-because the installer writes it into `config.json`. A portable archive with no
-configuration starts with `models/` relative to its working directory; choose a
-persistent folder in **Models → Storage** and click **Apply folder** before
-downloading. To use an existing NLLB directory, put
+verify, load or remove them. Installed builds use the XDG data model directory
+(the fallback is shown above) because the installer writes it into
+`config.json`. A portable archive with no
+configuration uses the same platform-native default
+(`$XDG_DATA_HOME/fluent/models` or `~/.local/share/fluent/models`), never the
+current working directory. A populated `models/` directory beside the archive root is detected
+and used without moving files; **Models → Storage** shows the active path and
+offers **Apply folder** for an explicit choice. To use an existing NLLB
+directory, put
 `config.json`, `tokenizer.json` and a real checkpoint
 (`pytorch_model.bin`, `model.safetensors`, or complete shards plus an index) in
 that directory, or point `config.json` at it. The Model Manager never

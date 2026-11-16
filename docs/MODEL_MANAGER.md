@@ -137,19 +137,27 @@ existing installation.
 
 ## Storage
 
-The default root is the parent of the configured NLLB directory. For an
-installed Linux build, that is normally:
+The default root is platform-native and independent of the process working
+directory:
 
 ```text
-~/.local/share/fluent/models/                              Linux
+$XDG_DATA_HOME/fluent/models/                              Linux
+  (fallback: ~/.local/share/fluent/models/)
 ~/Library/Application Support/io.fluent.Fluent/models/     macOS
 %APPDATA%\fluent\Fluent\data\models\                    Windows
 ```
 
-A portable archive or ZIP has no `config.json` and starts with `models/`
-relative to its working directory. Choose a persistent folder in the manager
-before downloading. The manager shows the path, free space, total usage and
-per-model usage.
+An installed Linux build also has these paths in `config.json`. A portable
+archive or ZIP without `config.json` uses the same platform default; it never
+writes to `/models`, the `.app` bundle or an arbitrary working directory.
+
+On Linux and Windows, a populated portable `models/` directory next to the
+executable or at the archive root is detected and used without moving files. A
+historical `~/.fluent/models` directory is also considered when the platform
+root is empty. On macOS, the `.app` bundle is never used; use the platform
+default or choose a folder explicitly. The Model Manager shows the active path,
+free space, total usage, per-model usage and a notice when an existing directory
+was detected.
 
 A custom storage folder can be entered and applied. It is validated for
 creation and write access. **Existing models are not moved automatically**;

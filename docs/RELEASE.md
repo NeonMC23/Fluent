@@ -290,8 +290,13 @@ the current matrix.
 | Aggregate | `fluent-release-candidate` | all archives, `.sha256`, optional `.minisig`, `release-manifest.json`, `minisign.pub` |
 
 No artifact contains model weights, tokenizer assets, user configuration,
-caches or development files. The application needs a user-supplied model
-package; see [MODEL_PACKAGE.md](MODEL_PACKAGE.md).
+caches or development files. The application needs a user-installed or
+Model-Manager-downloaded model package; see [MODEL_PACKAGE.md](MODEL_PACKAGE.md).
+
+Portable archives contain no `config.json`. On first launch they use the
+platform-native per-user model root, never the working directory or the
+application bundle, and detect a populated portable `models/` directory
+without moving it. See [MODEL_MANAGER.md](MODEL_MANAGER.md).
 
 ### Reproducibility of platform archives
 

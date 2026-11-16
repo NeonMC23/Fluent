@@ -186,6 +186,21 @@ counts are NLLB-200 1.3B/3.3B: 202; MADLAD-400 3B: 72; SMaLL-100: 98. See
   build. No GPU runtime validation was performed for this release; all
   documented performance and inference results are CPU-only.
 
+## Model storage
+
+- With no `config.json`, the default model root is platform-native:
+  `$XDG_DATA_HOME/fluent/models` (or `~/.local/share/fluent/models`) on Linux,
+  `%APPDATA%\fluent\Fluent\data\models` on Windows, and
+  `~/Library/Application Support/io.fluent.Fluent/models` on macOS.
+- The process working directory, `/models`, and the macOS `.app` bundle are
+  never used as model storage.
+- On Linux and Windows, a populated portable `models/` directory beside the
+  executable or archive root is detected and reused without moving files when
+  the platform root is empty. A historical `~/.fluent/models` directory is also
+  considered. The macOS `.app` bundle is never used.
+- An explicit `config.json` model path or GUI custom storage root takes
+  precedence. See [MODEL_MANAGER.md](MODEL_MANAGER.md).
+
 ## Model assets
 
 No model weights, tokenizer or model configuration is included in the

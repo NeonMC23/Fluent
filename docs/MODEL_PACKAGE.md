@@ -34,7 +34,8 @@ Only `config.json`, `tokenizer.json`, and one complete checkpoint form are
 required by the current code. Files copied from a Hugging Face model repository
 can remain in place; unused files are ignored.
 
-The default install layout is:
+The default install layout is platform-native (see
+[MODEL_MANAGER.md](MODEL_MANAGER.md)); on Linux it is normally:
 
 ```text
 ~/.local/share/fluent/models/nllb-200-1.3b/

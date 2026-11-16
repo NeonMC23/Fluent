@@ -66,12 +66,13 @@ set `FLUENT_CONFIG` to an absolute path. The configuration directory used by
 %APPDATA%\fluent\Fluent\config\settings.json
 ```
 
-The Windows per-user data directory is `%APPDATA%\fluent\Fluent\data`.
-The portable ZIP contains no `config.json`, so a fresh extraction starts with
-`models/` relative to its working directory (normally the folder containing
-`fluent.exe`). Use **Models → Storage** and **Apply folder** to choose an
-explicit model root. If a configuration is present, its model paths take
-precedence.
+The Windows per-user data directory is `%APPDATA%\fluent\Fluent\data`; the
+default model root is `%APPDATA%\fluent\Fluent\data\models`. The portable ZIP
+contains no `config.json`, so a fresh extraction uses that stable per-user
+location rather than the process working directory. A populated `models/`
+folder next to `fluent.exe` is detected and used without moving files. Use
+**Models → Storage** and **Apply folder** to choose an explicit model root. If
+a configuration is present, its model paths take precedence.
 
 A minimal configuration with absolute paths:
 
@@ -89,8 +90,8 @@ Use doubled backslashes in JSON. Fluent bundles no models: the native Model
 Manager downloads translation and chat models only after confirmation, stores
 them outside the application payload, and verifies SHA-256 before reporting them
 installed. With an installer-written configuration the default is the per-user
-data directory; the portable ZIP defaults to `models/` relative to its working
-directory until you choose another folder.
+data directory; the portable ZIP uses the same per-user data directory unless
+an existing model folder is detected or you choose another folder.
 
 ## CI, portable ZIP and validation status
 
