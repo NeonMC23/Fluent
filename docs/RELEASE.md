@@ -93,16 +93,16 @@ The workflow has run successfully on GitHub:
   GUI smoke test and a detached signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
 - **Cycle 21 run (storage and product-identity hardening):**
-  [43934038763](https://github.com/NeonMC23/Fluent/actions/runs/43934038763)
-  on `180fbf1`. All four jobs succeeded after the CLI/desktop description
-  updates, platform-native model storage, portable-root detection and the new
-  storage tests. Inner archive SHA-256: Linux
-  `512fe05fd9de61cda147dc3d3f5e84c0ea8e96c5e16f7e61e0b1095df97924e3`
-  (9,731,554 B), Windows
-  `812ba3ecf0d2c0b7cf5cba590142d5206097188605531dc781aefa49114c88e0`
-  (7,626,761 B), macOS
-  `1538891b6fb69ba78be85e3a9b38ef717bf7c4df06064e5586735d29e9e0759b`
-  (7,910,643 B). CI reports `signing=unsigned verified=False`; the local Linux
+  [43938282811](https://github.com/NeonMC23/Fluent/actions/runs/43938282811)
+  on `5875dd2`. All four jobs succeeded after the CLI/desktop description
+  updates, platform-native model storage, portable-root detection, actionable
+  storage errors and the new storage tests. Inner archive SHA-256: Linux
+  `ebfd0750a3c1bbb01d9829798c253ba9cf38e6096f8766c9d6f2e637d691fb28`
+  (9,731,954 B), Windows
+  `b191ea61bf4eb1db84524d9df4986144b62f1a86ea35128af85910a7b8b88156`
+  (7,627,007 B), macOS
+  `b1ef4acadb360b9f498b5b271ef15db47bf0a010cd311665d9682df1901f0fc4`
+  (7,911,087 B). CI reports `signing=unsigned verified=False`; the local Linux
   archive is Minisign-signed and matches the Linux inner archive above.
 - **Cycle 19 run (final validation and hardening):**
   [43781201073](https://github.com/NeonMC23/Fluent/actions/runs/43781201073)
@@ -444,10 +444,11 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
   and the separation of Fluent's MIT source licence from model licences.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [x] Final Cycle 21 CI run 43934038763 (`180fbf1`) succeeded on `main` for
-  all four jobs after platform-native storage, CLI/desktop identity and storage
-  test changes; Linux, Windows, macOS and release-integrity jobs are green.
-  Cycle 19 run 43785992390 and earlier release-candidate runs also passed.
+- [x] Final Cycle 21 CI run 43938282811 (`5875dd2`) succeeded on `main` for
+  all four jobs after platform-native storage, CLI/desktop identity, actionable
+  storage errors and storage test changes; Linux, Windows, macOS and
+  release-integrity jobs are green. Cycle 19 run 43785992390 and earlier
+  release-candidate runs also passed.
 - [x] Local chat real-model tests cover English, French, follow-up context,
   streaming, cancellation, reload and context truncation.
 - [x] Translation regression: SMaLL-100 42-case outputs are identical to
