@@ -76,13 +76,13 @@ Run
    To use an existing model directory instead, create config.json next to
    fluent.exe or set FLUENT_CONFIG to its absolute path. Example entries:
 
-       "models": {
+       "models": {{
          "fast": "C:/models/nllb-200-1.3b",
          "accurate": "C:/models/nllb-200-3.3b",
          "madlad": "C:/models/madlad400-3b-mt",
          "small": "C:/models/small100",
          "chat": "C:/models/qwen2.5-1.5b-instruct"
-       }
+       }}
 
    Fluent starts without models. The Model Manager and first-run guidance show
    what to install; a translation or chat request without the required model
