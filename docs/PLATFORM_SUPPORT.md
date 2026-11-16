@@ -1,26 +1,38 @@
 # Platform Support
 
-This is the honest support matrix for Cycle 8. It distinguishes local builds,
+This is the honest support matrix for Cycle 19. It distinguishes local builds,
 CI definitions, CI execution and actual GUI runtime validation.
 
 ## Summary
 
 | Platform | Local build | CI job defined | CI executed | GUI runtime validated | Distribution artifact |
 |---|---|---|---|---|---|
-| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum + smoke) | **Yes** (run 43768080004) | **Yes** (Nobara host + Ubuntu 22.04 container + Xvfb) | Portable tar.gz |
+| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum + smoke) | **Yes** (run 43781201073) | **Yes** (Nobara host + Ubuntu 22.04 container + Xvfb) | Portable tar.gz |
 | Linux AArch64 | No | No | No | No | No |
-| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43768080004) | **Partial**: self-test on runner; GUI skipped (no OpenGL) | Portable ZIP; no installer |
-| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43768080004) | **Yes on CI runner** (bundle GUI smoke) | `.app` ZIP; unsigned; Intel not produced |
-| MADLAD-400 3B (T5, q4_k GGUF) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43768080004) | **Yes** (Linux real-model engine test + GUI inspection) | User-supplied GGUF; CPU only |
-| SMaLL-100 (M2M-100, 330M) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43768080004) | **Yes** (Linux real-model engine test + GUI download/verify) | User-supplied safetensors; CPU validated |
-| Qwen2.5 Instruct chat (0.5B/1.5B) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43768080004) | **Yes** (Linux real-model chat test + GUI conversation) | User-supplied GGUF; CPU only |
+| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43781201073) | **Partial**: packaged `--version`/`--self-test` on runner; GUI skipped (no OpenGL); physical GUI **NOT EXECUTED** | Portable ZIP; no installer |
+| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43781201073) | **CI runner only** (bundle GUI smoke); physical GUI **NOT EXECUTED** | `.app` ZIP; unsigned; Intel not produced |
+| NLLB-200 1.3B / 3.3B (dense, quantised) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43781201073) | **Yes** (Linux real translation, tiny FLORES regression, generated checks) | User-supplied weights; CPU/optional CUDA/Metal |
+| MADLAD-400 3B (T5, q4_k GGUF) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43781201073) | **Yes** (Linux real-model engine test + GUI inspection) | User-supplied GGUF; CPU only |
+| SMaLL-100 (M2M-100, 330M) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43781201073) | **Yes** (Linux real-model engine test + GUI download/verify) | User-supplied safetensors; CPU validated |
+| Qwen2.5 Instruct chat (0.5B/1.5B) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43781201073) | **Yes** (Linux GUI download/verify, English/French chat, 0.5B↔1.5B switch) | User-supplied GGUF; CPU only |
 
-The current fully green `main` run is `43768080004` (`5a7f96a`), including
-MADLAD/T5, SMaLL-100 and Qwen2.5 chat compilation, packaged application smoke
-tests, the Model Manager, the remote catalogue, the unified mark-based icons,
-the language capability registry, local chat and artifact verification. Earlier successful runs are
-`43605074905`, `43606018556`, `43606646499` and `43620495032`. GitHub-runner
-execution is still not physical-device validation.
+The current fully green `main` run is `43781201073` (`27a4a3d`), including
+MADLAD/T5, SMaLL-100, NLLB and Qwen2.5 chat compilation, packaged application
+smoke tests, the Model Manager, the remote catalogue, the unified mark-based
+icons, the language capability registry, local chat and artifact verification.
+The previous Cycle 18 run `43768080004` (`5a7f96a`) also passed. Earlier
+successful runs are `43605074905`, `43606018556`, `43606646499` and
+`43620495032`. GitHub-runner execution is still not physical-device validation.
+
+Measured on the canonical host (Intel Core i5-11400H, 15 GiB RAM, CPU only):
+the Qwen2.5 1.5B chat engine reached about 2.09 GB RSS while answering; real
+NLLB-200 1.3B translation in the GUI reached about 1.74 GB. The default
+allocator kept RSS near 0.96 GB after chat unload, but forcing trims
+(`MALLOC_TRIM_THRESHOLD_=0 MALLOC_MMAP_THRESHOLD_=65536`) showed RSS falling to
+~0.14 GB and ~0.18 GB after chat and translation unload respectively, so the
+other heavyweight engine is not kept resident. Translation engines loaded in
+2.1 s (MADLAD), 9.4 s (NLLB 1.3B) and 21.3 s (NLLB 3.3B) with peak RSS of
+2.68 GB, 1.63 GB and 3.62 GB respectively.
 
 ## Linux
 
@@ -32,8 +44,10 @@ execution is still not physical-device validation.
 - **Direct NEEDED:** `libgcc_s.so.1`, `libm.so.6`, `libc.so.6`,
   `ld-linux-x86-64.so.2`.
 - **Runtime:** GUI launched inside Ubuntu 22.04 under Wayland with software
-  OpenGL for 6 seconds with no model; stayed up and emitted no errors. Also
-  launched from an extracted archive on the Nobara host.
+  OpenGL for 6 seconds with no model; stayed up and emitted no errors. The
+  Cycle 19 archive was extracted and passed `--version`, `--self-test` and
+  `--smoke-test-gui` under Xvfb; it also ran the 1.5B/0.5B chat and four-model
+  translation validation on the Nobara host.
 - **Runtime-only libraries:** X11 or Wayland, OpenGL 3.3 driver, fontconfig and
   the usual desktop libraries loaded by `winit`/`glutin`; not all appear in
   `ldd`.
@@ -43,17 +57,27 @@ execution is still not physical-device validation.
 - **Archive:** `dist/fluent-0.2.0-linux-x86_64.tar.gz`; application-only
   (binary, LICENSE, README); no models or tokenizer files.
 - **Not tested:** Debian/Fedora stable releases other than the build/runtime
-  hosts, ARM Linux, non-glibc systems, X11-only sessions (the container used
-  Wayland), and other desktop environments.
+  hosts, ARM Linux, non-glibc systems, real Wayland desktops in this cycle
+  (X11/Xvfb was used for the packaged smoke test), and other desktop
+  environments.
+- **Signing:** the local Ubuntu 22.04 archive is Minisign-signed
+  (`B504F2189BB21013`), verifies against `docs/keys/minisign.pub`, and its
+  SHA-256 (`475b2a83…`) is byte-identical to the Cycle 19 CI inner archive.
 - **Gate:** `scripts/check-linux-baseline.sh target/release/fluent 2.35`.
 
 ## Windows
 
 - The workflow runs `cargo test --workspace`, a release GUI build, the portable
   ZIP, and executes the packaged `fluent.exe --version` / `--self-test`.
-- Run `43710941404` passed those checks. GitHub's hosted Windows runner has no
-  OpenGL 2.0+ context, so the temporary GUI-window smoke is SKIPPED there.
-  This is still not physical-device GUI validation.
+- Run `43781201073` passed those checks after the portable README fix.
+  GitHub's hosted Windows runner has no OpenGL 2.0+ context, so the temporary
+  GUI-window smoke is SKIPPED there. This is still not physical-device GUI
+  validation.
+- **Physical runtime: NOT EXECUTED.** An existing local `win11` libvirt domain
+  is defined, but it cannot start because its attached
+  `tiny11 23H2 x64.iso` is on the unavailable `/mnt/nas` mount. No Windows
+  credentials, installer artifact or authorized fallback environment were
+  available.
 - No installer, Start Menu integration, DLL inventory, CUDA build, or
   uninstaller is provided.
 - See [WINDOWS.md](WINDOWS.md) for prerequisites and paths.
@@ -63,9 +87,10 @@ execution is still not physical-device validation.
 - The workflow runs `cargo test --workspace`, a release GUI build, `.app`
   staging, plist/Mach-O validation and a bundled GUI smoke test on
   `macos-latest`.
-- Run `43710941404` passed all of those steps, so the arm64 `.app` is runtime
-  validated on the CI runner. Metal, Intel macOS, universal binaries, signing
-  and notarization remain unvalidated.
+- Run `43781201073` passed all of those steps, so the arm64 `.app` is runtime
+  validated on the CI runner. **Physical macOS runtime: NOT EXECUTED**; no
+  Apple Silicon or Intel Mac is available in this environment. Metal, Intel
+  macOS, universal binaries, signing and notarization remain unvalidated.
 - See [MACOS.md](MACOS.md) for the CPU-only/Metal build commands and remaining
   bundle work.
 
@@ -103,6 +128,28 @@ execution is still not physical-device validation.
   Spanish, Portuguese, Italian and Simplified Chinese. See
   [BENCHMARKS.md](BENCHMARKS.md) and [SMALL100.md](SMALL100.md).
 - **Not executed:** physical Windows/macOS SMaLL-100 runs and CUDA/Metal.
+
+## Qwen2.5 chat (0.5B/1.5B)
+
+- **Architecture:** Qwen2.5 Instruct GGUF, CPU-only, one chat engine resident
+  at a time. Chat is independent of the translation mode.
+- **Models:** 1.5B Q4_K_M (`1.0 GB` download, default) and 0.5B Q4_0
+  (`416 MB`, fast option); both Apache-2.0.
+- **Cycle 19 GUI download:** 1.5B downloaded through the Model Manager into a
+  fresh root. 1,124,359,686 bytes total, SHA-256 verified for all three files,
+  `Installed, verified=true, missing=0, bad=0`. Cancelling at 37.6 MB preserved
+  the `.part` file and showed **Not installed**.
+- **Measured on the canonical host:** 1.5B load ~1.9 s, ~1.95 GB RSS after
+  load, ~2.02 GB peak, 3.3–4.9 s to first output and 4–7 generated tok/s;
+  0.5B load ~1.0 s, ~0.94 GB RSS and 5–8 tok/s. The GUI RSS reached about
+  2.03 GB while answering and returned to about 0.96 GB after switching to
+  Translate.
+- **Validated flow:** English answer, French follow-up with context, streaming,
+  cancellation, context truncation, switching 0.5B→1.5B (new conversation),
+  unload on Translate, reload on return to Chat.
+- **Not executed:** physical Windows/macOS chat inference, GPU chat and
+  persistent conversation history (by design).
+- See [CHAT.md](CHAT.md) for the lifecycle and limitations.
 
 ## Branding assets
 

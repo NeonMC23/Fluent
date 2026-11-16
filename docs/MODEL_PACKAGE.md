@@ -134,11 +134,13 @@ placeholder guard, not a substitute for checkpoint validation.
   and Fluent’s clamp. Longer text is truncated explicitly and reported.
 - The 3.3B model requires substantially more RAM; the engine estimates memory
   before loading, but does not guarantee that the host has enough swap.
-- No model is downloaded, executed, or modified by Fluent.
+- Models are never bundled with Fluent. The native Model Manager downloads a
+  pinned manifest only after explicit confirmation and validates it before
+  use; see [MODEL_MANAGER.md](MODEL_MANAGER.md).
 
-## 7. Future acquisition contract (not implemented)
+## 7. Acquisition contract (implemented by the Model Manager)
 
-If a downloader is added later, it must:
+The native downloader follows this contract:
 
 1. use a documented official source;
 2. show the license before download;
@@ -151,6 +153,7 @@ If a downloader is added later, it must:
 9. keep models outside the application payload;
 10. preserve offline translation after installation.
 
-None of this is implemented in Cycle 7. Users must supply the model files
-themselves, subject to the CC-BY-NC-4.0 terms described in
+Items 1–9 are implemented for the six catalogue models; item 10 follows once
+the required files are installed. The CLI/manual path remains available for
+user-supplied files, subject to the model licences in
 [MODEL_PROVENANCE.md](MODEL_PROVENANCE.md).

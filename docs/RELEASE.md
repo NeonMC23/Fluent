@@ -86,11 +86,37 @@ The workflow has run successfully on GitHub:
   `MINISIGN_SECRET_KEY`; their artifacts are **unsigned**. The public key now
   exists, but the secret is still not configured, so current CI artifacts
   remain unsigned until the owner performs the one command in section 5.
-- This development environment has no `gh`, token or stored credential, so it
-  cannot download GitHub artifact bytes. The local Linux candidate is verified
-  directly from its bytes, including a real GUI smoke test and a detached
-  signature.
+- `gh` is installed in this development environment but not authenticated and
+  no token is stored, so uploaded artifact bytes cannot be re-downloaded.
+  Inner archive checksums are read from the run's public checksum notice; the
+  local Linux candidate is verified directly from its bytes, including a real
+  GUI smoke test and a detached signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
+- **Cycle 19 run (final validation and hardening):**
+  [43781201073](https://github.com/NeonMC23/Fluent/actions/runs/43781201073)
+  on `27a4a3d7…`. All four jobs succeeded after the Windows portable README
+  packaging fix. Artifact bundle sizes/digests (uploaded ZIPs, not inner
+  archives): Linux 9,698,250 B
+  `62eacbe18051094954f7a0900132c44a0a1076a6dd3e01cd191886a9b25fd42d`,
+  Windows 7,601,050 B
+  `78f9f40319406cd0f8566d3caa4400fc678e99b390e215c0a4492c10985cc12c`,
+  macOS 7,891,063 B
+  `487e5d428e02e37d5b8082dcec9e1ec71267fa67512f469cc105bbea224c5261`,
+  and release candidate 25,191,578 B
+  `e8192d5e83e758e2d8f0a4cb5a94d574e454533ac3f577a9b9396cbbe886995b`.
+- **Cycle 19 inner archive SHA-256 (from the run's checksum notice):** Linux
+  `475b2a83d1e27d56312c769b5998d8ef884ad198ebc24011e78a56b6112325d4`
+  (9,725,187 B), Windows
+  `eafbc65ac0ae06133cecf3dd8550493298c405fc894e606194641e9a3be4b7fa`
+  (7,618,508 B), macOS
+  `d903b2c801acaabf8625bfaa6a54df3503962c7ff2c49648a0c8761b6291fa39`
+  (7,905,926 B). The run reports `signing=unsigned verified=False` because
+  `MINISIGN_SECRET_KEY` is not configured.
+- **Cycle 19 local Linux candidate:** the Linux inner archive was rebuilt from
+  `27a4a3d` in an Ubuntu 22.04 container, packaged, Minisign-signed with the
+  project key and verified. Its SHA-256 is byte-identical to the CI inner
+  archive above; `dist/release-manifest.json` records `signed 1/1` and
+  `signatures_verified=true`.
 - **Cycle 18 run (local chat and release candidate):**
   [43768080004](https://github.com/NeonMC23/Fluent/actions/runs/43768080004)
   on `5a7f96ac…`. All four jobs succeeded with the local Qwen2.5 chat engine,
@@ -295,8 +321,10 @@ The repository now contains the production **public** key at
   `bd07631dfc69be884ad2edd405fe5238bae27748f4d1ab3cbff7f1331501e713`
 
 The private key is kept outside the repository with owner-only permissions.
-The `MINISIGN_SECRET_KEY` Actions secret is **not configured yet**, so current
-CI artifacts are unsigned. The workflow writes `UNSIGNED.txt` and a manifest
+`gh` is installed but not authenticated, so the Actions secret configuration
+could not be inspected. The `MINISIGN_SECRET_KEY` secret has not been shown to
+exist, and the Cycle 19 run reports unsigned, so current CI artifacts remain
+unsigned. The workflow writes `UNSIGNED.txt` and a manifest
 with `"minisign_status": "unsigned"` rather than inventing a signature.
 
 ### Enable CI signing
@@ -363,7 +391,8 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
 - [x] macOS native build produced `Fluent.app` ZIP (arm64); CI validated the
   plist, Mach-O architecture, contents and checksum.
 - [x] Artifact names, contents, architectures and checksums verified by CI.
-- [ ] SHA-256 files generated from actual archives.
+- [x] SHA-256 files generated from actual archives; the local Linux archive
+  matches the Cycle 19 CI inner archive byte for byte.
 - [x] Minisign public key committed (`B504F2189BB21013`).
 - [ ] `MINISIGN_SECRET_KEY` configured and signatures verified (owner action).
 - [x] Windows Authenticode decision documented: no production certificate or
@@ -376,9 +405,10 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
   and the separation of Fluent's MIT source licence from model licences.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [x] Cycle 18 CI run 43768080004 succeeded on `main` for all four jobs after
-  the local-chat and release-candidate integration; inner archive checksums
-  were published. Cycle 17 run 43747547053 also passed.
+- [x] Cycle 19 CI run 43781201073 succeeded on `main` for all four jobs after
+  the final GUI, packaging and documentation fixes; Linux, Windows, macOS and
+  release-integrity jobs are green. Cycle 18 run 43768080004 and Cycle 17 run
+  43747547053 also passed.
 - [x] Local chat real-model tests cover English, French, follow-up context,
   streaming, cancellation, reload and context truncation.
 - [x] Translation regression: SMaLL-100 42-case outputs are identical to
@@ -387,23 +417,30 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
   candidate; CI publishes the aggregate manifest/checksums.
 - [x] Unlimited output generated 600 real-model tokens and cancelled after 520
   in the gated integration test.
+- [x] Qwen2.5 1.5B downloaded end to end through the GUI: 1,124,359,686 bytes,
+  SHA-256 verified, installed state confirmed, English/French conversations
+  completed and the engine unloaded on switching to Translate. Cancellation
+  preserved a 37.6 MB `.part`; resuming grew it without restarting and the
+  final hash matched.
 - [ ] Artifact bytes independently downloaded and inspected (requires GitHub
   authentication).
 - [ ] Release published/tagged only after explicit owner authorization.
 
 ## 8. Current limitations
 
-- CI artifact download requires GitHub authentication. This development
-  environment has no `gh` installation, token or stored credential, so the
-  uploaded bytes cannot be re-downloaded here. The local Linux candidate is
-  verified directly from its actual bytes.
+- CI artifact download requires GitHub authentication. `gh` is installed here
+  but not authenticated and no token is stored, so the uploaded bytes cannot
+  be re-downloaded. Inner archive hashes were read from the public run notice;
+  the local Linux candidate is verified directly from its actual bytes.
 - `MINISIGN_SECRET_KEY` is not configured; CI artifacts remain unsigned even
   though the public key is committed.
 - Windows and macOS runtime validation is limited to native GitHub runners,
   not physical devices. The Windows runner cannot create an OpenGL 2.0+
   context, so its GUI-window smoke is SKIPPED; `--version` and `--self-test`
-  still execute the real packaged `fluent.exe`. No SmartScreen or Gatekeeper
-  acceptance is claimed.
+  still execute the real packaged `fluent.exe`. The existing local `win11`
+  libvirt domain cannot start because its attached ISO under `/mnt/nas` is
+  unavailable, so no physical Windows GUI test was executed. No physical Mac
+  is available. No SmartScreen or Gatekeeper acceptance is claimed.
 - macOS artifact is arm64 only; Intel/universal are not produced.
 - Windows ZIP is portable only; no installer.
 - No DMG is produced; ZIP is the initial macOS format.

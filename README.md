@@ -248,9 +248,11 @@ the final path-remapping build
 [43727254932](https://github.com/NeonMC23/Fluent/actions/runs/43727254932)
 (`5200ab5`), the Cycle 17 branding/language run
 [43747547053](https://github.com/NeonMC23/Fluent/actions/runs/43747547053)
-(`23a7c94`), and the Cycle 18 local-chat release-candidate run
+(`23a7c94`), the Cycle 18 local-chat release-candidate run
 [43768080004](https://github.com/NeonMC23/Fluent/actions/runs/43768080004)
-(`5a7f96a`): Linux, Windows, macOS and the aggregate release candidate all
+(`5a7f96a`), and the Cycle 19 final-validation run
+[43781201073](https://github.com/NeonMC23/Fluent/actions/runs/43781201073)
+(`27a4a3d`): Linux, Windows, macOS and the aggregate release candidate all
 passed. The Linux artifact is an application-only tar.gz;
 Windows is a portable ZIP; macOS is an `.app` ZIP whose filename records the
 runner architecture (the current `macos-latest` matrix produces arm64). Models
@@ -264,8 +266,10 @@ fluent --smoke-test-gui   # open a window, paint once and exit
 
 The Minisign public key is committed at `docs/keys/minisign.pub` (key ID
 `B504F2189BB21013`). CI artifacts are currently **unsigned** until the
-`MINISIGN_SECRET_KEY` Actions secret is configured. Verify checksums and, when
-present, signatures with [docs/RELEASE.md](docs/RELEASE.md).
+`MINISIGN_SECRET_KEY` Actions secret is configured. The local Linux candidate
+is Minisign-signed, verifies against that public key, and is byte-identical to
+the Cycle 19 CI inner archive. Verify checksums and, when present, signatures
+with [docs/RELEASE.md](docs/RELEASE.md).
 
 ## ⌁ Using Fluent
 

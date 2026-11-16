@@ -119,6 +119,36 @@ conversation and unloads the previous engine.
 Chat model selection is independent of translation model selection. Changing
 one never changes the other.
 
+The status pill distinguishes **not installed**, **installed but not loaded**
+and **ready**. Switching to Translate unloads the chat engine while the model
+remains installed on disk; returning to Chat shows *Chat model not loaded*
+until a message starts the worker and emits `Loaded`.
+
+### Cycle 19 GUI validation (Linux x86-64, CPU)
+
+The 1.5B model was downloaded through the GUI into a fresh `/download` root:
+
+- 1,124,359,686 bytes total: GGUF 1,117,320,736 B
+  (`6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e`),
+  `tokenizer.json` 7,031,645 B
+  (`c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539`)
+  and `tokenizer_config.json` 7,305 B
+  (`5b5d4f65d0acd3b2d56a35b56d374a36cbc1c8fa5cf3b3febbbfabf22f359583`).
+- The progress view reported about 2 MB/s with an ETA. The run took about 12
+  minutes end to end, including startup, navigation and SHA-256 verification;
+  the row then showed **Installed** and `verify_chat_model` reported
+  `Installed, verified=true, missing=0, bad=0`.
+- Cancelling at 37.6 MB kept the `.part` file and left the row **Not
+  installed** with a Download action. Starting again resumed the same file:
+  the `.part` grew from 37,625,448 to 69,889,816 bytes in 15 seconds instead of
+  restarting at zero, and the completed model passed the pinned SHA-256
+  verification. The `resumes_a_partial_download_and_verifies_the_hash` unit
+  test covers the same path independently.
+- Loading, an English question, a French follow-up, switching to Translate and
+  returning to Chat all behaved correctly. Switching away unloaded the engine
+  (RSS ~2.03 GB to ~0.96 GB); returning showed *Chat model not loaded* until
+  the next message reloaded the model and produced an answer.
+
 ## 5. Measured performance
 
 Canonical host: Intel Core i5-11400H (6C/12T), 15 GiB RAM, CPU only, Nobara
@@ -142,6 +172,14 @@ slower than the 0.5B model for the same prompt.
 
 The `chat_eval` report records prompt/generated tokens, TTFT, duration,
 tokens/s, streaming equality, context truncation and output-limit flags.
+
+Switching views drops the other engine. With the default allocator, RSS can
+remain high after unload because freed arenas are retained (chat unload stayed
+near 0.96 GB in one GUI run). Repeating the sequence with
+`MALLOC_TRIM_THRESHOLD_=0 MALLOC_MMAP_THRESHOLD_=65536` showed RSS falling from
+~2.05 GB to ~0.14 GB after chat unload and from ~1.74 GB to ~0.18 GB after
+translation unload, which confirms the engine is actually dropped rather than
+kept resident.
 
 ## 6. Known limitations
 

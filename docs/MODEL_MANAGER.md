@@ -88,6 +88,17 @@ not appear in the translation selector.
 5. After the download, every required file is SHA-256 verified before the model
    becomes available for loading.
 
+**Cycle 19 GUI validation.** The default Qwen2.5 1.5B model was downloaded
+end to end into a fresh storage root: 1,124,359,686 bytes across three files,
+about 12 minutes end to end at the ~2 MB/s shown by the progress view, then
+SHA-256 verification and an **Installed** row. `verify_chat_model` reported
+`Installed, verified=true, missing=0, bad=0`. Cancelling at 37.6 MB kept the
+`.part` file and showed **Not installed** with a Download action. Restarting
+resumed that file (37,625,448 to 69,889,816 bytes in 15 seconds) and the
+completed model passed the same SHA-256 check; the
+`resumes_a_partial_download_and_verifies_the_hash` unit test covers this path
+independently.
+
 Downloads use the official Hugging Face repositories at pinned revisions,
 write to a `.part` file, resume with HTTP Range requests where the server
 supports them, and rename only after size/hash verification. A failed download

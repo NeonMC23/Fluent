@@ -1,9 +1,12 @@
 # Windows Build Guide
 
-**Status: not validated.** There is no MSVC toolchain or Windows machine in the
-Cycle 6 environment, and no Windows installer. This guide describes the intended
-build path and the path conventions the code uses. Do not treat it as a
-compatibility guarantee.
+**Status: CI-built and smoke-tested; physical GUI validation NOT EXECUTED.**
+There is no MSVC toolchain or Windows machine in this development environment
+and no Windows installer. GitHub's `windows-latest` runner builds the release
+EXE and executes the packaged `--version` and `--self-test`, but its hosted
+runner cannot create an OpenGL context, so no window is rendered there. This
+guide describes the build path and the path conventions the code uses. Do not
+treat it as a physical-compatibility guarantee.
 
 ## Prerequisites
 
@@ -83,7 +86,10 @@ A minimal configuration with absolute paths:
 }
 ```
 
-Use doubled backslashes in JSON. Models are not downloaded or bundled.
+Use doubled backslashes in JSON. Fluent bundles no models: the native Model
+Manager downloads translation and chat models only after confirmation, stores
+them outside the application folder (by default under the per-user application
+data directory) and verifies SHA-256 before reporting them installed.
 
 ## CI, portable ZIP and validation status
 
@@ -91,11 +97,18 @@ The CI workflow defines a native `windows-latest` job that runs
 `cargo test --workspace`, a release GUI build with the embedded icon/resource,
 and `scripts/package-windows.py`. It uploads the
 `fluent-<version>-windows-x86_64.zip` workflow artifact (14-day retention).
-It executed successfully in GitHub Actions run `43768080004` (commit
-`5a7f96a`), uploaded the ZIP artifact, and ran the packaged `fluent.exe`
+It executed successfully in GitHub Actions run `43781201073` (commit
+`27a4a3d`), uploaded the ZIP artifact, and ran the packaged `fluent.exe`
 `--version` and `--self-test`. The GUI-window smoke is SKIPPED because the
 hosted runner has no OpenGL 2.0+ context; this is not physical-device GUI
-validation.
+validation. The Cycle 19 inner ZIP is 7,618,508 B with SHA-256
+`eafbc65ac0ae06133cecf3dd8550493298c405fc894e606194641e9a3be4b7fa`.
+
+**Physical runtime was not executed.** An existing local `win11` libvirt domain
+cannot start because its attached `tiny11 23H2 x64.iso` lives on the
+unavailable `/mnt/nas` mount, and no authorized physical Windows machine or
+credentials were available. GUI startup, fonts, window sizing, Downloads,
+model-file locking and real inference therefore remain unvalidated on Windows.
 
 The ZIP contains `fluent.exe`, `LICENSE` and `README.txt`; models and user
 configuration are excluded. There is no authenticated installer or Start Menu
@@ -104,9 +117,11 @@ integration.
 ## What is missing
 
 - No `.exe` installer, Start Menu shortcut, or uninstaller is provided.
-- No Windows runtime validation has been performed.
+- No physical Windows runtime validation has been performed.
 - The ZIP is unsigned (Authenticode is not configured). SmartScreen reputation
-  is not claimed.
+  is not claimed. Signing requires a real code-signing certificate, an
+  RFC 3161 timestamp service and a Windows signing host; none is available, so
+  no signing command is presented as active.
 - The state of the MSVC runtime on end-user machines has not been audited.
 - CUDA has not been built or run on Windows in this project.
 - The Windows `install.sh` branch of the old installer was untested and has

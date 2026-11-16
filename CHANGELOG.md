@@ -112,6 +112,15 @@ versions until a release is explicitly published.
 - Installed launch now creates the `.desktop` entry and icon automatically.
 - `XDG_BIN_HOME` and custom XDG locations are respected.
 - Packaging works from checkout paths containing spaces.
+- The chat status pill distinguishes an installed model from a loaded engine;
+  returning from Translate no longer reports "Ready" before the chat worker
+  has reloaded the model.
+- Free-space checks use the nearest existing ancestor of a not-yet-created
+  storage root, so first-run guidance shows real capacity.
+- Portable Linux and Windows READMEs describe the native Model Manager,
+  translation and chat model families, licences and storage behaviour.
+- The Windows portable README keeps its JSON config example literal; the
+  packaging script no longer fails while formatting braces.
 
 ## 0.1.0 — previous published version
 

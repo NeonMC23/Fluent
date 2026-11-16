@@ -1,8 +1,10 @@
 # macOS Build Guide
 
-**Status: not validated.** No macOS machine or Apple target toolchain was
-available in Cycle 6. The source is expected to compile, but nothing below has
-been executed on macOS.
+**Status: CI-built and smoke-tested on an arm64 runner; physical validation
+NOT EXECUTED.** No macOS machine is available in this development environment.
+GitHub's `macos-latest` runner builds the release binary and `.app`, validates
+the plist and Mach-O architecture, and opens a GUI window. That is CI-runner
+validation, not physical Apple-hardware validation.
 
 ## Prerequisites
 
@@ -73,15 +75,15 @@ The CI workflow defines a native `macos-latest` job that runs
 `scripts/package-macos-archive.py`. It uploads the `fluent-macos` workflow
 artifact containing an unsigned `Fluent-<version>-macos-<arch>.zip` (14-day
 retention; the current runner is arm64). It executed successfully in GitHub
-Actions run `43768080004` (commit `5a7f96a`), including a plist/Mach-O
-validation and a bundled GUI smoke test on the runner. Metal, Intel macOS,
-universal binaries, signing and notarization remain untested; this is not
-notarized Gatekeeper validation.
+Actions run `43781201073` (commit `27a4a3d`), including plist/Mach-O
+validation and a bundled GUI smoke test on the runner. The Cycle 19 inner ZIP
+is 7,905,926 B with SHA-256
+`d903b2c801acaabf8625bfaa6a54df3503962c7ff2c49648a0c8761b6291fa39`. Metal,
+Intel macOS, universal binaries, signing and notarization remain untested;
+this is not notarized Gatekeeper or physical-hardware validation.
 
 The ZIP contains the staged `Fluent.app` bundle (Info.plist, executable,
 Fluent.icns, PkgInfo). Models and user configuration are excluded. Intel macOS is not produced by the current matrix.
-
-## Packaging, signing and notarization
 
 ## Application icon and bundle staging
 
@@ -97,8 +99,9 @@ dist/Fluent.app/Contents/PkgInfo
 `Info.plist` uses bundle identifier `io.fluent.Fluent`, executable `fluent`,
 icon `Fluent.icns`, display name `Fluent`, minimum macOS 12.0 and high-DPI
 support. The ICNS is validated independently on Linux; the bundle layout and
-plist can be staged and parsed on Linux, but only a macOS build can produce a
-usable executable. No macOS build or launch has been performed.
+plist can be staged and parsed on Linux. CI has built the arm64 executable and
+launched the bundle under the runner's GUI smoke test; no physical Mac has
+launched it.
 
 ## Packaging, signing and notarization
 
@@ -107,13 +110,15 @@ universal binary, code signature, hardened-runtime entitlement, or
 notarization workflow. The ZIP is unsigned; Gatekeeper friction may apply. A
 future distribution needs:
 
-- an `Info.plist` with the `io.fluent.Fluent` bundle identifier;
-- a `.icns` icon derived from the official brand asset (none exists yet);
-- ad-hoc or Developer ID signing;
+- a Developer ID Application certificate and code-signing identity;
 - hardened runtime and the minimum entitlements for the OpenGL/Metal path;
-- notarization and stapling for distribution outside the App Store;
+- an Apple notarization account and a `notarytool` workflow with stapling;
 - separate `aarch64-apple-darwin` and `x86_64-apple-darwin` builds or a
   universal binary;
-- validation on real Apple hardware.
+- validation on real Apple hardware, including Gatekeeper behavior.
 
-Do not treat the current binary as a distributable macOS application.
+The existing bundle already has the `io.fluent.Fluent` identifier and an ICNS
+derived from the official Fluent mark. No Developer ID certificate or Apple
+notarization credentials are available, so the ZIP is unsigned and
+Gatekeeper friction may apply. Do not treat the current ZIP as a notarized
+macOS distribution.
