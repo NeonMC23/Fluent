@@ -1,8 +1,9 @@
 # Model Package Specification
 
-This is the contract between a user-supplied NLLB-200 model directory and the
-Fluent engine. It describes what is implemented today; it is not a download
-specification.
+This is the contract between an NLLB-200 model directory and the Fluent engine.
+It describes what is implemented today. The native Model Manager also downloads
+pinned models after explicit confirmation; this page defines the resulting
+on-disk package.
 
 MADLAD-400 uses a different GGUF/tokenizer contract documented in
 [MADLAD.md](MADLAD.md). SMaLL-100 uses `vocab.json` plus
@@ -12,7 +13,7 @@ This page covers NLLB-200 only.
 
 ## 1. Directory layout
 
-Fluent never bundles or downloads a model. Each model directory must contain:
+Fluent never bundles or redistributes a model. A model directory contains:
 
 ```text
 <model-dir>/
@@ -41,8 +42,10 @@ The default install layout is:
 ```
 
 `config.json` (the Fluent configuration, not the model config) maps the
-NLLB-200 1.3B and 3.3B models to directories. `--models-src DIR` tells the installer where to
-find `<DIR>/nllb-200-1.3b/` and `<DIR>/nllb-200-3.3b/`.
+NLLB-200 1.3B and 3.3B models to directories. `--models-src DIR` tells the
+installer where to seed `<DIR>/nllb-200-1.3b/` and `<DIR>/nllb-200-3.3b/`; the
+installer only seeds those two NLLB directories. Use the Model Manager for
+MADLAD, SMaLL-100 and the chat models.
 
 ## 2. `config.json`
 

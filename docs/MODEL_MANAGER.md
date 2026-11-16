@@ -4,23 +4,26 @@ Fluent can discover, download, verify, load, unload and remove its four
 translation models and two chat models from the **Model Manager** in the
 application header (or **Settings → Manage models…**).
 
-Models are always **user-supplied**. Fluent does not bundle weights in the
-application, installer, portable archive or CI artifacts.
+Models are **user-installed**. Fluent does not bundle or redistribute weights
+in the application, installer, portable archive or CI artifacts. The Model
+Manager downloads pinned files only after you review the licence and confirm.
 
 ## Catalogue
 
-| Model | Architecture | Storage | Download | License | Runtime |
+| Model | Architecture | Storage | Download | Licence | Runtime |
 |---|---|---:|---:|---|---|
-| NLLB-200 1.3B | NLLB-200 | 5.2 GB | ~5.5 GB | CC-BY-NC-4.0 | CPU Q8; CUDA/Metal if built |
-| NLLB-200 3.3B | NLLB-200 | 17.5 GB | ~17.6 GB | CC-BY-NC-4.0 | CPU Q8; CUDA/Metal if built |
-| MADLAD-400 3B | T5 | 1.7 GB | ~1.7 GB | Apache-2.0 | CPU q4_k greedy only |
-| SMaLL-100 | M2M-100 (12/3) | 1.3 GB | 1.34 GB | MIT | CPU Q8; CUDA/Metal if built |
-| Qwen2.5 1.5B Instruct | Qwen2 (chat) | 1.1 GB | 1.12 GB | Apache-2.0 | CPU GGUF Q4_K_M |
-| Qwen2.5 0.5B Instruct | Qwen2 (chat) | 0.4 GB | 0.43 GB | Apache-2.0 | CPU GGUF Q4_0 |
+| NLLB-200 1.3B | NLLB-200 | 5.2 GB | 5.51 GB | CC-BY-NC-4.0 | CPU Q8 validated; CUDA/Metal not validated |
+| NLLB-200 3.3B | NLLB-200 | 17.5 GB | 17.60 GB | CC-BY-NC-4.0 | CPU Q8 validated; CUDA/Metal not validated |
+| MADLAD-400 3B | T5 | 1.7 GB | 1.68 GB | Apache-2.0 | CPU q4_k greedy only |
+| SMaLL-100 | M2M-100 (12/3) | 1.3 GB | 1.34 GB | MIT | CPU Q8 validated; CUDA/Metal not validated |
+| Qwen2.5 1.5B Instruct | Qwen2.5 (chat) | 1.1 GB | 1.12 GB | Apache-2.0 | CPU GGUF Q4_K_M |
+| Qwen2.5 0.5B Instruct | Qwen2.5 (chat) | 0.4 GB | 0.44 GB | Apache-2.0 | CPU GGUF Q4_0 |
 
-The catalogue is defined once in `crates/fluent-core/src/model/registry.rs`.
-Required files, sizes, SHA-256 values, repository and pinned revision are in
-that registry. The GUI, verifier and downloader consume the same definitions.
+The translation catalogue is defined in
+`crates/fluent-core/src/model/registry.rs`; chat models are defined in
+`crates/fluent-core/src/model/chat_registry.rs`. Required files, sizes,
+SHA-256 values, repositories and pinned revisions live in those registries. The
+GUI, verifier and downloader consume the same definitions.
 
 ## Remote catalogue
 
@@ -59,8 +62,10 @@ The manager distinguishes:
 - **Loaded** — the inference engine currently holds the model.
 
 A size check is deliberately cheap and runs whenever the catalogue is shown.
-Use **Verify** for the full checksum pass. A model is never reported as
-downloaded/installed before its required files pass verification.
+Use **Verify** for the full checksum pass. A completed download is promoted only
+after its required files pass SHA-256 verification. An existing or manually
+installed directory may show **Installed** after the size check; **Verify**
+upgrades the report to **Installed · verified**.
 
 ## Chat models
 
@@ -126,19 +131,25 @@ Existing paths from `config.json` are used when no custom storage root is set:
 
 The manager detects those directories without downloading or moving anything.
 Extra files from a Hugging Face download are ignored. Existing model
-directories are never renamed or deleted by verification.
+directories are never renamed or deleted by verification. A custom storage root
+changes where Fluent looks for model subdirectories; it does not relocate an
+existing installation.
 
 ## Storage
 
-The default root is the parent of the configured NLLB directory, normally:
+The default root is the parent of the configured NLLB directory. For an
+installed Linux build, that is normally:
 
 ```text
-~/.local/share/fluent/models/        Linux
-~/Library/Application Support/io.fluent.Fluent/models/   macOS
-%APPDATA%\fluent\Fluent\data\models\ Windows
+~/.local/share/fluent/models/                              Linux
+~/Library/Application Support/io.fluent.Fluent/models/     macOS
+%APPDATA%\fluent\Fluent\data\models\                    Windows
 ```
 
-The manager shows the path, free space, total usage and per-model usage.
+A portable archive or ZIP has no `config.json` and starts with `models/`
+relative to its working directory. Choose a persistent folder in the manager
+before downloading. The manager shows the path, free space, total usage and
+per-model usage.
 
 A custom storage folder can be entered and applied. It is validated for
 creation and write access. **Existing models are not moved automatically**;
@@ -169,17 +180,22 @@ configuration, another model, or unrelated files.
 Removed weights must be downloaded again. Fluent does not offer automatic
 cleanup.
 
-## Licenses
+## Licences
 
 - NLLB-200: **CC-BY-NC-4.0** (non-commercial). See
   [MODEL_PROVENANCE.md](MODEL_PROVENANCE.md).
 - MADLAD-400-3B-MT: **Apache-2.0**. See [MADLAD.md](MADLAD.md).
-- Fluent source code: **MIT**; this does not change the model licenses.
+- SMaLL-100: **MIT**. See [SMALL100.md](SMALL100.md).
+- Qwen2.5 Instruct: **Apache-2.0**. See [CHAT.md](CHAT.md).
+- Fluent source code: **MIT**; this does not change any model licence.
 
-The download confirmation displays the model license before acquisition.
+The download confirmation displays the model licence before acquisition.
 Model pages: [NLLB-200 1.3B](https://huggingface.co/facebook/nllb-200-1.3B),
 [NLLB-200 3.3B](https://huggingface.co/facebook/nllb-200-3.3B),
-[MADLAD-400-3B-MT](https://huggingface.co/google/madlad400-3b-mt).
+[MADLAD-400-3B-MT](https://huggingface.co/google/madlad400-3b-mt),
+[SMaLL-100](https://huggingface.co/alirezamsh/small100),
+[Qwen2.5 1.5B Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF) and
+[Qwen2.5 0.5B Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF).
 
 ## Troubleshooting
 

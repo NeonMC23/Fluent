@@ -44,8 +44,8 @@ No administrator privileges are needed to build or run from a user directory.
 Windows hosts. The ICO has 16, 24, 32, 48, 64, 128 and 256 px entries and is
 independently validated by `scripts/verify-branding-assets.py`. Product name,
 file description, original filename and numeric file/product versions are set.
-The icon and metadata have **not** been inspected in Windows Explorer, and a
-Windows build has not been executed here.
+The icon and metadata have **not** been inspected in Windows Explorer, and no
+physical Windows runtime has been executed here. CI has built the EXE.
 
 ## Configuration and models
 
@@ -66,13 +66,12 @@ set `FLUENT_CONFIG` to an absolute path. The configuration directory used by
 %APPDATA%\fluent\Fluent\config\settings.json
 ```
 
-The Windows data directory is `%APPDATA%\fluent\Fluent\data`; the documented
-model location for a future installer is:
-
-```text
-%APPDATA%\fluent\Fluent\data\models\nllb-200-1.3b\
-%APPDATA%\fluent\Fluent\data\models\nllb-200-3.3b\
-```
+The Windows per-user data directory is `%APPDATA%\fluent\Fluent\data`.
+The portable ZIP contains no `config.json`, so a fresh extraction starts with
+`models/` relative to its working directory (normally the folder containing
+`fluent.exe`). Use **Models → Storage** and **Apply folder** to choose an
+explicit model root. If a configuration is present, its model paths take
+precedence.
 
 A minimal configuration with absolute paths:
 
@@ -88,8 +87,10 @@ A minimal configuration with absolute paths:
 
 Use doubled backslashes in JSON. Fluent bundles no models: the native Model
 Manager downloads translation and chat models only after confirmation, stores
-them outside the application folder (by default under the per-user application
-data directory) and verifies SHA-256 before reporting them installed.
+them outside the application payload, and verifies SHA-256 before reporting them
+installed. With an installer-written configuration the default is the per-user
+data directory; the portable ZIP defaults to `models/` relative to its working
+directory until you choose another folder.
 
 ## CI, portable ZIP and validation status
 
@@ -97,12 +98,15 @@ The CI workflow defines a native `windows-latest` job that runs
 `cargo test --workspace`, a release GUI build with the embedded icon/resource,
 and `scripts/package-windows.py`. It uploads the
 `fluent-<version>-windows-x86_64.zip` workflow artifact (14-day retention).
-It executed successfully in GitHub Actions run `43781201073` (commit
-`27a4a3d`), uploaded the ZIP artifact, and ran the packaged `fluent.exe`
+It executed successfully in GitHub Actions run `43785992390` (commit
+`c91523c`), uploaded the ZIP artifact, and ran the packaged `fluent.exe`
 `--version` and `--self-test`. The GUI-window smoke is SKIPPED because the
 hosted runner has no OpenGL 2.0+ context; this is not physical-device GUI
-validation. The Cycle 19 inner ZIP is 7,618,508 B with SHA-256
-`eafbc65ac0ae06133cecf3dd8550493298c405fc894e606194641e9a3be4b7fa`.
+validation. The Cycle 19 inner ZIP was 7,618,513 B with SHA-256
+`f3587e8066c788c80de7245bfbe9cc99dcb819a28b3486dee5b2702266cc200a`.
+Windows PE archives are not byte-reproducible across rebuilds because the
+linker embeds build-specific data; always verify the `.sha256` published with
+the exact ZIP you downloaded.
 
 **Physical runtime was not executed.** An existing local `win11` libvirt domain
 cannot start because its attached `tiny11 23H2 x64.iso` lives on the

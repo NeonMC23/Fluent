@@ -1,28 +1,28 @@
 # Platform Support
 
-This is the honest support matrix for Cycle 19. It distinguishes local builds,
-CI definitions, CI execution and actual GUI runtime validation.
+This is the honest support matrix for the 0.2.0 release candidate (Cycle 19
+validation, documentation reviewed in Cycle 20). It distinguishes local
+builds, CI definitions, CI execution and actual GUI runtime validation.
 
 ## Summary
 
 | Platform | Local build | CI job defined | CI executed | GUI runtime validated | Distribution artifact |
 |---|---|---|---|---|---|
-| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum + smoke) | **Yes** (run 43781201073) | **Yes** (Nobara host + Ubuntu 22.04 container + Xvfb) | Portable tar.gz |
+| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum + smoke) | **Yes** (run 43785992390) | **Yes** (Nobara host + Ubuntu 22.04 container + Xvfb) | Portable tar.gz |
 | Linux AArch64 | No | No | No | No | No |
-| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43781201073) | **Partial**: packaged `--version`/`--self-test` on runner; GUI skipped (no OpenGL); physical GUI **NOT EXECUTED** | Portable ZIP; no installer |
-| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43781201073) | **CI runner only** (bundle GUI smoke); physical GUI **NOT EXECUTED** | `.app` ZIP; unsigned; Intel not produced |
-| NLLB-200 1.3B / 3.3B (dense, quantised) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43781201073) | **Yes** (Linux real translation, tiny FLORES regression, generated checks) | User-supplied weights; CPU/optional CUDA/Metal |
-| MADLAD-400 3B (T5, q4_k GGUF) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43781201073) | **Yes** (Linux real-model engine test + GUI inspection) | User-supplied GGUF; CPU only |
-| SMaLL-100 (M2M-100, 330M) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43781201073) | **Yes** (Linux real-model engine test + GUI download/verify) | User-supplied safetensors; CPU validated |
-| Qwen2.5 Instruct chat (0.5B/1.5B) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43781201073) | **Yes** (Linux GUI download/verify, English/French chat, 0.5B↔1.5B switch) | User-supplied GGUF; CPU only |
+| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43785992390) | **Partial**: packaged `--version`/`--self-test` on runner; GUI skipped (no OpenGL); physical GUI **NOT EXECUTED** | Portable ZIP; no installer |
+| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43785992390) | **CI runner only** (bundle GUI smoke); physical GUI **NOT EXECUTED** | `.app` ZIP; unsigned; Intel not produced |
+| NLLB-200 1.3B / 3.3B (dense, quantised) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43785992390) | **Yes** (Linux real translation, tiny FLORES regression, generated checks) | User-installed weights; CPU Q8 validated; CUDA/Metal builds not validated |
+| MADLAD-400 3B (T5, q4_k GGUF) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43785992390) | **Yes** (Linux real-model engine test + GUI inspection) | User-supplied GGUF; CPU only |
+| SMaLL-100 (M2M-100, 330M) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43785992390) | **Yes** (Linux real-model engine test + GUI download/verify) | User-supplied safetensors; CPU validated |
+| Qwen2.5 Instruct chat (0.5B/1.5B) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43785992390) | **Yes** (Linux GUI download/verify, English/French chat, 0.5B↔1.5B switch) | User-supplied GGUF; CPU only |
 
-The current fully green `main` run is `43781201073` (`27a4a3d`), including
+The final Cycle 19 validation run is `43785992390` (`c91523c`), including
 MADLAD/T5, SMaLL-100, NLLB and Qwen2.5 chat compilation, packaged application
 smoke tests, the Model Manager, the remote catalogue, the unified mark-based
 icons, the language capability registry, local chat and artifact verification.
-The previous Cycle 18 run `43768080004` (`5a7f96a`) also passed. Earlier
-successful runs are `43605074905`, `43606018556`, `43606646499` and
-`43620495032`. GitHub-runner execution is still not physical-device validation.
+The previous Cycle 18 run `43768080004` (`5a7f96a`) also passed. GitHub-runner
+execution is still not physical-device validation.
 
 Measured on the canonical host (Intel Core i5-11400H, 15 GiB RAM, CPU only):
 the Qwen2.5 1.5B chat engine reached about 2.09 GB RSS while answering; real
@@ -69,7 +69,7 @@ other heavyweight engine is not kept resident. Translation engines loaded in
 
 - The workflow runs `cargo test --workspace`, a release GUI build, the portable
   ZIP, and executes the packaged `fluent.exe --version` / `--self-test`.
-- Run `43781201073` passed those checks after the portable README fix.
+- Run `43785992390` passed those checks after the portable README fix.
   GitHub's hosted Windows runner has no OpenGL 2.0+ context, so the temporary
   GUI-window smoke is SKIPPED there. This is still not physical-device GUI
   validation.
@@ -87,7 +87,7 @@ other heavyweight engine is not kept resident. Translation engines loaded in
 - The workflow runs `cargo test --workspace`, a release GUI build, `.app`
   staging, plist/Mach-O validation and a bundled GUI smoke test on
   `macos-latest`.
-- Run `43781201073` passed all of those steps, so the arm64 `.app` is runtime
+- Run `43785992390` passed all of those steps, so the arm64 `.app` is runtime
   validated on the CI runner. **Physical macOS runtime: NOT EXECUTED**; no
   Apple Silicon or Intel Mac is available in this environment. Metal, Intel
   macOS, universal binaries, signing and notarization remain unvalidated.
@@ -133,8 +133,8 @@ other heavyweight engine is not kept resident. Translation engines loaded in
 
 - **Architecture:** Qwen2.5 Instruct GGUF, CPU-only, one chat engine resident
   at a time. Chat is independent of the translation mode.
-- **Models:** 1.5B Q4_K_M (`1.0 GB` download, default) and 0.5B Q4_0
-  (`416 MB`, fast option); both Apache-2.0.
+- **Models:** 1.5B Q4_K_M (`1.12 GB` download, default) and 0.5B Q4_0
+  (`0.44 GB`, fast option); both Apache-2.0.
 - **Cycle 19 GUI download:** 1.5B downloaded through the Model Manager into a
   fresh root. 1,124,359,686 bytes total, SHA-256 verified for all three files,
   `Installed, verified=true, missing=0, bad=0`. Cancelling at 37.6 MB preserved
@@ -142,13 +142,14 @@ other heavyweight engine is not kept resident. Translation engines loaded in
 - **Measured on the canonical host:** 1.5B load ~1.9 s, ~1.95 GB RSS after
   load, ~2.02 GB peak, 3.3–4.9 s to first output and 4–7 generated tok/s;
   0.5B load ~1.0 s, ~0.94 GB RSS and 5–8 tok/s. The GUI RSS reached about
-  2.03 GB while answering and returned to about 0.96 GB after switching to
-  Translate.
+  2.03 GB while answering and stayed near 0.96 GB after switching to Translate
+  under the default allocator; forced trims showed the engine was released
+  (~0.14 GB).
 - **Validated flow:** English answer, French follow-up with context, streaming,
   cancellation, context truncation, switching 0.5B→1.5B (new conversation),
   unload on Translate, reload on return to Chat.
-- **Not executed:** physical Windows/macOS chat inference, GPU chat and
-  persistent conversation history (by design).
+- **Not executed:** physical Windows/macOS chat inference and GPU chat.
+  Persistent conversation history is not implemented by design.
 - See [CHAT.md](CHAT.md) for the lifecycle and limitations.
 
 ## Branding assets
@@ -168,20 +169,6 @@ counts are NLLB-200 1.3B/3.3B: 202; MADLAD-400 3B: 72; SMaLL-100: 98. See
 [LANGUAGES.md](LANGUAGES.md) for mappings, Chinese variants and the NLLB
 204→202 correction.
 
-## Chat (Qwen2.5 Instruct)
-
-- **Architecture:** Qwen2 causal decoder, GGUF Q4_0 (0.5B) or Q4_K_M (1.5B).
-- **Device:** CPU only in this release. CUDA/Metal chat inference is not
-  validated and is not advertised.
-- **Decoding:** deterministic greedy with a repetition penalty. Streaming
-  deltas and cancellation are supported.
-- **Measured on the canonical host:** 1.5B loads in ~1.9 s, uses ~1.95 GB RSS
-  and generates at ~4–7 tok/s; 0.5B loads in ~1.0 s, uses ~0.94 GB RSS and
-  generates at ~5–8 tok/s.
-- **Validated:** English and French prompts, follow-up context, streaming,
-  cancellation during generation, reload and context truncation on Linux.
-- **Not executed:** physical Windows/macOS chat runtime and GPU chat.
-
 ## CPU and GPU behaviour
 
 - NLLB 1.3B and 3.3B both use CPU Q8 under Automatic precision. A measured
@@ -196,11 +183,12 @@ counts are NLLB-200 1.3B/3.3B: 202; MADLAD-400 3B: 72; SMaLL-100: 98. See
 - ARM: only the scalar Q8 kernel exists; it is correct but slower and has not
   been benchmarked on Apple Silicon.
 - CUDA and Metal are optional build features and are not required for the CPU
-  build.
-- No GPU runtime validation was performed in this cycle.
+  build. No GPU runtime validation was performed for this release; all
+  documented performance and inference results are CPU-only.
 
 ## Model assets
 
-No NLLB weights, tokenizer or model configuration is included in the
-repository or the portable archive. Users supply a model package; see
+No model weights, tokenizer or model configuration is included in the
+repository or the portable archive. The Model Manager downloads pinned files
+only after explicit confirmation, or you can supply an existing package; see
 [MODEL_PACKAGE.md](MODEL_PACKAGE.md) and [MODEL_PROVENANCE.md](MODEL_PROVENANCE.md).

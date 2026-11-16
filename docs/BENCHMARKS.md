@@ -2,6 +2,8 @@
 
 Sections 1–9 record Cycle 14. Section 10 adds the Cycle 16 lightweight-model
 comparison over all 42 directed pairs among the seven required languages.
+Section 11 records the Cycle 19 end-to-end sanity checks. The full quality
+history is retained; none of these numbers is a universal guarantee.
 
 This document records measured results on the canonical development host. It is
 a snapshot, not a universal performance claim. Raw JSON and metric outputs are
@@ -397,3 +399,34 @@ picture (SMaLL 50.06, NLLB 1.3B 51.04, NLLB 3.3B 53.83).
 - No COMET, human evaluation or GPU benchmark was performed.
 - Windows and macOS SMaLL-100 runtime validation was not executed; CI compiles
   the code only.
+
+## 11. Cycle 19 sanity checks
+
+Cycle 19 re-ran a small, real-model regression after the release-candidate
+polish. It was intentionally short: four English→French/German/Spanish/Italian
+FLORES cases per translation model, plus Chinese script checks and the chat
+validation documented in [CHAT.md](CHAT.md).
+
+| Model | Load | RSS after load | Observed translation time |
+|---|---:|---:|---:|
+| NLLB-200 1.3B | 9.4 s | 1.63 GB | 1.6–2.7 s per short sentence |
+| NLLB-200 3.3B Q8 | 21.3 s | 3.62 GB | 3.4–8.2 s per short sentence |
+| MADLAD-400 3B q4_k | 2.15 s | 2.68 GB | ~20 s per short sentence |
+| SMaLL-100 | 1.35 s | 0.42 GB | ~0.3 s per short sentence |
+
+Outputs were coherent for all four models. Chinese checks:
+
+- NLLB-200 produced distinct Simplified Chinese
+  (`他补充说:"我们现在有4个月的老鼠…`) and Traditional Chinese
+  (`他說:"我們現在有4個月的老鼠…`) output.
+- MADLAD exposes both Chinese scripts.
+- SMaLL-100 produced Simplified Chinese and correctly reported `zho_Hant` as
+  unsupported.
+
+Real NLLB-200 1.3B translation in the GUI produced
+“Le renard brun rapide saute sur le chien paresseux.” for
+“The quick brown fox jumps over the lazy dog.” in 2.2 s for 15 generated
+tokens. The GUI process reached about 1.74 GB RSS during that workload.
+
+These numbers are reference measurements from the canonical host, not
+minimum-hardware guarantees.

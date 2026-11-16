@@ -8,10 +8,10 @@ validation, not physical Apple-hardware validation.
 
 ## Prerequisites
 
-- macOS 12 or newer on Apple Silicon or Intel.
+- macOS 12 or newer on Apple Silicon for the packaged artifact. Intel builds
+  are not produced or validated.
 - Xcode Command Line Tools (`xcode-select --install`).
-- Rust stable for `aarch64-apple-darwin` and/or `x86_64-apple-darwin`
-  (<https://rustup.rs>).
+- Rust stable for `aarch64-apple-darwin` (<https://rustup.rs>).
 - Enough RAM/disk for the model you intend to use.
 
 ## Build and run
@@ -25,14 +25,15 @@ cargo build --release --locked -p fluent-gui
 ./target/release/fluent
 ```
 
-Optional Metal build:
+Optional Metal build (not validated in this release):
 
 ```bash
 cargo build --release --locked -p fluent-gui --features metal
 ```
 
-Metal is an optional feature; the default build does not require it. When the
-feature is enabled, select the Metal device in **Settings → Device**.
+Metal is an optional feature; the default CPU build does not require it. When
+the feature is enabled, select the Metal device in **Settings → Device**. CPU is
+the only validated macOS path.
 
 ## CPU behaviour on Apple Silicon
 
@@ -53,20 +54,23 @@ The application searches for `config.json` in this order:
 4. `~/Library/Application Support/io.fluent.Fluent/config.json`
 5. the current working directory
 
-Settings live in the same directory as `settings.json`. Documented model
-location:
+Settings live in `~/Library/Application Support/io.fluent.Fluent/`. A
+configuration written there or next to the executable can point at model
+directories. The packaged ZIP contains no `config.json`, so a fresh extraction
+starts with `models/` relative to its working directory; use
+**Models → Storage** and **Apply folder** to choose an explicit model root
+before downloading. The documented per-user data location is:
 
 ```text
 ~/Library/Application Support/io.fluent.Fluent/config.json
 ~/Library/Application Support/io.fluent.Fluent/settings.json
-~/Library/Application Support/io.fluent.Fluent/models/nllb-200-1.3b/
-~/Library/Application Support/io.fluent.Fluent/models/nllb-200-3.3b/
+~/Library/Application Support/io.fluent.Fluent/models/
 ```
 
 The Linux `install.sh` has a best-effort macOS branch that installs the payload
 under `~/Library/Application Support/io.fluent.Fluent/app`, but **it has not
-been tested**. Manual `cargo build` plus a config file is the supported path
-for now.
+been tested**. Manual `cargo build` plus a configuration file is the supported
+path for now.
 
 ## CI, application ZIP and validation status
 
@@ -75,7 +79,7 @@ The CI workflow defines a native `macos-latest` job that runs
 `scripts/package-macos-archive.py`. It uploads the `fluent-macos` workflow
 artifact containing an unsigned `Fluent-<version>-macos-<arch>.zip` (14-day
 retention; the current runner is arm64). It executed successfully in GitHub
-Actions run `43781201073` (commit `27a4a3d`), including plist/Mach-O
+Actions run `43785992390` (commit `c91523c`), including plist/Mach-O
 validation and a bundled GUI smoke test on the runner. The Cycle 19 inner ZIP
 is 7,905,926 B with SHA-256
 `d903b2c801acaabf8625bfaa6a54df3503962c7ff2c49648a0c8761b6291fa39`. Metal,

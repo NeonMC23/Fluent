@@ -1,8 +1,9 @@
 # Linux Installation
 
-Linux is the validated distribution target for Cycle 6. The installer is a
-per-user installation: it does not need root, does not install system packages,
-and never downloads models.
+Linux x86-64 is the validated distribution target for the 0.2.0 release
+candidate. The installer is a per-user installation: it does not need root,
+does not install system packages and never downloads model weights. After
+launch, the Model Manager downloads only models that you explicitly confirm.
 
 ## Requirements
 
@@ -11,7 +12,9 @@ Building from source:
 - Rust 1.85 or newer and Cargo.
 - `bash` (the installer uses bash, not POSIX sh).
 - A C/C++ toolchain, `pkg-config` and `cmake`.
-- X11 or Wayland development headers and an OpenGL-capable driver.
+- X11 or Wayland development headers and an OpenGL 3.3-capable driver.
+- Runtime binaries built for the release target require **glibc 2.35 or
+  newer**; source builds inherit the host's glibc.
 
 Fedora / Nobara:
 
@@ -87,8 +90,9 @@ Environment equivalents: `FLUENT_APP_DIR`, `FLUENT_BIN_DIR`,
 ## Models
 
 Fluent bundles no model weights. The application includes a native Model
-Manager that can download and verify translation and chat models on request;
-no model is downloaded automatically or before explicit confirmation.
+Manager that can download and verify all four translation models and both chat
+models on request; no model is downloaded automatically or before explicit
+confirmation.
 
 Models are stored outside the application directory, by default:
 
@@ -98,11 +102,16 @@ Models are stored outside the application directory, by default:
 ├── nllb-200-3.3b/
 ├── madlad400-3b-mt/
 ├── small100/
-└── qwen2.5-1.5b-instruct/
+├── qwen2.5-1.5b-instruct/
+└── qwen2.5-0.5b-instruct/
 ```
 
 Use **Models** in the header (or **Settings → Manage models…**) to install,
-verify, load or remove them. To use an existing NLLB directory, put
+verify, load or remove them. Installed builds use the XDG model directory above
+because the installer writes it into `config.json`. A portable archive with no
+configuration starts with `models/` relative to its working directory; choose a
+persistent folder in **Models → Storage** and click **Apply folder** before
+downloading. To use an existing NLLB directory, put
 `config.json`, `tokenizer.json` and a real checkpoint
 (`pytorch_model.bin`, `model.safetensors`, or complete shards plus an index) in
 that directory, or point `config.json` at it. The Model Manager never
@@ -116,7 +125,9 @@ when the new model directory is empty. It hard-links when possible and copies
 otherwise. The old directory is not modified or deleted; remove it manually
 once you have verified the new installation.
 
-Models are subject to the NLLB license. See [MODEL_PROVENANCE.md](MODEL_PROVENANCE.md).
+Model licences differ: NLLB-200 is **CC-BY-NC-4.0** (non-commercial),
+MADLAD-400 is **Apache-2.0**, SMaLL-100 is **MIT**, and Qwen2.5 Instruct is
+**Apache-2.0**. See [MODEL_PROVENANCE.md](MODEL_PROVENANCE.md).
 
 ## Portable archive
 
@@ -137,11 +148,12 @@ fluent-<version>-linux-<arch>/
 ```
 
 Models, tokenizer files, configuration and user data are **not** included. The
-archive README explains how to place models next to it. The tar metadata is
-normalised (sorted entries, fixed timestamp, numeric owner) and the packaging
-build remaps Cargo/repository paths out of the binary. Re-running the script
-with the same binary produces the same SHA-256. The Rust binary itself is not
-guaranteed bit-reproducible across hosts or toolchains.
+archive README explains how to run Fluent and install models with the native
+Model Manager. The tar metadata is normalised (sorted entries, fixed timestamp,
+numeric owner) and the packaging build remaps Cargo/repository paths out of the
+binary. Re-running the script with the same binary produces the same SHA-256.
+The Rust binary itself is not guaranteed bit-reproducible across hosts or
+toolchains.
 
 Verify an archive from the directory containing it:
 
@@ -154,7 +166,7 @@ a signature.
 
 ### glibc compatibility baseline
 
-The canonical Cycle 8 archive is built in an **Ubuntu 22.04** container and its
+The canonical 0.2.0 archive is built in an **Ubuntu 22.04** container and its
 strongest symbol requirement is **`GLIBC_2.35`**. The gate is:
 
 ```bash
@@ -178,16 +190,18 @@ still needs the runtime packages listed above. There is no RPATH/RUNPATH
 pointing into the build tree.
 
 The Ubuntu build was validated locally in a container and in the native CI
-job on `ubuntu-22.04`; CI enforces the same GLIBC 2.35 check and succeeded in
-run 43605074905.
+job on `ubuntu-22.04`; CI enforces the same GLIBC 2.35 check. The final Cycle
+19 run `43785992390` passed the baseline gate, the packaged smoke tests and
+artifact verification.
 
 CPU dispatch is unchanged: the binary contains AVX2/FMA kernels selected by
 runtime detection, with a scalar fallback. It is not compiled with
 `target-cpu=native`; installing it on a CPU without AVX2 is intended to work
 through the scalar path and was covered by the scalar test suite.
 
-This archive has only been executed on the host described in the validation
-section. Other distributions and older glibc versions remain untested.
+This archive has been executed on the development host and under Xvfb, in
+addition to the Ubuntu 22.04 container check. Other distributions and older
+glibc versions remain untested.
 
 ## Launch and desktop integration
 
@@ -246,11 +260,13 @@ carry over. If you had edited `~/.fluent/config.json`, compare it with the new
 | Desktop entry does not appear | Log out/in or run `update-desktop-database ~/.local/share/applications`. |
 | Wayland/X11 startup failure | Ensure an OpenGL driver is installed; try an X11 session to isolate compositor issues. |
 
-## Validation performed in Cycle 6
+## Validation performed for the 0.2.0 candidate
 
-The reproducible test script is `scripts/test-installer.sh`; it uses only
+The reproducible installer test is `scripts/test-installer.sh`; it uses only
 temporary HOMEs, a fake executable and a fake 2 MB checkpoint. None of the
-tests touched the real user environment.
+tests touched the real user environment. The Cycle 19 Linux validation also
+covered the portable archive, real translation, both chat models, the Model
+Manager and a locally signed candidate.
 
 - Fresh install with spaces in `HOME` and model source paths: passed.
 - Repeat install: binary updated, configuration and model files preserved.
@@ -273,6 +289,11 @@ tests touched the real user environment.
   verified, extraction and GUI launch tested from a directory containing
   spaces. No model or tokenizer asset was present. Runtime dependency/glibc
   inspection performed with `file`, `readelf`, `ldd` and `objdump`.
+- Cycle 19 archive: `--version`, `--self-test` and `--smoke-test-gui` passed
+  under Xvfb. The local archive SHA-256
+  `475b2a83d1e27d56312c769b5998d8ef884ad198ebc24011e78a56b6112325d4`
+  is byte-identical to the CI inner archive and has a verified Minisign
+  signature.
 - Ubuntu 22.04 container build: complete GUI built against glibc 2.35; maximum
   required symbol `GLIBC_2.35`; GUI launched under Wayland in the container.
   `scripts/check-linux-baseline.sh` passes for that binary and fails for the

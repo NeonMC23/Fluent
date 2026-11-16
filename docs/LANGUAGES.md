@@ -24,7 +24,9 @@ The model-specific pieces are:
   prefixes.
 
 The GUI (`app.rs`), Model Manager and catalogue all consume these functions.
-There is no independent language list in the interface.
+There is no independent language list in the interface. A language being
+listed means the model can represent it, not that translation quality is equal
+across languages or domains. See the user guide in the repository README.
 
 ## 2. Actual coverage
 

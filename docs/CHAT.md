@@ -8,8 +8,8 @@ model directory and GUI view. Translation models are never used as chat models.
 
 | Model | Parameters | Quantization | Download | Context | Licence |
 |---|---:|---|---:|---:|---|
-| Qwen2.5 1.5B Instruct | 1.5B | Q4_K_M GGUF | 1.1 GB | 4096 used (32768 upstream) | Apache-2.0 |
-| Qwen2.5 0.5B Instruct | 0.5B | Q4_0 GGUF | 0.4 GB | 4096 used (32768 upstream) | Apache-2.0 |
+| Qwen2.5 1.5B Instruct | 1.5B | Q4_K_M GGUF | 1.12 GB | 4096 used (32768 upstream) | Apache-2.0 |
+| Qwen2.5 0.5B Instruct | 0.5B | Q4_0 GGUF | 0.44 GB | 4096 used (32768 upstream) | Apache-2.0 |
 
 The 1.5B model is the default: it is noticeably more coherent than the 0.5B
 model while still fitting the CPU baseline. The 0.5B model is the fast option
