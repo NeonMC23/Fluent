@@ -144,5 +144,7 @@ must record the actual Git commit and workflow run, not just the version.
 - Candidate: **prepared locally only**.
 - Legal review: **not obtained**.
 - Official NLLB weights: still CC-BY-NC-4.0, user-supplied, never bundled.
+- Branding: project-provided but redistribution rights are not independently
+  documented; owner confirmation is required. See [ASSETS.md](ASSETS.md).
 
 No claim of public-repository cleanliness is made.

@@ -90,3 +90,10 @@ Three product-level decisions were made in Cycle 17:
    canonical application symbol. Window, Linux, Windows and macOS icons are
    derived from that exact crop. The full logo and banner masters remain
    untouched but are no longer used as icons.
+
+## Cycle 18 addition: separate chat engine
+
+Chat is not a translation backend. It uses a separate `ChatEngine`, Qwen2 GGUF
+weights, a chat template and a dedicated worker and GUI view. Translation
+models are never exposed as chat models, and chat model selection is independent
+of the translation mode. See [CHAT.md](CHAT.md).

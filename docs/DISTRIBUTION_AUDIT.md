@@ -7,14 +7,18 @@
 > turquoise mark exists, the native Model Manager is implemented, and a locally
 > signed Linux release candidate is verified.
 
-Status: **Linux source and portable archive validated against a glibc 2.35
-baseline; NLLB assets removed from HEAD; Windows and macOS CI definitions exist
-but have not run; public Git-history release still blocked by assets retained in
-history.**
+Status at the end of Cycle 7: **Linux source and portable archive validated
+against a glibc 2.35 baseline; NLLB assets removed from HEAD; Windows and macOS
+CI definitions existed but had not run; public Git-history release still blocked
+by assets retained in history.** This is a historical snapshot. Current CI,
+platform and signing status is in [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md)
+and [RELEASE.md](RELEASE.md).
 
 This document records what was verified, what changed in Cycle 6, and what
-remains unknown. It is intentionally conservative: source code compiling on
-Linux is not evidence that Windows or macOS binaries work.
+remained unknown at that time. It is intentionally conservative: source code
+compiling on Linux is not evidence that Windows or macOS binaries work. The
+Cycle 19 validation and current artifact status supersede the platform and
+model-manager sections below.
 
 ## 1. Verified facts
 
@@ -159,15 +163,17 @@ installing a new toolchain; that was out of scope.
 2. **Windows runtime validation** — no MSVC toolchain or Windows machine.
 3. **macOS build/bundle/signing** — no macOS machine; no `.app`, `.icns`,
    universal binary, codesigning, or notarization.
-4. **Official icon/logo** — no brand asset exists; the `--icon` path is ready
-   but intentionally unused.
-5. **Model acquisition** — no downloader; see `MODEL_PROVENANCE.md` for the
-   required consent/checksum workflow.
-6. **Release signing/checksums** — the archive has a SHA-256 file, but no
-   signature or trusted release channel yet.
-7. **CI artifact verification** — run 43605074905 passed on Linux, Windows,
-   macOS and release integrity. Artifact bytes still need owner download and
-   inspection; no production signing key is present.
+4. **Official icon/logo** — historical: the official turquoise mark and all
+   platform variants exist (Cycle 17); see [ASSETS.md](ASSETS.md).
+5. **Model acquisition** — historical: the native Model Manager now implements
+   confirmation, resumable downloads and checksum verification; see
+   [MODEL_MANAGER.md](MODEL_MANAGER.md).
+6. **Release signing/checksums** — historical: the local Linux candidate is
+   Minisign-signed and verified; CI artifacts remain unsigned until the owner
+   configures `MINISIGN_SECRET_KEY`. See [RELEASE.md](RELEASE.md).
+7. **CI artifact verification** — historical run 43605074905 passed; the final
+   Cycle 19 run was 43785992390. Artifact bytes still require an authenticated
+   owner download for independent inspection.
 
 ## 7. Unverified assumptions
 

@@ -95,7 +95,12 @@ The workflow has run successfully on GitHub:
 - **Cycle 19 run (final validation and hardening):**
   [43781201073](https://github.com/NeonMC23/Fluent/actions/runs/43781201073)
   on `27a4a3d7…`. All four jobs succeeded after the Windows portable README
-  packaging fix. Artifact bundle sizes/digests (uploaded ZIPs, not inner
+  packaging fix. The final Cycle 19 documentation run
+  [43785992390](https://github.com/NeonMC23/Fluent/actions/runs/43785992390)
+  on `c91523c` also passed all four jobs; its Linux and macOS inner archives
+  were unchanged, while the Windows PE ZIP was 7,618,513 B with SHA-256
+  `f3587e8066c788c80de7245bfbe9cc99dcb819a28b3486dee5b2702266cc200a`.
+  Artifact bundle sizes/digests for 43781201073 (uploaded ZIPs, not inner
   archives): Linux 9,698,250 B
   `62eacbe18051094954f7a0900132c44a0a1076a6dd3e01cd191886a9b25fd42d`,
   Windows 7,601,050 B
@@ -110,7 +115,8 @@ The workflow has run successfully on GitHub:
   `eafbc65ac0ae06133cecf3dd8550493298c405fc894e606194641e9a3be4b7fa`
   (7,618,508 B), macOS
   `d903b2c801acaabf8625bfaa6a54df3503962c7ff2c49648a0c8761b6291fa39`
-  (7,905,926 B). The run reports `signing=unsigned verified=False` because
+  (7,905,926 B). Run 43781201073 reports `signing=unsigned verified=False`;
+  the final documentation run is also unsigned because
   `MINISIGN_SECRET_KEY` is not configured.
 - **Cycle 19 local Linux candidate:** the Linux binary was rebuilt from the
   same source in an Ubuntu 22.04 container, packaged, Minisign-signed with the
@@ -421,10 +427,10 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
   and the separation of Fluent's MIT source licence from model licences.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [x] Cycle 19 CI run 43781201073 succeeded on `main` for all four jobs after
-  the final GUI, packaging and documentation fixes; Linux, Windows, macOS and
-  release-integrity jobs are green. Cycle 18 run 43768080004 and Cycle 17 run
-  43747547053 also passed.
+- [x] Final Cycle 19 CI run 43785992390 (`c91523c`) succeeded on `main` for
+  all four jobs after the final GUI, packaging and documentation fixes; Linux,
+  Windows, macOS and release-integrity jobs are green. Cycle 19 run 43781201073,
+  Cycle 18 run 43768080004 and Cycle 17 run 43747547053 also passed.
 - [x] Local chat real-model tests cover English, French, follow-up context,
   streaming, cancellation, reload and context truncation.
 - [x] Translation regression: SMaLL-100 42-case outputs are identical to

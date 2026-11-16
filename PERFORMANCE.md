@@ -1,4 +1,9 @@
-# Fluent CPU Performance — Cycle 5
+# Fluent CPU Performance — Cycle 5 (historical)
+
+> **Historical snapshot.** This document records the Cycle 5 optimisation work
+> for NLLB-200 1.3B on CPU. It is retained as engineering history. Current
+> translation quality/performance is in [docs/BENCHMARKS.md](docs/BENCHMARKS.md);
+> current chat performance and limits are in [docs/CHAT.md](docs/CHAT.md).
 
 Cycle 5 attacked the two remaining CPU bottlenecks identified in Cycle 4: the
 quantized encoder/prefill path and the per-step logits normalization. Both

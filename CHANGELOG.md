@@ -45,7 +45,7 @@ versions until a release is explicitly published.
   old generic Fast/Accurate/MADLAD buttons are gone.
 - Branding generation now supports `--check` for byte-for-byte reproducibility.
 
-### Added
+### Added in earlier 0.2.0 development
 
 - Native Model Manager with a four-model catalogue, download/repair,
   SHA-256 verification, progress/cancellation, safe removal, storage usage and
@@ -95,7 +95,7 @@ versions until a release is explicitly published.
   and macOS `.app` bundle, including a real temporary GUI window.
 - Release-integrity/signing preparation documentation and scripts.
 
-### Changed
+### Changed in earlier 0.2.0 development
 
 - CPU Automatic precision now uses the Q8 path for NLLB 3.3B as well as 1.3B.
   On the benchmark host this reduced median 3.3B latency from 26.6 s to
@@ -121,6 +121,19 @@ versions until a release is explicitly published.
   translation and chat model families, licences and storage behaviour.
 - The Windows portable README keeps its JSON config example literal; the
   packaging script no longer fails while formatting braces.
+
+### Documentation
+
+- Rewrote the README as a complete user guide covering installation, model
+  setup, translation, local chat, model reference, performance, troubleshooting,
+  privacy, development and provenance.
+- Audited the platform guides, Model Manager, provenance, package, benchmark,
+  asset and release documents against the 0.2.0 implementation.
+- Clarified that model installation is separate from application installation,
+  that portable builds may start with a working-directory model root, and that
+  Linux is the only physically validated platform.
+- Documented the unresolved NLLB Git-history and branding-rights review items
+  without making legal claims or rewriting history.
 
 ## 0.1.0 — previous published version
 

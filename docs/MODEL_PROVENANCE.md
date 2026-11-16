@@ -1,12 +1,44 @@
-# Model Provenance and Licensing — Cycle 7 Audit
+# Model Provenance and Licensing
 
-This document records the evidence available for every NLLB-derived asset, what
-was removed from the working tree, and what remains unresolved. It is an
-engineering audit, not legal advice.
+This document records the evidence available for Fluent's model assets, what is
+kept outside the repository, and what remains unresolved. It is an engineering
+audit, not legal advice. The NLLB history sections began as a Cycle 7 audit and
+are retained as history; the current acquisition path is the native Model
+Manager described below.
 
-No model weights were downloaded, copied, packaged, or committed during Cycle 7.
-The real 1.3B weights used for validation remained at their original read-only
-location outside the repository.
+## Current status (Cycle 20)
+
+- **Current working tree:** no model weights, tokenizer files or model
+  configuration are tracked. `models/` contains only a README.
+- **Model acquisition:** the native Model Manager downloads only the six
+  supported models (four translation entries in the remote catalogue and two
+  chat entries in the compiled registry), after explicit confirmation, and
+  verifies exact sizes and SHA-256. It is not a general model loader.
+- **Licences:** NLLB-200 is CC-BY-NC-4.0, MADLAD-400 is Apache-2.0, SMaLL-100
+  is MIT and Qwen2.5 Instruct is Apache-2.0. Fluent's source is MIT; that does
+  not relicense any model.
+- **Git history:** earlier commits still contain NLLB tokenizer and model
+  configuration assets. See [RELEASE_INTEGRITY.md](RELEASE_INTEGRITY.md).
+- **Branding:** the logo and banner are project-provided, but redistribution
+  rights are not independently documented. Owner confirmation is required
+  before public distribution; see [ASSETS.md](ASSETS.md).
+
+No model weights were downloaded, copied, packaged or committed during the
+Cycle 7 cleanup. The real 1.3B weights used for validation remained at their
+original read-only location outside the repository.
+
+## Model licence summary
+
+| Model | Upstream licence | Redistribution in Fluent |
+|---|---|---|
+| NLLB-200 1.3B / 3.3B | CC-BY-NC-4.0 | Not bundled; user-installed or downloaded after confirmation |
+| MADLAD-400 3B | Apache-2.0 | Not bundled; user-installed or downloaded after confirmation |
+| SMaLL-100 | MIT | Not bundled; user-installed or downloaded after confirmation |
+| Qwen2.5 1.5B / 0.5B Instruct | Apache-2.0 | Not bundled; user-installed or downloaded after confirmation |
+| Fluent source code | MIT | Distributed as source and application binaries |
+
+Model licences apply to the model assets, not to Fluent's source code. Check the
+upstream model card and licence before commercial use or redistribution.
 
 ## MADLAD-400-3B-MT (Cycle 13)
 
@@ -170,6 +202,9 @@ Transitive dependencies keep their own licenses; a full `cargo-deny` /
   sizes and SHA-256, and refuses to replace a valid installation. See
   [MODEL_MANAGER.md](MODEL_MANAGER.md). The original acquisition contract is in
   [MODEL_PACKAGE.md](MODEL_PACKAGE.md).
+- **Branding rights remain unresolved.** The project mark and banner are not
+  covered by a documented third-party licence here. Confirm redistribution
+  rights before public distribution; see [ASSETS.md](ASSETS.md).
 
 ## 7. Downloads and copies during Cycle 7
 

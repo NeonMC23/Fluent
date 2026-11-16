@@ -172,7 +172,7 @@ For a future release:
 - **Store/social:** banner (present), README image; no icon derived from the
   banner.
 
-## 6. Public-distribution caveat
+## 7. Public-distribution caveat
 
 The logo/banner are project-provided but their license is not documented here.
 Before publishing binaries or the repository, confirm the branding rights in
