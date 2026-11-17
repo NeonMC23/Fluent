@@ -93,6 +93,18 @@ The workflow has run successfully on GitHub:
   local Linux candidate is verified directly from its bytes, including a real
   GUI smoke test and a detached signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
+- **Cycle 22 run (release validation):**
+  [43983913671](https://github.com/NeonMC23/Fluent/actions/runs/43983913671)
+  on `fabfda9`. All four jobs succeeded with the strengthened Windows and
+  macOS package checks, manifest cross-checks and release notes. Inner archive
+  SHA-256: Linux
+  `ebfd0750a3c1bbb01d9829798c253ba9cf38e6096f8766c9d6f2e637d691fb28`
+  (9,731,954 B), Windows
+  `7c01997ce876511a4e66dc0f0aa6018f02ad30817439caafcbbe0c4d0a2e2e4c`
+  (7,627,015 B), macOS
+  `b1ef4acadb360b9f498b5b271ef15db47bf0a010cd311665d9682df1901f0fc4`
+  (7,911,087 B). CI reports `signing=unsigned verified=False`; the local Linux
+  archive is Minisign-signed and matches the Linux inner archive above.
 - **Cycle 21 run (storage and product-identity hardening):**
   [43938282811](https://github.com/NeonMC23/Fluent/actions/runs/43938282811)
   on `5875dd2`. All four jobs succeeded after the CLI/desktop description
@@ -445,11 +457,11 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
   and the separation of Fluent's MIT source licence from model licences.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [x] Final Cycle 21 CI run 43938282811 (`5875dd2`) succeeded on `main` for
-  all four jobs after platform-native storage, CLI/desktop identity, actionable
-  storage errors and storage test changes; Linux, Windows, macOS and
-  release-integrity jobs are green. Cycle 19 run 43785992390 and earlier
-  release-candidate runs also passed.
+- [x] Final Cycle 22 CI run 43983913671 (`fabfda9`) succeeded on `main` for
+  all four jobs after strengthened Windows/macOS package checks, manifest
+  cross-checks and release notes; Linux, Windows, macOS and release-integrity
+  jobs are green. Cycle 21 run 43938282811 and earlier release-candidate runs
+  also passed.
 - [x] Local chat real-model tests cover English, French, follow-up context,
   streaming, cancellation, reload and context truncation.
 - [x] Translation regression: SMaLL-100 42-case outputs are identical to

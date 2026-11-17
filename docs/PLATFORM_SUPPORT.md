@@ -1,28 +1,28 @@
 # Platform Support
 
-This is the honest support matrix for the 0.2.0 release candidate (Cycle 19
-validation, documentation reviewed in Cycle 20). It distinguishes local
+This is the honest support matrix for the 0.2.0 release candidate (Cycle 22
+release validation; documentation reviewed in Cycle 22). It distinguishes local
 builds, CI definitions, CI execution and actual GUI runtime validation.
 
 ## Summary
 
 | Platform | Local build | CI job defined | CI executed | GUI runtime validated | Distribution artifact |
 |---|---|---|---|---|---|
-| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum + smoke) | **Yes** (run 43785992390) | **Yes** (Nobara host + Ubuntu 22.04 container + Xvfb) | Portable tar.gz |
+| Linux x86-64, glibc ≥ 2.35 | **Yes** (host and Ubuntu 22.04 container) | Yes (`ubuntu-22.04`, tar.gz + checksum + smoke) | **Yes** (run 43983913671) | **Yes** (Nobara host + Ubuntu 22.04 container + Xvfb) | Portable tar.gz |
 | Linux AArch64 | No | No | No | No | No |
-| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43785992390) | **Partial**: packaged `--version`/`--self-test` on runner; GUI skipped (no OpenGL); physical GUI **NOT EXECUTED** | Portable ZIP; no installer |
-| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43785992390) | **CI runner only** (bundle GUI smoke); physical GUI **NOT EXECUTED** | `.app` ZIP; unsigned; Intel not produced |
-| NLLB-200 1.3B / 3.3B (dense, quantised) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43785992390) | **Yes** (Linux real translation, tiny FLORES regression, generated checks) | User-installed weights; CPU Q8 validated; CUDA/Metal builds not validated |
-| MADLAD-400 3B (T5, q4_k GGUF) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43785992390) | **Yes** (Linux real-model engine test + GUI inspection) | User-supplied GGUF; CPU only |
-| SMaLL-100 (M2M-100, 330M) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43785992390) | **Yes** (Linux real-model engine test + GUI download/verify) | User-supplied safetensors; CPU validated |
-| Qwen2.5 Instruct chat (0.5B/1.5B) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43785992390) | **Yes** (Linux GUI download/verify, English/French chat, 0.5B↔1.5B switch) | User-supplied GGUF; CPU only |
+| Windows x86-64 | No toolchain | Yes (tests, release GUI, portable ZIP + self-test) | **Yes** (run 43983913671) | **Partial**: packaged `--version`/`--self-test` on runner; GUI skipped (no OpenGL); physical GUI **NOT EXECUTED** | Portable ZIP; no installer |
+| macOS (current runner: arm64) | No toolchain | Yes (tests, release GUI, `.app` ZIP + smoke) | **Yes** (run 43983913671) | **CI runner only** (bundle GUI smoke); physical GUI **NOT EXECUTED** | `.app` ZIP; unsigned; Intel not produced |
+| NLLB-200 1.3B / 3.3B (dense, quantised) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43983913671) | **Yes** (Linux real translation, tiny FLORES regression, generated checks) | User-installed weights; CPU Q8 validated; CUDA/Metal builds not validated |
+| MADLAD-400 3B (T5, q4_k GGUF) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43983913671) | **Yes** (Linux real-model engine test + GUI inspection) | User-supplied GGUF; CPU only |
+| SMaLL-100 (M2M-100, 330M) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43983913671) | **Yes** (Linux real-model engine test + GUI download/verify) | User-supplied safetensors; CPU validated |
+| Qwen2.5 Instruct chat (0.5B/1.5B) | **Yes** on Linux x86-64 CPU | Yes (Linux/Windows/macOS builds) | **Yes** (run 43983913671) | **Yes** (Linux GUI download/verify, English/French chat, 0.5B↔1.5B switch) | User-supplied GGUF; CPU only |
 
-The final Cycle 19 validation run is `43785992390` (`c91523c`), including
-MADLAD/T5, SMaLL-100, NLLB and Qwen2.5 chat compilation, packaged application
-smoke tests, the Model Manager, the remote catalogue, the unified mark-based
-icons, the language capability registry, local chat and artifact verification.
-The previous Cycle 18 run `43768080004` (`5a7f96a`) also passed. GitHub-runner
-execution is still not physical-device validation.
+The final Cycle 22 validation run is `43983913671` (`fabfda9`), including the
+strengthened Windows/macOS package checks, MADLAD/T5, SMaLL-100, NLLB and
+Qwen2.5 chat compilation, packaged application smoke tests, the Model Manager,
+the remote catalogue, the unified mark-based icons, the language capability
+registry, local chat and artifact verification. GitHub-runner execution is
+still not physical-device validation.
 
 Measured on the canonical host (Intel Core i5-11400H, 15 GiB RAM, CPU only):
 the Qwen2.5 1.5B chat engine reached about 2.09 GB RSS while answering; real
@@ -69,7 +69,7 @@ other heavyweight engine is not kept resident. Translation engines loaded in
 
 - The workflow runs `cargo test --workspace`, a release GUI build, the portable
   ZIP, and executes the packaged `fluent.exe --version` / `--self-test`.
-- Run `43785992390` passed those checks after the portable README fix.
+- Run `43983913671` passed those checks after the portable README fix.
   GitHub's hosted Windows runner has no OpenGL 2.0+ context, so the temporary
   GUI-window smoke is SKIPPED there. This is still not physical-device GUI
   validation.
@@ -87,7 +87,7 @@ other heavyweight engine is not kept resident. Translation engines loaded in
 - The workflow runs `cargo test --workspace`, a release GUI build, `.app`
   staging, plist/Mach-O validation and a bundled GUI smoke test on
   `macos-latest`.
-- Run `43785992390` passed all of those steps, so the arm64 `.app` is runtime
+- Run `43983913671` passed all of those steps, so the arm64 `.app` is runtime
   validated on the CI runner. **Physical macOS runtime: NOT EXECUTED**; no
   Apple Silicon or Intel Mac is available in this environment. Metal, Intel
   macOS, universal binaries, signing and notarization remain unvalidated.
