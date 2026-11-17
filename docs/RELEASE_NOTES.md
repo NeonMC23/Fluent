@@ -75,9 +75,9 @@ installation, verification and storage guidance.
 
 ## Release artifacts
 
-Prepared at `release-v0.2.0/` from CI run `43986327987` at artifact source
-revision `b57e6bc`. Later release-preparation documentation and test-tooling
-commits do not change the application binaries:
+Built from CI run `43986327987` at artifact source revision `b57e6bc`. Later
+release-preparation documentation and test-tooling commits do not change the
+application binaries.
 
 | File | Bytes | SHA-256 |
 |---|---:|---|
@@ -85,8 +85,8 @@ commits do not change the application binaries:
 | `Fluent-v0.2.0-windows-x86_64.zip` | 7,627,018 | `50e6564dde071f6c28bcd9e530638f9ceecb0460cb2796d18f551ac73080bcdc` |
 | `Fluent-v0.2.0-macos-aarch64.zip` | 7,911,087 | `b1ef4acadb360b9f498b5b271ef15db47bf0a010cd311665d9682df1901f0fc4` |
 
-`SHA256SUMS` is generated from these exact files. The directory is gitignored
-and is not part of the source tree.
+These checksums and the matching `SHA256SUMS` refer to the exact files supplied
+with this release.
 
 ## Verification
 
