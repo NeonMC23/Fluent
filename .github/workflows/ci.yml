@@ -101,7 +101,7 @@ jobs:
           grep -Fq "$XDG_DATA_HOME/fluent/models/nllb-200-1.3b" fluent-self-test.txt
           LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a "$BIN" --smoke-test-gui
           LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a \
-            ./scripts/check-linux-window-icon.sh "$BIN"
+            "$GITHUB_WORKSPACE/scripts/check-linux-window-icon.sh" "$BIN"
       - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: fluent-linux-x86_64
