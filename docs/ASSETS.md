@@ -123,6 +123,18 @@ The Windows icon embedding is only exercised when the build script runs on a
 Windows host. Cross-compiling from Linux would need additional resource-tool
 setup and is not claimed.
 
+Cycle 22 validation checks the packaging references, not only file existence:
+
+- the Linux release binary contains the exact canonical RGBA mark bytes;
+- the installer test confirms the installed desktop icon is byte-identical to
+  `src/logo/generated/png/fluent-256.png`;
+- the packaged macOS `Fluent.icns` is byte-identical to
+  `src/logo/generated/macos/Fluent.icns`;
+- Windows CI verifies the PE header/resource section and executable metadata.
+
+Physical Windows Explorer and macOS Dock/Gatekeeper visual validation remain
+unexecuted.
+
 ## 5. Interface screenshots
 
 Captured from the actual running application on the canonical Linux host:

@@ -262,15 +262,20 @@ def inspect_macos(archive: Path, version: str, arch: str) -> None:
 
 
 def classify_archive(name: str) -> tuple[str, str, str]:
-    match = re.fullmatch(r"fluent-[0-9.]+-linux-(x86_64|aarch64)\.tar\.gz", name)
+    match = re.fullmatch(
+        r"(?:fluent-|Fluent-v)[0-9.]+-linux-(x86_64|aarch64)\.tar\.gz", name
+    )
     if match:
         return "linux", match.group(1), "tar.gz"
-    match = re.fullmatch(r"fluent-[0-9.]+-windows-(x86_64)\.zip", name)
+    match = re.fullmatch(
+        r"(?:fluent-|Fluent-v)[0-9.]+-windows-(x86_64)\.zip", name
+    )
     if match:
         return "windows", match.group(1), "zip"
-    match = re.fullmatch(r"Fluent-[0-9.]+-macos-(arm64|x86_64)\.zip", name)
+    match = re.fullmatch(r"Fluent-v?[0-9.]+-macos-(arm64|aarch64|x86_64)\.zip", name)
     if match:
-        return "macos", match.group(1), "zip"
+        arch = "arm64" if match.group(1) == "aarch64" else match.group(1)
+        return "macos", arch, "zip"
     return "unknown", "unknown", "unknown"
 
 
@@ -407,6 +412,14 @@ def main() -> int:
         "--expected-run-id",
         help="Fail unless the manifest records this workflow run identifier.",
     )
+    parser.add_argument(
+        "--release-layout",
+        action="store_true",
+        help=(
+            "Verify a release directory using Fluent-v<version>-* archive names "
+            "and a SHA256SUMS file instead of adjacent .sha256 sidecars."
+        ),
+    )
     args = parser.parse_args()
 
     directory = args.dir
@@ -425,6 +438,32 @@ def main() -> int:
         print(f"FAIL: no distribution archives in {directory}", file=sys.stderr)
         return 2
 
+    release_sums: dict[str, str] = {}
+    if args.release_layout:
+        expected_names = {
+            f"Fluent-v{args.version}-linux-x86_64.tar.gz",
+            f"Fluent-v{args.version}-windows-x86_64.zip",
+            f"Fluent-v{args.version}-macos-aarch64.zip",
+        }
+        actual_names = {archive.name for archive in archives}
+        if actual_names != expected_names:
+            print(
+                "FAIL: release directory archives differ: expected "
+                f"{sorted(expected_names)}, found {sorted(actual_names)}",
+                file=sys.stderr,
+            )
+            return 1
+        sums_path = directory / "SHA256SUMS"
+        if not sums_path.is_file():
+            print("FAIL: SHA256SUMS is missing", file=sys.stderr)
+            return 1
+        for line in sums_path.read_text(encoding="utf-8").splitlines():
+            fields = line.strip().split()
+            if len(fields) != 2 or not re.fullmatch(r"[0-9a-fA-F]{64}", fields[0]):
+                print(f"FAIL: malformed SHA256SUMS line: {line}", file=sys.stderr)
+                return 1
+            release_sums[fields[1].lstrip("*")] = fields[0].lower()
+
     public_key = args.public_key
     if public_key is None:
         candidate = directory / "minisign.pub"
@@ -439,42 +478,31 @@ def main() -> int:
 
     for archive in archives:
         try:
-            match = re.fullmatch(
-                rf"fluent-{re.escape(args.version)}-linux-(x86_64|aarch64)\.tar\.gz",
-                archive.name,
-            )
-            if match:
-                platform, arch = "linux", match.group(1)
+            platform, arch, _fmt = classify_archive(archive.name)
+            if platform == "linux":
                 inspect_linux(archive, args.version, arch)
+            elif platform == "windows":
+                inspect_windows(archive, args.version, arch)
+            elif platform == "macos":
+                inspect_macos(archive, args.version, arch)
             else:
-                match = re.fullmatch(
-                    rf"fluent-{re.escape(args.version)}-windows-(x86_64)\.zip",
-                    archive.name,
-                )
-                if match:
-                    platform, arch = "windows", match.group(1)
-                    inspect_windows(archive, args.version, arch)
-                else:
-                    match = re.fullmatch(
-                        rf"Fluent-{re.escape(args.version)}-macos-(arm64|x86_64)\.zip",
-                        archive.name,
-                    )
-                    if not match:
-                        fail("unrecognised distribution archive name")
-                    platform, arch = "macos", match.group(1)
-                    inspect_macos(archive, args.version, arch)
+                fail("unrecognised distribution archive name")
 
-            sidecar = Path(str(archive) + ".sha256")
-            if not sidecar.is_file():
-                fail("missing SHA-256 sidecar")
-            fields = sidecar.read_text(encoding="utf-8").strip().split()
-            if len(fields) != 2 or not re.fullmatch(r"[0-9a-fA-F]{64}", fields[0]):
-                fail("malformed SHA-256 sidecar")
-            if fields[1] != archive.name:
-                fail("SHA-256 sidecar names a different archive")
             actual = sha256(archive)
-            if fields[0].lower() != actual:
-                fail("SHA-256 sidecar does not match the archive")
+            if args.release_layout:
+                if release_sums.get(archive.name) != actual:
+                    fail("SHA256SUMS entry is missing or does not match the archive")
+            else:
+                sidecar = Path(str(archive) + ".sha256")
+                if not sidecar.is_file():
+                    fail("missing SHA-256 sidecar")
+                fields = sidecar.read_text(encoding="utf-8").strip().split()
+                if len(fields) != 2 or not re.fullmatch(r"[0-9a-fA-F]{64}", fields[0]):
+                    fail("malformed SHA-256 sidecar")
+                if fields[1] != archive.name:
+                    fail("SHA-256 sidecar names a different archive")
+                if fields[0].lower() != actual:
+                    fail("SHA-256 sidecar does not match the archive")
             print(
                 f"{archive.name}: OK ({platform}/{arch}, "
                 f"{archive.stat().st_size} bytes, sha256 {actual})"

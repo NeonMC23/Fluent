@@ -74,6 +74,7 @@ assert_file "$CONFIG"
 assert_file "$MODEL/pytorch_model.bin"
 assert_file "$DESKTOP"
 assert_file "$ICON_DST"
+cmp -s "$ICON_DST" "$ROOT/src/logo/generated/png/fluent-256.png" || fail 'installed icon is not the canonical Fluent mark'
 python3 -m json.tool "$CONFIG" > /dev/null || fail 'config.json is not valid JSON'
 grep -q "^Exec=\"$LAUNCHER\"" "$DESKTOP" || fail 'desktop Exec path is wrong'
 grep -q '^Comment=Local-first translation and chat with downloadable local models$' "$DESKTOP" || fail 'desktop Comment is outdated'

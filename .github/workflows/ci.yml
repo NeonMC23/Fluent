@@ -62,8 +62,17 @@ jobs:
         run: python3 scripts/set-ci-remap.py
       - name: Release GUI build
         run: cargo build --release --locked -p fluent-gui
-      - name: Verify GLIBC 2.35 baseline
-        run: ./scripts/check-linux-baseline.sh target/release/fluent 2.35
+      - name: Verify GLIBC 2.35 baseline and embedded mark
+        run: |
+          ./scripts/check-linux-baseline.sh target/release/fluent 2.35
+          python3 - <<'PY'
+          from pathlib import Path
+          binary = Path("target/release/fluent").read_bytes()
+          mark = Path("src/logo/generated/window/fluent-256.rgba").read_bytes()
+          if mark not in binary:
+              raise SystemExit("canonical mark RGBA is not embedded in the GUI binary")
+          print("embedded window/header mark: OK")
+          PY
       - name: Installer regression tests
         run: ./scripts/test-installer.sh
       - name: Portable Linux archive
@@ -307,6 +316,7 @@ jobs:
           PLIST="$APP/Contents/Info.plist"
           test -x "$APP/Contents/MacOS/fluent"
           test -s "$APP/Contents/Resources/Fluent.icns"
+          cmp "$APP/Contents/Resources/Fluent.icns" src/logo/generated/macos/Fluent.icns
           test "$(cat "$APP/Contents/PkgInfo")" = "APPL????"
           plutil -lint "$PLIST"
           test "$(plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = "io.fluent.Fluent"
