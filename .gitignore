@@ -26,7 +26,49 @@ Thumbs.db
 
 # Distribution artifacts (never commit generated packages)
 /dist/
-/release-v0.2.0/
+/release-v*/
+/coverage/
 *.AppImage
 *.deb
 *.rpm
+*.zip
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+*.exe
+*.dll
+*.so
+*.so.*
+*.dylib
+*.app/
+*.minisig
+*.sha256
+*.log
+*.trace
+*.profraw
+*.profdata
+*.tmp
+*.temp
+*.pid
+
+# Local credentials and signing material (never commit)
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+.env
+.env.*
+!.env.example
+
+# Model formats and generated model caches
+*.gguf
+*.safetensors
+*.bin
+*.pth
+*.pt
+*.onnx
