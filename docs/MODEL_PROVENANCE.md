@@ -14,6 +14,10 @@ Manager described below.
   supported models (four translation entries in the remote catalogue and two
   chat entries in the compiled registry), after explicit confirmation, and
   verifies exact sizes and SHA-256. It is not a general model loader.
+- **NLLB source and hosting:** NLLB files are fetched from their original
+  pinned Hugging Face repositories. Fluent does not mirror, host or redistribute
+  NLLB weights. Downloading from that external source does not change the
+  CC-BY-NC-4.0 terms or permit commercial use.
 - **Licences:** NLLB-200 is CC-BY-NC-4.0, MADLAD-400 is Apache-2.0, SMaLL-100
   is MIT and Qwen2.5 Instruct is Apache-2.0. Fluent's source is MIT; that does
   not relicense any model.

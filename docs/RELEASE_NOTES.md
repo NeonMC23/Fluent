@@ -107,8 +107,10 @@ with this release.
 - No Windows installer, macOS DMG, AppImage or Flatpak.
 - No GPU-validated chat inference.
 - No persistent chat history, tool calling, RAG or web access.
-- NLLB-200 is non-commercial; Fluent's MIT source licence does not relicense
-  model assets.
+- NLLB-200 is non-commercial (CC-BY-NC-4.0). Fluent downloads it from the
+  original upstream model source, does not mirror or bundle the weights, and
+  does not relicense model assets. Downloading from upstream does not remove
+  the non-commercial restriction.
 - Historical Git commits still contain NLLB tokenizer/configuration assets;
   branding redistribution rights require owner confirmation. See
   [MODEL_PROVENANCE.md](https://github.com/NeonMC23/Fluent/blob/main/docs/MODEL_PROVENANCE.md) and

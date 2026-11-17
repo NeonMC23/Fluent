@@ -40,6 +40,14 @@ authorship/license is not documented in the original project. Do not assume the
 repository's MIT source license covers them; confirm redistribution rights
 before public distribution.
 
+### Naming and canonical decision
+
+No file named `Fluent-Marque.png` exists in the repository or its reachable Git
+history. The approved, existing canonical artwork is
+`src/logo/fluent-mark.png`. It is the turquoise F crop of the immutable
+`logo.png` master and is the only application mark. Do not add a second
+similarly named master or substitute the full wordmark as an application icon.
+
 ## 2. Generated assets
 
 Generated files live under `src/logo/generated/` and are committed so normal
@@ -126,6 +134,8 @@ setup and is not claimed.
 Cycle 22 validation checks the packaging references, not only file existence:
 
 - the Linux release binary contains the exact canonical RGBA mark bytes;
+- the running Linux X11 window’s `_NET_WM_ICON` is compared pixel-for-pixel
+  with the canonical RGBA mark;
 - the installer test confirms the installed desktop icon is byte-identical to
   `src/logo/generated/png/fluent-256.png`;
 - the packaged macOS `Fluent.icns` is byte-identical to

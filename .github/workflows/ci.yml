@@ -37,7 +37,8 @@ jobs:
             libxkbcommon-dev libwayland-dev \
             libx11-dev libxcursor-dev libxi-dev libxrandr-dev \
             libgl1-mesa-dev libegl1-mesa-dev libfontconfig1-dev \
-            desktop-file-utils xvfb libgl1-mesa-dri libxkbcommon-x11-0
+            desktop-file-utils xvfb libgl1-mesa-dri libxkbcommon-x11-0 \
+            xdotool x11-utils
       - name: Verify branding assets
         run: python3 scripts/verify-branding-assets.py
       - name: Formatting
@@ -99,6 +100,8 @@ jobs:
           grep -Fq "model-root: platform default" fluent-self-test.txt
           grep -Fq "$XDG_DATA_HOME/fluent/models/nllb-200-1.3b" fluent-self-test.txt
           LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a "$BIN" --smoke-test-gui
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a \
+            ./scripts/check-linux-window-icon.sh "$BIN"
       - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
         with:
           name: fluent-linux-x86_64
