@@ -51,9 +51,10 @@ and can produce inaccurate or fabricated information.
 - **Linux x86-64:** physically runtime-validated; glibc 2.35 baseline;
   portable tar.gz; locally Minisign-signed candidate.
 - **Windows x86-64:** CI-built, packaged and path-tested; **physical GUI/runtime
-  validation NOT EXECUTED**; unsigned, no Authenticode certificate.
+  validation NOT EXECUTED**; not Authenticode-signed.
 - **macOS ARM64:** CI-built, `.app`/plist/Mach-O/smoke-tested; **physical
-  Finder/Terminal validation NOT EXECUTED**; unsigned and not notarized.
+  Finder/Terminal validation NOT EXECUTED**; not Developer ID-signed or
+  notarized.
 - Intel macOS and universal binaries are not produced.
 
 ## Installation
@@ -70,14 +71,31 @@ directory. The default model roots are:
 See the [README](../README.md) and [MODEL_MANAGER.md](MODEL_MANAGER.md) for
 installation, verification and storage guidance.
 
+## Release artifacts
+
+Prepared locally in `release-v0.2.0/` from CI run `43986327987` at source
+commit `b57e6bc`:
+
+| File | Bytes | SHA-256 |
+|---|---:|---|
+| `Fluent-v0.2.0-linux-x86_64.tar.gz` | 9,731,954 | `ebfd0750a3c1bbb01d9829798c253ba9cf38e6096f8766c9d6f2e637d691fb28` |
+| `Fluent-v0.2.0-windows-x86_64.zip` | 7,627,018 | `50e6564dde071f6c28bcd9e530638f9ceecb0460cb2796d18f551ac73080bcdc` |
+| `Fluent-v0.2.0-macos-aarch64.zip` | 7,911,087 | `b1ef4acadb360b9f498b5b271ef15db47bf0a010cd311665d9682df1901f0fc4` |
+
+`SHA256SUMS` is generated from these exact files. The directory is gitignored
+and is not part of the source tree.
+
 ## Verification
 
-- Verify each archive with its adjacent SHA-256 file.
-- The local Linux candidate is Minisign-signed with public key
-  `B504F2189BB21013`; verify against [the committed public key](keys/minisign.pub).
-- CI artifacts are currently **unsigned** because `MINISIGN_SECRET_KEY` is not
-  configured.
-- Windows/macOS archives are unsigned and not notarized.
+- Verify the directory with `sha256sum -c SHA256SUMS`.
+- All three final files have detached Minisign signatures made locally with
+  public key ID `B504F2189BB21013`; verify with the included `minisign.pub`.
+- CI-produced artifacts are **unsigned** because `MINISIGN_SECRET_KEY` is not
+  configured. The detached signatures in `release-v0.2.0/` were added after
+  download.
+- Windows and macOS archives are **not Authenticode-signed, Developer ID-signed
+  or notarized**. Gatekeeper/SmartScreen may warn; do not claim OS-level
+  signing or physical platform validation.
 
 ## Known limitations
 

@@ -245,6 +245,12 @@ Artifacts are not release assets. Treat a downloaded workflow artifact as a
 test build until the owner has verified its checksum and explicitly published a
 release. See [docs/RELEASE.md](docs/RELEASE.md).
 
+The prepared but unpublished release filenames are
+`Fluent-v0.2.0-linux-x86_64.tar.gz`,
+`Fluent-v0.2.0-windows-x86_64.zip` and
+`Fluent-v0.2.0-macos-aarch64.zip`. The workflow artifacts above still contain
+the packaging names produced by the build scripts.
+
 ### Linux (x86-64, glibc 2.35 baseline)
 
 The validated artifact is an application-only `tar.gz` containing `bin/fluent`,

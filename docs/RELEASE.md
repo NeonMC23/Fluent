@@ -94,17 +94,19 @@ The workflow has run successfully on GitHub:
   GUI smoke test and a detached signature.
 - The macOS artifact is arm64 on the current `macos-latest` runner.
 - **Cycle 22 run (release validation):**
-  [43983913671](https://github.com/NeonMC23/Fluent/actions/runs/43983913671)
-  on `fabfda9`. All four jobs succeeded with the strengthened Windows and
+  [43986327987](https://github.com/NeonMC23/Fluent/actions/runs/43986327987)
+  on `b57e6bc`. All four jobs succeeded with the strengthened Windows and
   macOS package checks, manifest cross-checks and release notes. Inner archive
   SHA-256: Linux
   `ebfd0750a3c1bbb01d9829798c253ba9cf38e6096f8766c9d6f2e637d691fb28`
   (9,731,954 B), Windows
-  `7c01997ce876511a4e66dc0f0aa6018f02ad30817439caafcbbe0c4d0a2e2e4c`
-  (7,627,015 B), macOS
+  `50e6564dde071f6c28bcd9e530638f9ceecb0460cb2796d18f551ac73080bcdc`
+  (7,627,018 B), macOS
   `b1ef4acadb360b9f498b5b271ef15db47bf0a010cd311665d9682df1901f0fc4`
-  (7,911,087 B). CI reports `signing=unsigned verified=False`; the local Linux
-  archive is Minisign-signed and matches the Linux inner archive above.
+  (7,911,087 B). Windows PE hashes vary between rebuilds; always verify the
+  downloaded file against its run-specific checksum. CI reports
+  `signing=unsigned verified=False`; the assembled Linux archive is
+  Minisign-signed and matches the Linux inner archive above.
 - **Cycle 21 run (storage and product-identity hardening):**
   [43938282811](https://github.com/NeonMC23/Fluent/actions/runs/43938282811)
   on `5875dd2`. All four jobs succeeded after the CLI/desktop description
@@ -318,6 +320,21 @@ No artifact contains model weights, tokenizer assets, user configuration,
 caches or development files. The application needs a user-installed or
 Model-Manager-downloaded model package; see [MODEL_PACKAGE.md](MODEL_PACKAGE.md).
 
+### Prepared Cycle 22 release directory
+
+`release-v0.2.0/` is a local, gitignored staging directory assembled from CI
+run `43986327987` at source commit `b57e6bc`:
+
+| File | Bytes | SHA-256 |
+|---|---:|---|
+| `Fluent-v0.2.0-linux-x86_64.tar.gz` | 9,731,954 | `ebfd0750a3c1bbb01d9829798c253ba9cf38e6096f8766c9d6f2e637d691fb28` |
+| `Fluent-v0.2.0-windows-x86_64.zip` | 7,627,018 | `50e6564dde071f6c28bcd9e530638f9ceecb0460cb2796d18f551ac73080bcdc` |
+| `Fluent-v0.2.0-macos-aarch64.zip` | 7,911,087 | `b1ef4acadb360b9f498b5b271ef15db47bf0a010cd311665d9682df1901f0fc4` |
+
+The directory also contains `SHA256SUMS`, detached `.minisig` files for all
+three archives, and `minisign.pub`. It must not be committed; it is excluded by
+`.gitignore`.
+
 Portable archives contain no `config.json`. On first launch they use the
 platform-native per-user model root, never the working directory or the
 application bundle, and detect a populated portable `models/` directory
@@ -457,11 +474,11 @@ artifacts, and explicitly announce that old signatures are no longer trusted.
   and the separation of Fluent's MIT source licence from model licences.
 - [ ] Branding rights confirmed (not yet documented as legally cleared).
 - [x] README, CHANGELOG and VERSIONING current.
-- [x] Final Cycle 22 CI run 43983913671 (`fabfda9`) succeeded on `main` for
+- [x] Final Cycle 22 CI run 43986327987 (`b57e6bc`) succeeded on `main` for
   all four jobs after strengthened Windows/macOS package checks, manifest
   cross-checks and release notes; Linux, Windows, macOS and release-integrity
-  jobs are green. Cycle 21 run 43938282811 and earlier release-candidate runs
-  also passed.
+  jobs are green. The earlier Cycle 22 run 43983913671 and Cycle 21 run
+  43938282811 also passed.
 - [x] Local chat real-model tests cover English, French, follow-up context,
   streaming, cancellation, reload and context truncation.
 - [x] Translation regression: SMaLL-100 42-case outputs are identical to
