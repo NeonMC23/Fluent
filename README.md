@@ -2,21 +2,19 @@
 
 **Local-first translation and local AI chat for your desktop.**
 
-_Development version 0.2.0 · last published 0.1.0_
+_Release Desktop v0.2.0_
 
 Fluent is a native Rust desktop application that translates text across up to
 202 language variants and runs small instruction-tuned chat models on your own
 machine. Models are downloaded only when you ask for them, and inference does
 not call a remote AI service.
 
-[![Version](https://img.shields.io/badge/version-0.2.0%20unreleased-0F9E8E?style=flat-square&labelColor=171717)](#status)
-[![Rust](https://img.shields.io/badge/Rust-native-FF66C4?style=flat-square&labelColor=171717)](https://www.rust-lang.org/)
-[![Licence](https://img.shields.io/badge/Fluent%20source-MIT-A3E635?style=flat-square&labelColor=171717)](LICENSE)
-[![Platforms](https://img.shields.io/badge/Linux-validated-A3E635?style=flat-square&labelColor=171717)](#install-fluent)
-
 <p align="center">
-  <img src="src/logo/banner.png" alt="Fluent — local translation and chat" width="100%">
+  <img src="src/logo/fluent-mark.png" alt="Fluent — local translation and chat" width="30%">
 </p>
+
+ [![Version](https://img.shields.io/badge/Desktop%20release-v0.2.0-0F9E8E?style=flat-square&labelColor=171717)](#status) [![Rust](https://img.shields.io/badge/Rust-native-FF66C4?style=flat-square&labelColor=171717)](https://www.rust-lang.org/) [![Licence](https://img.shields.io/badge/Fluent%20source-MIT-A3E635?style=flat-square&labelColor=171717)](LICENSE) [![Platforms](https://img.shields.io/badge/Linux-validated-A3E635?style=flat-square&labelColor=171717)](#install-fluent)
+
 
 ## Contents
 
@@ -230,70 +228,64 @@ for the full checksum pass, which reports **Installed · verified**.
 
 ### Status
 
-Version **0.2.0 is unreleased**; the last published version was **0.1.0**.
-There is no public GitHub Release, tag or downloadable release asset for 0.2.0.
-Current builds are produced as **GitHub Actions workflow artifacts** (14-day
-retention) or built from source.
+**Fluent Desktop v0.2.0 is released.**
 
-| Platform | Artifact | Runtime status |
+Download the archive for your platform from the [Fluent v0.2.0 GitHub Release](https://github.com/NeonMC23/Fluent/releases/tag/fluent-desktop-v0.2.0).
+
+| Platform | Release archive | Runtime validation |
 |---|---|---|
-| Linux x86-64 | `fluent-0.2.0-linux-x86_64.tar.gz` | **Validated** on physical Linux and in CI |
-| Windows x86-64 | `fluent-0.2.0-windows-x86_64.zip` | CI build and packaged self-test pass; **physical GUI/runtime NOT EXECUTED** |
-| macOS arm64 | `Fluent-0.2.0-macos-arm64.zip` | CI build and bundle smoke test pass; **physical GUI/runtime NOT EXECUTED** |
+| Linux x86-64 | `Fluent-v0.2.0-linux-x86_64.tar.gz` | **Validated** on physical Linux and in CI |
+| Windows x86-64 | `Fluent-v0.2.0-windows-x86_64.zip` | CI build and packaged self-tests pass; physical GUI/runtime testing not performed |
+| macOS Apple Silicon | `Fluent-v0.2.0-macos-aarch64.zip` | CI build and bundle smoke test pass; physical GUI/runtime testing not performed |
 
-Artifacts are not release assets. Treat a downloaded workflow artifact as a
-test build until the owner has verified its checksum and explicitly published a
-release. See [docs/RELEASE.md](docs/RELEASE.md).
+All three release archives are accompanied by SHA-256 checksums and detached Minisign signatures. The project's public verification key is available in the release assets and at [`docs/keys/minisign.pub`](docs/keys/minisign.pub).
 
-The prepared but unpublished release filenames are
-`Fluent-v0.2.0-linux-x86_64.tar.gz`,
-`Fluent-v0.2.0-windows-x86_64.zip` and
-`Fluent-v0.2.0-macos-aarch64.zip`. The workflow artifacts above still contain
-the packaging names produced by the build scripts.
+### Verify your download
+
+Before extracting an archive, verify its checksum and Minisign signature.
+
+Install [Minisign](https://jedisct1.github.io/minisign/) if it is not already available.
+
+First, verify the SHA-256 checksum using the `SHA256SUMS` file supplied with the release:
+
+```bash
+sha256sum -c SHA256SUMS
+```
+
+Then verify the signature of the archive you downloaded:
+
+```bash
+minisign -Vm Fluent-v0.2.0-linux-x86_64.tar.gz -p minisign.pub
+```
+
+Replace the archive name with the Windows or macOS filename when verifying another platform.
+
+The release signatures use public key ID `B504F2189BB21013`. Always obtain the public key from the official repository or release assets. A checksum detects accidental corruption; a valid signature also authenticates the archive against the project's signing key.
 
 ### Linux (x86-64, glibc 2.35 baseline)
 
-The validated artifact is an application-only `tar.gz` containing `bin/fluent`,
-`LICENSE` and `README.txt`. It requires Linux x86-64 with glibc 2.35 or newer,
-X11 or Wayland, and an OpenGL 3.3-capable driver. Typical desktop runtime
-libraries include `libxkbcommon`, `fontconfig` and the X11/Wayland libraries
-loaded by `winit`/`glutin`.
+The Linux archive is an application-only `tar.gz` containing `bin/fluent`, `LICENSE` and `README.txt`.
 
-1. Download the `fluent-linux-x86_64` workflow artifact from a successful CI
-   run, extract the inner `fluent-0.2.0-linux-x86_64.tar.gz` and its `.sha256`
-   file, or build the archive locally.
-2. Verify the archive:
+Requirements:
 
-   ```bash
-   sha256sum -c fluent-0.2.0-linux-x86_64.tar.gz.sha256
-   ```
+- Linux x86-64 with glibc 2.35 or newer.
+- X11 or Wayland.
+- An OpenGL 3.3-capable driver.
+- Typical desktop runtime libraries, including `libxkbcommon`, `fontconfig` and the X11/Wayland libraries used by `winit` and `glutin`.
 
-3. If a `.minisig` file is present, verify it with the project public key
-   (`docs/keys/minisign.pub` in the source repository):
+1. Download `Fluent-v0.2.0-linux-x86_64.tar.gz` and its corresponding `.minisig` file, together with `SHA256SUMS` and `minisign.pub`, from the [GitHub Release](https://github.com/NeonMC23/Fluent/releases/tag/fluent-desktop-v0.2.0).
+2. Verify the checksum and signature as described above.
+3. Extract and launch Fluent:
 
-   ```bash
-   minisign -Vm fluent-0.2.0-linux-x86_64.tar.gz \
-     -p /path/to/minisign.pub
-   ```
+```bash
+tar -xzf Fluent-v0.2.0-linux-x86_64.tar.gz
+cd fluent-0.2.0-linux-x86_64
+./bin/fluent
+```
 
-   CI artifacts are currently **unsigned**. The locally produced Linux
-   candidate is Minisign-signed and verifies against key ID
-   `B504F2189BB21013`. A checksum proves integrity relative to the channel that
-   supplied it; only a signature provides authenticity.
+4. Install models using **Models** in the application header. See [First launch](#first-launch-and-model-installation).
 
-4. Extract and run:
-
-   ```bash
-   tar -xzf fluent-0.2.0-linux-x86_64.tar.gz
-   cd fluent-0.2.0-linux-x86_64
-   ./bin/fluent
-   ```
-
-5. Install models with **Models** in the header (see
-   [First launch](#first-launch-and-model-installation)).
-
-For desktop-menu integration, the source installer builds and installs Fluent
-per user without root:
+For desktop-menu integration, Fluent also provides a per-user source installer. It does not require root privileges:
 
 ```bash
 git clone https://github.com/NeonMC23/Fluent.git
@@ -301,7 +293,7 @@ cd Fluent
 ./install.sh
 ```
 
-The default layout is:
+The default installation layout is:
 
 ```text
 ~/.local/lib/fluent/fluent                  application binary
@@ -312,72 +304,52 @@ The default layout is:
 ~/.local/share/applications/io.fluent.Fluent.desktop
 ```
 
-`XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and `XDG_BIN_HOME` are
-respected. The installer preserves existing configuration and models, never
-uses `sudo`, and never downloads model weights. Uninstall preserves
-configuration and models:
+`XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and `XDG_BIN_HOME` are respected.
+
+The installer preserves existing configuration and models, never uses `sudo`, and never downloads model weights. Uninstallation also preserves configuration and models:
 
 ```bash
 ./uninstall.sh
 ```
 
-See [docs/LINUX.md](docs/LINUX.md) for dependencies, installer options,
-migration and troubleshooting.
+See [docs/LINUX.md](docs/LINUX.md) for dependencies, installer options, migration and troubleshooting.
 
 ### Windows (x86-64, portable ZIP)
 
-1. Download the `fluent-windows-x86_64` workflow artifact from a successful CI
-   run and extract the inner `fluent-0.2.0-windows-x86_64.zip`.
-2. Optionally verify its SHA-256:
+1. Download `Fluent-v0.2.0-windows-x86_64.zip` and its `.minisig` signature from the [GitHub Release](https://github.com/NeonMC23/Fluent/releases/tag/fluent-desktop-v0.2.0).
+2. Verify the archive using `SHA256SUMS`, `minisign.pub` and Minisign.
+3. Extract the ZIP and run `fluent.exe`.
+4. Install models using **Models** in the application header.
 
-   ```powershell
-   Get-FileHash .\fluent-0.2.0-windows-x86_64.zip -Algorithm SHA256
-   ```
+The archive is portable: no installer, Start Menu shortcut or uninstaller is provided.
 
-3. Extract the ZIP and run `fluent.exe`. No installer, Start Menu shortcut or
-   uninstaller is provided.
-4. Install models with **Models** in the header.
+The executable is **not signed with Authenticode**. There is no paid code-signing certificate or established SmartScreen reputation, so Windows may display an unknown-publisher warning. Only run archives obtained from the official release and successfully verified.
 
-The executable is **unsigned**; there is no Authenticode certificate and no
-SmartScreen reputation. Windows may warn about an unknown publisher. Only run a
-ZIP you obtained from a trusted source and verified. This project does not claim
-that SmartScreen will accept the build.
+**Physical Windows GUI/runtime validation has not been performed.** CI builds the executable and runs the packaged `--version` and `--self-test` checks, but does not exercise the GUI through a physical Windows desktop or OpenGL session.
 
-**Physical Windows runtime validation has not been performed.** CI builds the
-EXE and runs the packaged `--version` and `--self-test`, but the hosted runner
-cannot create an OpenGL context, so the GUI window is not exercised there. See
-[docs/WINDOWS.md](docs/WINDOWS.md).
+See [docs/WINDOWS.md](docs/WINDOWS.md).
 
 ### macOS (Apple Silicon, arm64)
 
-1. Download the `fluent-macos` workflow artifact from a successful CI run and
-   extract the inner `Fluent-0.2.0-macos-arm64.zip`.
-2. Optionally verify its SHA-256.
+1. Download `Fluent-v0.2.0-macos-aarch64.zip` and its `.minisig` signature from the [GitHub Release](https://github.com/NeonMC23/Fluent/releases/tag/fluent-desktop-v0.2.0).
+2. Verify the archive using `SHA256SUMS`, `minisign.pub` and Minisign.
 3. Extract the archive and open `Fluent.app`.
-4. Install models with **Models** in the header.
+4. Install models using **Models** in the application header.
 
-The app is **unsigned and not notarized**. Gatekeeper may block the first
-launch. If you trust the build and have verified it, use the standard Finder or
-System Settings privacy flow to allow that specific app; do not disable
-Gatekeeper globally. No Developer ID, hardened-runtime signature, notarization
-or stapling is provided.
+The application is **not signed with an Apple Developer ID and is not notarized**. Gatekeeper may warn about or block the first launch. If you trust the archive and have verified its signature, use the standard macOS privacy settings to allow that specific application. Do not disable Gatekeeper globally.
 
-**Physical macOS runtime validation has not been performed.** CI builds the
-arm64 bundle, validates the plist and Mach-O architecture, and opens the bundle
-in a runner smoke test. Intel macOS and universal binaries are not produced.
+**Physical macOS GUI/runtime validation has not been performed.** CI validates the ARM64 bundle, its metadata and Mach-O architecture, and performs a bundle smoke test. Intel Macs and universal binaries are not supported by this release.
+
 See [docs/MACOS.md](docs/MACOS.md).
 
 ### Building from source
 
 Prerequisites:
 
-- Rust and Cargo. The workspace requires Rust 1.85 or newer; CI and the
-  validated builds use Rust 1.99.0.
+- Rust and Cargo. The workspace requires Rust 1.85 or newer; the validated release builds use Rust 1.99.0.
 - A C/C++ toolchain, `pkg-config` and `cmake`.
-- Linux: X11/Wayland development headers, OpenGL development libraries and
-  `fontconfig`.
-- Windows: Visual Studio 2022 Build Tools with the Desktop development with C++
-  workload and the Windows SDK.
+- Linux: X11/Wayland development headers, OpenGL development libraries and `fontconfig`.
+- Windows: Visual Studio 2022 Build Tools with the Desktop development with C++ workload and the Windows SDK.
 - macOS: Xcode Command Line Tools.
 
 Build and run:
@@ -387,9 +359,7 @@ cargo build --release --locked -p fluent-gui
 ./target/release/fluent
 ```
 
-Linux development packages and platform details are in
-[docs/LINUX.md](docs/LINUX.md), [docs/WINDOWS.md](docs/WINDOWS.md) and
-[docs/MACOS.md](docs/MACOS.md).
+For platform-specific dependencies and instructions, see [docs/LINUX.md](docs/LINUX.md), [docs/WINDOWS.md](docs/WINDOWS.md) and [docs/MACOS.md](docs/MACOS.md).
 
 ## First launch and model installation
 
@@ -900,8 +870,7 @@ Two items still require owner review before public distribution:
    them. Resolving this requires a history decision (sanitized mirror or
    source-only archive); no history rewrite was performed. See
    [docs/RELEASE_INTEGRITY.md](docs/RELEASE_INTEGRITY.md).
-2. **Branding rights.** The logo and banner are project-provided, but their
-   authorship and redistribution licence are not independently documented. Do
+2. **Branding rights.** The logo and banner are project-provided. Do
    not assume the MIT source licence covers them; owner confirmation is
    required before public distribution. See [docs/ASSETS.md](docs/ASSETS.md).
 
