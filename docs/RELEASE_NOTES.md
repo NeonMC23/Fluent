@@ -1,7 +1,7 @@
 # Fluent 0.2.0 — Release Notes
 
-**Status: release candidate, not published.** No Git tag, GitHub Release or
-public asset upload is implied by this document.
+**Status: prepared for owner-authorized manual publication; not published.**
+No Git tag, GitHub Release or public asset upload is implied by this document.
 
 ## Highlights
 
@@ -50,25 +50,27 @@ and can produce inaccurate or fabricated information.
 
 - **Linux x86-64:** physically runtime-validated; glibc 2.35 baseline;
   portable tar.gz; locally Minisign-signed candidate.
-- **Windows x86-64:** CI-built, packaged and path-tested; **physical GUI/runtime
-  validation NOT EXECUTED**; not Authenticode-signed.
-- **macOS ARM64:** CI-built, `.app`/plist/Mach-O/smoke-tested; **physical
-  Finder/Terminal validation NOT EXECUTED**; not Developer ID-signed or
-  notarized.
+- **Windows x86-64:** automated CI build, package and path validation passed;
+  **physical GUI/runtime and inference validation NOT EXECUTED**; not
+  Authenticode-signed.
+- **macOS ARM64:** automated CI build, bundle validation and runner GUI smoke
+  test passed; **physical Finder/Dock/Gatekeeper and inference validation NOT
+  EXECUTED**; not Developer ID-signed or notarized.
 - Intel macOS and universal binaries are not produced.
 
 ## Installation
 
-Application archives contain no models or user configuration. Install a model
-through **Models** after launch, or point `config.json` at an existing model
-directory. The default model roots are:
+Application archives contain no models, tokenizer files or user configuration.
+Models are downloaded only after explicit confirmation in **Models**, which
+shows each model’s licence before download, or can be supplied from an existing
+local directory through `config.json`. The default model roots are:
 
 - Linux: `$XDG_DATA_HOME/fluent/models`, fallback
   `~/.local/share/fluent/models`;
 - Windows: `%APPDATA%\fluent\Fluent\data\models`;
 - macOS: `~/Library/Application Support/io.fluent.Fluent/models`.
 
-See the [README](../README.md) and [MODEL_MANAGER.md](MODEL_MANAGER.md) for
+See the [README](https://github.com/NeonMC23/Fluent/blob/main/README.md) and [MODEL_MANAGER.md](https://github.com/NeonMC23/Fluent/blob/main/docs/MODEL_MANAGER.md) for
 installation, verification and storage guidance.
 
 ## Release artifacts
@@ -100,7 +102,8 @@ and is not part of the source tree.
 
 ## Known limitations
 
-- Windows and macOS physical runtime validation is pending.
+- Windows and macOS physical runtime validation was not performed; the owner
+  has chosen automated CI validation for these platforms.
 - No Windows installer, macOS DMG, AppImage or Flatpak.
 - No GPU-validated chat inference.
 - No persistent chat history, tool calling, RAG or web access.
@@ -108,11 +111,16 @@ and is not part of the source tree.
   model assets.
 - Historical Git commits still contain NLLB tokenizer/configuration assets;
   branding redistribution rights require owner confirmation. See
-  [MODEL_PROVENANCE.md](MODEL_PROVENANCE.md) and
-  [RELEASE_INTEGRITY.md](RELEASE_INTEGRITY.md).
+  [MODEL_PROVENANCE.md](https://github.com/NeonMC23/Fluent/blob/main/docs/MODEL_PROVENANCE.md) and
+  [RELEASE_INTEGRITY.md](https://github.com/NeonMC23/Fluent/blob/main/docs/RELEASE_INTEGRITY.md).
 
 ## Publication
 
 Publication remains a separate owner-authorized action. Before publishing,
-complete the manual Windows and macOS checks, decide the signing requirements,
-confirm model/branding rights, and authorize any release tag or GitHub Release.
+confirm branding redistribution rights, confirm that the intended distribution
+model is compatible with NLLB-200’s non-commercial licence, decide the Windows
+Authenticode and macOS Developer ID/notarization requirements, and authorize any
+release tag or GitHub Release. Physical Windows/macOS testing is not a
+prerequisite under the owner’s selected automated-CI policy.
+
+The step-by-step owner procedure is in [PUBLISHING.md](https://github.com/NeonMC23/Fluent/blob/main/docs/PUBLISHING.md).

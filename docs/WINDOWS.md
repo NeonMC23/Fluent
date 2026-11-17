@@ -149,7 +149,8 @@ Record which steps executed. Steps not performed must be reported as
 ## What is missing
 
 - No `.exe` installer, Start Menu shortcut, or uninstaller is provided.
-- No physical Windows runtime validation has been performed.
+- No physical Windows runtime validation was performed; the owner has chosen
+  automated CI validation for this platform.
 - The ZIP is unsigned (Authenticode is not configured). SmartScreen reputation
   is not claimed. Signing requires a real code-signing certificate, an
   RFC 3161 timestamp service and a Windows signing host; none is available, so
@@ -159,4 +160,4 @@ Record which steps executed. Steps not performed must be reported as
 - The Windows `install.sh` branch of the old installer was untested and has
   been replaced by an explicit unsupported message.
 
-These are release blockers, not claims that the source is incompatible.
+These are documented limitations, not claims that the source is incompatible.
