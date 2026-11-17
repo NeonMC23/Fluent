@@ -73,8 +73,9 @@ installation, verification and storage guidance.
 
 ## Release artifacts
 
-Prepared locally in `release-v0.2.0/` from CI run `43986327987` at source
-commit `b57e6bc`:
+Prepared at `release-v0.2.0/` from CI run `43986327987` at artifact source
+revision `b57e6bc`. Later release-preparation documentation and test-tooling
+commits do not change the application binaries:
 
 | File | Bytes | SHA-256 |
 |---|---:|---|
